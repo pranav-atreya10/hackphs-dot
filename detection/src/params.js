@@ -145,6 +145,23 @@ export const PARAMS = [
     what: 'Seconds of calm before stepping the risk level down.',
     raiseIf: 'Alerts flicker on and off.', lowerIf: 'Status stays red too long after birds leave.' },
 
+  // ---- COCO-SSD second opinion ----
+  { path: 'coco.birdScore', min: 0.2, max: 0.9, step: 0.05, stage: 'coco', impact: 'medium',
+    what: 'COCO "bird" score needed to upgrade an unknown object to bird.',
+    raiseIf: 'Clouds, kites or debris get upgraded to bird by COCO.',
+    lowerIf: 'Large, clearly visible gliding birds stay unknown.' },
+  { path: 'coco.disagreeScore', min: 0.3, max: 0.95, step: 0.05, stage: 'coco', impact: 'low',
+    what: 'COCO non-bird score that lowers a flapping bird\'s confidence.',
+    raiseIf: 'Real birds lose confidence because COCO guesses "kite".',
+    lowerIf: 'Flapping false positives keep high confidence despite COCO.' },
+  { path: 'coco.minPx', min: 12, max: 120, step: 4, stage: 'coco', impact: 'medium',
+    what: 'Only send objects at least this big (px, full camera res) to COCO.',
+    raiseIf: 'stats.coco_nothing is high: COCO is wasting time on objects too small to see.',
+    lowerIf: 'Mid-size birds never get a COCO check.' },
+  { path: 'coco.cooldownSec', min: 0.5, max: 15, step: 0.5, stage: 'coco', impact: 'low',
+    what: 'Seconds before the same track is checked again.',
+    raiseIf: 'One object hogs COCO while others wait.', lowerIf: 'Labels go stale on long tracks.' },
+
   // ---- Audio ----
   { path: 'audio.highProb', min: 0.5, max: 0.98, step: 0.02, stage: 'audio', impact: 'high',
     what: 'Drone probability needed from the sound model.',

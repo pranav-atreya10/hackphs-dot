@@ -107,11 +107,54 @@ export class DetectionEngine {
     }
   }
 
-  // Second-opinion label (e.g. COCO-SSD) for a track.
-  applyLabel(trackId, label, score, source = 'coco') {
-    this.cocoLabels.set(Number(trackId), { label, score, source });
-    this.stats.cocoChecks++;
-    if (label === 'bird') this.stats.cocoBirds++;
+  // Second-opinion label (e.g. COCO-SSD) for a track. label: 'bird' | 'airplane' | 'kite' | other | null (nothing seen).
+  applyLabel(trackId, label, score, source = 'coco', extra = {}) {
+    const id = Number(trackId);
+    const tr = this.tracker.tracks.find((x) => x.id === id);
+    this.cocoLabels.set(id, { label, score, source, t: this.lastT, ...extra });
+    if (tr) tr.cocoCheckedAt = this.lastT;
+    const st = this.stats;
+    st.cocoChecks++;
+    if (label === 'bird') st.cocoBirds++;
+    if (!label) { st.cocoNothing++; return; }
+    if (this.cfg.coco.uninformative.includes(label)) { st.cocoVague++; return; }
+    // Agreement with what the engine believed at the moment COCO answered.
+    if (tr && tr.cls) {
+      const cocoSaysBird = label === 'bird';
+      const engineSaysBird = tr.cls === 'bird';
+      if (cocoSaysBird === engineSaysBird) st.cocoAgree++;
+      else st.cocoDisagree++;
+    }
+  }
+
+  // Which tracks are worth a COCO-SSD look right now, best first.
+  // sourceWidth/Height: full camera resolution (COCO runs on full-res crops).
+  cocoCandidates({ sourceWidth, sourceHeight, max = 1 } = {}) {
+    const c = this.cfg.coco;
+    const t = this.lastT ?? 0;
+    const out = [];
+    for (const tr of this.tracker.tracks) {
+      if (!tr.confirmed || tr.cls === 'rejected' || this.verdicts.has(tr.id)) continue;
+      if (tr.cocoCheckedAt !== undefined && t - tr.cocoCheckedAt < c.cooldownSec) continue;
+      const b = tr.blob;
+      const w = this.motion.w, h = this.motion.h;
+      const pxW = ((b.maxX - b.minX) / w) * sourceWidth;
+      const pxH = ((b.maxY - b.minY) / h) * sourceHeight;
+      const longSide = Math.max(pxW, pxH);
+      if (longSide < c.minPx) continue;
+      // Priority: unknowns first (a second opinion helps most), then bigger objects
+      // (COCO can actually see their shape), then ones never checked.
+      const priority = (tr.cls === 'unknown' ? 1000 : 0) + Math.min(longSide, 400) + (tr.cocoCheckedAt === undefined ? 50 : 0);
+      out.push({
+        id: tr.id,
+        priority,
+        longSidePx: Math.round(longSide),
+        bbox: { x: b.minX / w, y: b.minY / h, w: (b.maxX - b.minX) / w, h: (b.maxY - b.minY) / h },
+        classification: tr.cls,
+      });
+    }
+    out.sort((a, b) => b.priority - a.priority);
+    return out.slice(0, max);
   }
 
   reset() {
@@ -325,19 +368,28 @@ export class DetectionEngine {
       tr.why = `${v.source}${v.label ? `: ${v.label}` : ''}`;
       return;
     }
-    const coco = this.cocoLabels.get(tr.id);
+    const cc = this.cfg.coco;
+    const raw = this.cocoLabels.get(tr.id);
+    const coco = raw && raw.label && this.lastT - raw.t <= cc.maxAgeSec ? raw : null;
+    const vague = coco && cc.uninformative.includes(coco.label);
+    const cocoBird = coco && coco.label === 'bird' && coco.score >= cc.birdScore;
+    const cocoNonBird = coco && !vague && coco.label !== 'bird' && coco.score >= cc.disagreeScore;
     if (tr.profile === 'steady' && audio.active) {
       tr.cls = 'drone'; tr.conf = 0.9; tr.why = 'steady track + drone sound';
     } else if (tr.profile === 'flapping') {
-      tr.cls = 'bird'; tr.conf = 0.6 + 0.4 * Math.min(1, tr.flapStrength || 0); tr.why = `wingbeat ${(tr.flapHz || 0).toFixed(1)} Hz`;
-    } else if (coco && coco.label === 'bird' && coco.score >= 0.4) {
-      tr.cls = 'bird'; tr.conf = 0.5 + 0.3 * coco.score; tr.why = 'COCO-SSD: bird';
+      // Wingbeat alone caps at 0.9; independent agreement (COCO, Gemini) can add the rest.
+      tr.cls = 'bird'; tr.conf = 0.55 + 0.35 * Math.min(1, tr.flapStrength || 0); tr.why = `wingbeat ${(tr.flapHz || 0).toFixed(1)} Hz`;
+      if (cocoBird) { tr.conf = Math.min(0.99, tr.conf + cc.agreeBoost); tr.why += ' + COCO bird'; }
+      else if (cocoNonBird) { tr.conf = Math.max(0.3, tr.conf - cc.disagreePenalty); tr.why += ` (COCO says ${coco.label})`; }
+    } else if (cocoBird) {
+      tr.cls = 'bird'; tr.conf = 0.5 + 0.3 * coco.score; tr.why = `COCO-SSD: bird ${(coco.score * 100).toFixed(0)}%`;
     } else {
       tr.cls = 'unknown';
       tr.conf = 0.4;
       tr.why = tr.profile === 'steady' ? 'steady, no drone sound'
         : tr.profile === 'irregular' ? 'irregular size changes'
         : tr.profile === 'too_small' ? 'too small to judge' : 'analysing';
+      if (coco) tr.why += ` (COCO: ${coco.label} ${(coco.score * 100).toFixed(0)}%)`;
     }
   }
 
@@ -420,6 +472,7 @@ export class DetectionEngine {
       age: r1(tr.t - tr.born),
       trail: tr.trail.map(([, px, py]) => [r3(px / w), r3(py / h)]),
       verdict: this.verdicts.get(tr.id) || null,
+      coco: (() => { const c = this.cocoLabels.get(tr.id); return c ? { label: c.label, score: r3(c.score), age: r1(this.lastT - c.t) } : null; })(),
       // 0..1: how much to trust this track (contrast above noise x how reliably it was seen)
       quality: r3(Math.min(1, snr / 8) * hitRate),
       diag: {
@@ -452,6 +505,9 @@ export class DetectionEngine {
       agreement_rate: judged ? r3(s.agree / judged) : null,
       coco_checks: s.cocoChecks,
       coco_birds: s.cocoBirds,
+      coco_nothing: s.cocoNothing,           // crops where COCO saw nothing relevant (small/far objects)
+      coco_vague: s.cocoVague,               // answers like kite/frisbee that carry no evidence
+      coco_agreement: s.cocoAgree + s.cocoDisagree ? r3(s.cocoAgree / (s.cocoAgree + s.cocoDisagree)) : null,
       ghosts_removed: s.ghosts,
       stage_ms: Object.fromEntries(Object.entries(s.stageMs).map(([k, v]) => [k, r3(v)])),
     };
@@ -554,7 +610,7 @@ export class DetectionEngine {
 }
 
 function newStats() {
-  return { frames: 0, fps: 0, procMs: 0, stageMs: {}, ghosts: 0, tracksConfirmed: 0, confirmed: 0, rejected: 0, agree: 0, disagree: 0, cocoChecks: 0, cocoBirds: 0, events: 0 };
+  return { frames: 0, fps: 0, procMs: 0, stageMs: {}, ghosts: 0, tracksConfirmed: 0, confirmed: 0, rejected: 0, agree: 0, disagree: 0, cocoChecks: 0, cocoBirds: 0, cocoNothing: 0, cocoVague: 0, cocoAgree: 0, cocoDisagree: 0, events: 0 };
 }
 
 // ETA range: redo the ETA with the velocity nudged by ±sigma standard errors in x and y

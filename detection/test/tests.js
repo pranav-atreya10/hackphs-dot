@@ -12,6 +12,7 @@ import { HumDetector } from '../src/audio.js';
 import { mulberry32 } from '../src/synthetic.js';
 import { runScenario, evaluateConfig } from '../src/tune.js';
 import { PARAMS, PRESETS, describeParams, getParam } from '../src/params.js';
+import { cropRect, interpretPredictions } from '../adapters/coco.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -283,6 +284,71 @@ test('robustness: flock scenes pass at a phone-like 15 fps with the phone preset
     const { row } = runScenario(s, { fps: 15, config: PRESETS.phone_15fps });
     ok(row.pass, `${s} @15fps: ${JSON.stringify(row)}`);
   }
+});
+
+// ---------- COCO-SSD integration (no model needed: fusion + geometry) ----------
+function engineOn(scene, frames, config = {}) {
+  const sky = new SyntheticSky({ scenario: scene, seed: 7 });
+  const engine = new DetectionEngine(config);
+  engine.setCorridor(sky.corridor);
+  let st;
+  let i = 0;
+  const step = (n) => { for (const end = i + n; i < end; i++) st = engine.process(sky.render(i / 30), i / 30); return st; };
+  step(frames);
+  return { engine, step, get state() { return st; } };
+}
+test('COCO fusion: "bird" upgrades an unknown object, and the label expires', () => {
+  const run = engineOn('bag', 150);
+  const tr = run.state.tracks[0];
+  ok(tr && tr.classification === 'unknown', `start ${tr && tr.classification}`);
+  run.engine.applyLabel(tr.id, 'bird', 0.8);
+  let t2 = run.step(1).tracks.find((x) => x.id === tr.id);
+  ok(t2.classification === 'bird' && /COCO/.test(t2.reason), `${t2.classification} ${t2.reason}`);
+  t2 = run.step(30 * (DEFAULTS.coco.maxAgeSec + 1)).tracks.find((x) => x.id === tr.id);
+  ok(!t2 || t2.classification === 'unknown', `after expiry: ${t2 && t2.classification}`);
+});
+test('COCO fusion: agreement boosts a flapping bird, disagreement lowers it', () => {
+  const run = engineOn('single_bird', 120);
+  const tr = run.state.tracks.find((x) => x.profile === 'flapping');
+  ok(tr, 'no flapping track');
+  const base = tr.confidence;
+  run.engine.applyLabel(tr.id, 'bird', 0.9);
+  const up = run.step(1).tracks.find((x) => x.id === tr.id);
+  run.engine.applyLabel(tr.id, 'airplane', 0.9);
+  const down = run.step(1).tracks.find((x) => x.id === tr.id);
+  ok(up.confidence > base && down.confidence < up.confidence && down.classification === 'bird', `${base} -> ${up.confidence} -> ${down.confidence} ${down.classification}`);
+  run.engine.applyLabel(tr.id, 'frisbee', 0.9);
+  const vague = run.step(1).tracks.find((x) => x.id === tr.id);
+  ok(vague.confidence === base, `frisbee should be neutral: ${base} vs ${vague.confidence}`);
+  ok(run.state.stats.coco_agreement !== null, 'agreement stat missing');
+});
+test('COCO candidates: big enough at full resolution, unknowns first, cooldown respected', () => {
+  const run = engineOn('bag', 150);
+  ok(run.engine.cocoCandidates({ sourceWidth: 320, sourceHeight: 240 }).length === 0, 'tiny at 320 px should not be sent to COCO');
+  const [c] = run.engine.cocoCandidates({ sourceWidth: 1920, sourceHeight: 1440 });
+  ok(c && c.classification === 'unknown' && c.longSidePx >= DEFAULTS.coco.minPx, JSON.stringify(c));
+  run.engine.applyLabel(c.id, null, 0);
+  ok(run.engine.cocoCandidates({ sourceWidth: 1920, sourceHeight: 1440 }).every((x) => x.id !== c.id), 'cooldown ignored');
+  ok(run.state.stats.coco_nothing === 0 && run.step(1).stats.coco_nothing === 1, 'nothing-count');
+});
+test('COCO crop: square, padded, inside the frame, object position mapped into the crop', () => {
+  const c = cropRect({ x: 0.5, y: 0.5, w: 0.02, h: 0.01 }, { width: 1920, height: 1080 }, 0.6, 48);
+  ok(c.side === Math.max(0.02 * 1920 * 2.2, 48), `side ${c.side}`);
+  near(c.obj.x + c.obj.w / 2, 0.5, 1e-9, 'object centred');
+  const edge = cropRect({ x: 0.99, y: 0.0, w: 0.01, h: 0.02 }, { width: 1920, height: 1080 }, 0.6, 48);
+  ok(edge.sx + edge.side <= 1920 && edge.sy >= 0, 'clamped');
+  ok(edge.obj.x > 0.5, 'object pushed toward crop edge when clamped');
+});
+test('COCO interpretation: only boxes on our object count; sky classes preferred', () => {
+  const obj = { x: 0.4, y: 0.4, w: 0.2, h: 0.2 };
+  const preds = [
+    { class: 'person', score: 0.9, bbox: [120, 120, 60, 60] },   // centred on object, not a sky class
+    { class: 'kite', score: 0.5, bbox: [125, 125, 50, 50] },     // centred on object, sky class
+    { class: 'bird', score: 0.95, bbox: [0, 0, 40, 40] },        // elsewhere in the crop
+  ];
+  const r = interpretPredictions(preds, obj, 300, 0.75);
+  ok(r.label === 'kite' && r.ignored === 1, JSON.stringify(r));
+  ok(interpretPredictions([], obj, 300, 0.75).label === null);
 });
 
 // ---------- runner ----------

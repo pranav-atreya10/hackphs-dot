@@ -92,6 +92,19 @@ export const DEFAULTS = {
     polygon: [],           // normalized polygon; empty = whole frame is sky
   },
 
+  coco: {
+    birdScore: 0.4,        // COCO "bird" at or above this upgrades an unknown to bird
+    disagreeScore: 0.6,    // COCO non-bird label this confident lowers a flapping bird's confidence
+    agreeBoost: 0.1,       // confidence added when wingbeat and COCO both say bird
+    disagreePenalty: 0.15,
+    maxAgeSec: 6,          // ignore COCO labels older than this (the object may have changed)
+    minPx: 24,             // only check objects at least this many px (long side, full camera res)
+    cooldownSec: 3,        // re-check the same track at most this often
+    // COCO labels that just mean "small thing in the air" (it calls dark blobs frisbees):
+    // shown in the UI, but they neither upgrade nor penalise and don't count toward agreement.
+    uninformative: ['kite', 'frisbee', 'sports ball'],
+  },
+
   risk: {
     flockRed: 5,
     etaRedSec: 30,
