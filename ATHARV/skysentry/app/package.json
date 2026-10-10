@@ -1,0 +1,25 @@
+{
+  "name": "skysentry",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Early-warning system for birds and drones near runways (hackPHS 2026).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "simulate": "node tools/simulate.js",
+    "db:tiger": "psql \"$TIGER_DATABASE_URL\" -f db/tiger_schema.sql",
+    "db:mongo": "node db/mongo_setup.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "pg": "^8.13.1",
+    "mongodb": "^6.12.0"
+  },
+  "optionalDependencies": {
+    "@solana/web3.js": "^1.98.0"
+  }
+}

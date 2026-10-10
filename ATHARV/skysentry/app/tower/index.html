@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkySentry Tower</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{--paper:#f4efe6;--card:#fbf8f2;--ink:#1f1b16;--mute:#6e6458;--line:#ddd2bf;--clay:#c2643f;--go:#2e8b57;--warn:#d99a00;--stop:#c0392b;
+        --serif:"Source Serif 4",Georgia,serif;--sans:"DM Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
+  *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+  main{max-width:1320px;margin:0 auto;padding:18px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  h1{margin:0;font:500 1.7rem var(--serif)} h2{margin:0;font:500 1.15rem var(--serif)}
+  .pill{font:500 .75rem var(--mono);border:1px solid var(--line);border-radius:99px;padding:4px 10px;color:var(--mute)}
+  .pill[data-ok="1"]{color:var(--go);border-color:var(--go)}
+  #sound{margin-left:auto;font:600 .9rem var(--sans);background:var(--ink);color:var(--paper);border:0;border-radius:99px;padding:9px 16px;cursor:pointer}
+  #sound[data-on="1"]{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+  .col{display:grid;gap:16px;align-content:start;min-width:0}
+  #meter{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:center;border-left:8px solid var(--go);transition:border-color .3s}
+  #meter[data-risk="yellow"]{border-left-color:var(--warn)} #meter[data-risk="red"]{border-left-color:var(--stop);animation:flash 1s infinite alternate}
+  @keyframes flash{to{background:#f7e3dc}}
+  @media (prefers-reduced-motion:reduce){#meter[data-risk="red"]{animation:none}}
+  #riskLabel{font:500 3rem/1 var(--serif);grid-row:span 2} #riskWhat{font-weight:600} #riskWhen{color:var(--mute);font:500 .8rem var(--mono)}
+  #alertText{font:400 1.35rem/1.35 var(--serif);min-height:1.4em}
+  #map{height:300px;border-radius:10px;border:1px solid var(--line)}
+  .feed,.incidents{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:260px;overflow:auto}
+  .feed li{display:grid;grid-template-columns:5.5rem 4.6rem 1fr;gap:8px;font:400 .82rem var(--mono);color:var(--mute);border-top:1px solid var(--line);padding-top:6px}
+  .lvl{font-weight:600;border-radius:4px;padding:0 6px;color:#fff;text-align:center} .lvl.green{background:var(--go)} .lvl.yellow{background:var(--warn)} .lvl.red{background:var(--stop)}
+  .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
+  .incidents button:hover b,.incidents button:focus-visible b{color:var(--clay)} .incidents b{font:500 1rem var(--serif)} .incidents span{font:400 .8rem var(--mono);color:var(--mute)}
+  #detail{display:grid;grid-template-columns:200px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:#ddd} #detail p{margin:0} #detail a{color:var(--clay)}
+  form{display:flex;gap:8px} input{flex:1;font:inherit;border:1px solid var(--line);border-radius:99px;padding:9px 14px;background:#fff}
+  form button{font:600 .9rem var(--sans);background:var(--ink);color:var(--paper);border:0;border-radius:99px;padding:9px 16px;cursor:pointer}
+  #answer{margin:0;font:400 1.02rem/1.5 var(--serif);min-height:1.5em}
+  canvas{max-height:240px}
+  :focus-visible{outline:2px solid var(--clay);outline-offset:2px}
+  @media (max-width:960px){main{grid-template-columns:1fr}#detail{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SkySentry tower</h1>
+    <span class="pill" id="conn">Connecting…</span>
+    <span class="pill" id="cams">No cameras</span>
+    <button id="sound" type="button">Turn on alert sound</button>
+  </header>
+
+  <div class="col">
+    <section class="card" id="meter" data-risk="green" aria-live="polite">
+      <span id="riskLabel">GREEN</span><span id="riskWhat">Clear sky</span><span id="riskWhen">Waiting for the first camera event</span>
+    </section>
+    <section class="card"><h2>Latest alert</h2><p id="alertText">No alerts yet.</p></section>
+    <section class="card"><h2>Airport map</h2><div id="map"></div></section>
+    <section class="card"><h2>Live events</h2><ul class="feed" id="feed"></ul></section>
+  </div>
+
+  <div class="col">
+    <section class="card"><h2>Detections by hour</h2><canvas id="chart" aria-label="Detections by hour, last 24 hours"></canvas></section>
+    <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div></section>
+    <section class="card"><h2>Ask SkySentry</h2>
+      <form id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question"><button>Ask</button></form>
+      <p id="answer"></p>
+    </section>
+  </div>
+</main>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="module" src="./tower.js"></script>
+</body>
+</html>

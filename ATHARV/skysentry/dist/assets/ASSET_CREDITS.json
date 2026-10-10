@@ -1,0 +1,677 @@
+{
+  "project": "SkySentry",
+  "retrieved_date": "2026-10-10",
+  "assets": [
+    {
+      "asset": "clean_asphalt",
+      "author": "Dimitrios Savva",
+      "source_url": "https://polyhaven.com/a/clean_asphalt",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher_license_url": "https://polyhaven.com/license",
+      "modifications": "None",
+      "notes": "1k seamless PBR textures. Diffuse is sRGB; OpenGL normal and roughness are linear. Original surface coverage approximately 2.1m square. Apply repeat wrapping.",
+      "files": [
+        {
+          "filename": "clean_asphalt_diff_1k.jpg",
+          "bytes": 697630,
+          "sha256": "ddf9224e9cfa3eb2998d9097e4cd34bd3630c85e0e6798e5a0a000415a684083"
+        },
+        {
+          "filename": "clean_asphalt_nor_gl_1k.jpg",
+          "bytes": 776360,
+          "sha256": "99cdf6b6f0b8a319d206e1d561bf2a5d9933d8d33e1d685f8e25388101d21310"
+        },
+        {
+          "filename": "clean_asphalt_rough_1k.jpg",
+          "bytes": 641634,
+          "sha256": "2280be133c104eb04370b625ebcc7f6709d2173b43ae2cd15a0074c26f492bf9"
+        }
+      ]
+    },
+    {
+      "asset": "grass_ground",
+      "author": "Charlotte Baglioni",
+      "source_url": "https://polyhaven.com/a/grass_ground",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher_license_url": "https://polyhaven.com/license",
+      "modifications": "None",
+      "notes": "1k grass/soil diffuse, sRGB. Original surface coverage approximately 2.51m square. Apply repeat wrapping; material roughness near 1.",
+      "files": [
+        {
+          "filename": "grass_ground_diff_1k.jpg",
+          "bytes": 876584,
+          "sha256": "a79cc5ed65af0f80261b39a383b64a8c5272c5144d724deb43dbc29f0e4cd19b"
+        }
+      ]
+    },
+    {
+      "asset": "derelict_airfield_01",
+      "author": "Alexander Scholten",
+      "source_url": "https://polyhaven.com/a/derelict_airfield_01",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "publisher_license_url": "https://polyhaven.com/license",
+      "modifications": "None",
+      "notes": "1k unclipped equirectangular HDRI. Load with RGBELoader and use EquirectangularReflectionMapping/PMREM for environment lighting.",
+      "files": [
+        {
+          "filename": "derelict_airfield_01_1k.hdr",
+          "bytes": 1422472,
+          "sha256": "3a4d32069cec6fa1cdeb29dda6a71e06a1a654d1600f125b8745fdc436ced3bc"
+        }
+      ]
+    },
+    {
+      "asset": "Narrow-body airliner",
+      "author": "Innerscene",
+      "source_url": "https://www.innerscene.com/tools/library/3d-parts/narrow-body-airliner-8c1aee2c",
+      "download_url": "https://www.innerscene.com/api/library/narrow-body-airliner-8c1aee2c/download",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modifications": "None",
+      "notes": "Self-contained glTF 2.0 GLB. Y up, nose +X, ground Y=0. Dimensions X=37.554878m, Y=10.0975m, Z=34.162399m. 286 meshes, 148572 triangles, 11 embedded textures. KHR_materials_transmission, KHR_materials_specular, KHR_materials_ior, KHR_texture_transform; supported by modern Three.js GLTFLoader. No Draco decoder needed. Original unbranded model.",
+      "files": [
+        {
+          "filename": "narrow-body-airliner.glb",
+          "bytes": 6652244,
+          "sha256": "c1c88c26c0a13de27e836421cdcc5a68064ced3eaca152f90a1a1099e925a512"
+        }
+      ]
+    },
+    {
+      "asset": "shrub_02",
+      "name": "Shrub 02",
+      "author": "Rico Cilliers",
+      "source_url": "https://polyhaven.com/a/shrub_02",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        5340.904712677002,
+        2060.703456401825,
+        2070.5229938030243
+      ],
+      "files": [
+        {
+          "filename": "models/shrub_02/shrub_02_1k.gltf",
+          "bytes": 8083,
+          "sha256": "99de0a70fe88ad414615cc8d8e020617c8512e2abfe08b911b153a6fcc40d93e"
+        },
+        {
+          "filename": "models/shrub_02/textures/shrub_02_arm_1k.jpg",
+          "bytes": 313715,
+          "sha256": "7186bf604d5c02f873aef6de2346cc06b6fa48f47d054edbef36d2c3772c0890"
+        },
+        {
+          "filename": "models/shrub_02/textures/shrub_02_nor_gl_1k.jpg",
+          "bytes": 490815,
+          "sha256": "54c24e433365d5410223b7ebd2b33042b80831f80976e10768114db5ef6911d7"
+        },
+        {
+          "filename": "models/shrub_02/shrub_02.bin",
+          "bytes": 758692,
+          "sha256": "5c1b79da1cfdbac90599542ccd1f75ba433a3a4d356b1ea03655adb39b0e2c96"
+        },
+        {
+          "filename": "models/shrub_02/textures/shrub_02_diff_1k.jpg",
+          "bytes": 395120,
+          "sha256": "9956eff294034d70516d867e9668428a23d782feb3d4c34061dce5e44bacd5a8"
+        },
+        {
+          "filename": "models/shrub_02/shrub_02_smooth.gltf.json",
+          "bytes": 304215,
+          "sha256": "1ba304115200dadd79c6db20f6ecb7ab6f9d620ecf054a9aa724d64a2bfccd7f"
+        }
+      ],
+      "entry": "models/shrub_02/shrub_02_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 6813
+    },
+    {
+      "asset": "shrub_04",
+      "name": "Shrub 04",
+      "author": "Rico Cilliers",
+      "source_url": "https://polyhaven.com/a/shrub_04",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        746.7864416539669,
+        186.9201734662056,
+        280.6698549538851
+      ],
+      "files": [
+        {
+          "filename": "models/shrub_04/shrub_04_1k.gltf",
+          "bytes": 2882,
+          "sha256": "782832cbc57e96686b78c6ef9df6234c25f564f78421c8ed4bd42c3631f5aeae"
+        },
+        {
+          "filename": "models/shrub_04/textures/shrub_04_nor_gl_1k.jpg",
+          "bytes": 449241,
+          "sha256": "200d791e0474495bfc876ba1c289dade669c6a5b124647c55bc840a875f6b51c"
+        },
+        {
+          "filename": "models/shrub_04/textures/shrub_04_diff_1k.jpg",
+          "bytes": 373350,
+          "sha256": "0b0fa0a474753d13f3093858cea79d0de05da1e6a0c5d6e181cd351080980b6c"
+        },
+        {
+          "filename": "models/shrub_04/textures/shrub_04_arm_1k.jpg",
+          "bytes": 332957,
+          "sha256": "d1085df021928b29b0f38dde7e58e9a2e304c4e8d838e390b37cf57f8aa492e8"
+        },
+        {
+          "filename": "models/shrub_04/shrub_04.bin",
+          "bytes": 749084,
+          "sha256": "cb442c39682e54cc63f912aa78ab17a03566f947a61adbbbaaa6473166744f01"
+        },
+        {
+          "filename": "models/shrub_04/shrub_04_smooth.gltf.json",
+          "bytes": 294669,
+          "sha256": "a8f7adc15335f470419221eb98a0f2455cea16fb1dbc425dc5a74d1b0c5a13d3"
+        }
+      ],
+      "entry": "models/shrub_04/shrub_04_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 6830
+    },
+    {
+      "asset": "boulder_01",
+      "name": "Boulder 01",
+      "author": "Rico Cilliers",
+      "source_url": "https://polyhaven.com/a/boulder_01",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        1272.6830840110779,
+        1830.7338953018188,
+        1003.8918256759644
+      ],
+      "files": [
+        {
+          "filename": "models/boulder_01/boulder_01_1k.gltf",
+          "bytes": 2773,
+          "sha256": "51487934db898b4c24072780a451e34eca5c02e3ada24a62bbc600bbc4019e92"
+        },
+        {
+          "filename": "models/boulder_01/textures/boulder_01_arm_1k.jpg",
+          "bytes": 659386,
+          "sha256": "c57187c5746b6be913fa53846cb44ff78743e7ca5000f131c9627b99563c2b87"
+        },
+        {
+          "filename": "models/boulder_01/textures/boulder_01_diff_1k.jpg",
+          "bytes": 987467,
+          "sha256": "c38f0e918f6dc16b8d386ba3cdd89805c78320c119a1ceec85856f82b09a65b8"
+        },
+        {
+          "filename": "models/boulder_01/boulder_01.bin",
+          "bytes": 2938808,
+          "sha256": "7f5b06503d62bd95bfe9c6b8a354a5cc8ff04a4d271a8cf87a3e3125db4232d7"
+        },
+        {
+          "filename": "models/boulder_01/textures/boulder_01_nor_gl_1k.jpg",
+          "bytes": 1183552,
+          "sha256": "0810cf6e89d89bb6eb065b4d2e2855288f5dcbd2c15c6e40ab90d462021b50aa"
+        },
+        {
+          "filename": "models/boulder_01/boulder_01_smooth.gltf.json",
+          "bytes": 374072,
+          "sha256": "d3d769c339544729be29e1b7ac12c61890d09d9653a167ece81b3591476b22b0"
+        }
+      ],
+      "entry": "models/boulder_01/boulder_01_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 9970
+    },
+    {
+      "asset": "street_lamp_01",
+      "name": "Street Lamp 01",
+      "author": "Josh Dean",
+      "source_url": "https://polyhaven.com/a/street_lamp_01",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        704.3362259864807,
+        386.49316132068634,
+        3870.5554008483887
+      ],
+      "files": [
+        {
+          "filename": "models/street_lamp_01/street_lamp_01_1k.gltf",
+          "bytes": 6419,
+          "sha256": "5d0358ede168b5e04547780b99d8e6d651cbe644e468e67cb505019047cbd5c8"
+        },
+        {
+          "filename": "models/street_lamp_01/textures/street_lamp_01_arm_1k.jpg",
+          "bytes": 664324,
+          "sha256": "4b5487a6c7ee300c3cf5449629e01c35409e5c7ac1695edb9fe69d4821853c7c"
+        },
+        {
+          "filename": "models/street_lamp_01/textures/street_lamp_01_diff_1k.jpg",
+          "bytes": 307889,
+          "sha256": "3e9d3471b33eb1f8075ed741c2b1932103598626d057ca12ef38005ea5fcb165"
+        },
+        {
+          "filename": "models/street_lamp_01/textures/street_lamp_01_nor_gl_1k.jpg",
+          "bytes": 438623,
+          "sha256": "172af0fd7ed4999e9f520b9f56e1f357a6dba87adbd7b8aa87e0a0b95840c63d"
+        },
+        {
+          "filename": "models/street_lamp_01/street_lamp_01.bin",
+          "bytes": 748908,
+          "sha256": "c283db9b6d95835d9e8fc1692829acadcb21a0623b2daaa7231cec1440488401"
+        },
+        {
+          "filename": "models/street_lamp_01/street_lamp_01_smooth.gltf.json",
+          "bytes": 282140,
+          "sha256": "b8d0b508329bd0edf0313dee57f193f4be0321625816029edc63c7d255d3970b"
+        }
+      ],
+      "entry": "models/street_lamp_01/street_lamp_01_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 7662
+    },
+    {
+      "asset": "security_camera_01",
+      "name": "Security Camera 01",
+      "author": "Alexander Otterbeck, Yann Kervran",
+      "source_url": "https://polyhaven.com/a/security_camera_01",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        169.5517897605896,
+        553.6733567714691,
+        286.04651242494583
+      ],
+      "files": [
+        {
+          "filename": "models/security_camera_01/security_camera_01_1k.gltf",
+          "bytes": 4743,
+          "sha256": "d2468fe353cd9f992a5549709cf9efcfae67e9fd17f80bf7ff3866e2881dd2ae"
+        },
+        {
+          "filename": "models/security_camera_01/security_camera_01.bin",
+          "bytes": 386836,
+          "sha256": "c43dd3576213c169d1b3a9968788c0da2d14073e59c7d2503bc230c05042bb21"
+        },
+        {
+          "filename": "models/security_camera_01/textures/security_camera_01_diff_1k.jpg",
+          "bytes": 521174,
+          "sha256": "572968d8c693682aa5c87d59428e1db234b0d81ec620af8a019c72e3f011d53f"
+        },
+        {
+          "filename": "models/security_camera_01/textures/security_camera_01_arm_1k.jpg",
+          "bytes": 530966,
+          "sha256": "68bb728aff5af6bd4141201cd221c7e17ef537f49978c321b0e183677f8877ba"
+        },
+        {
+          "filename": "models/security_camera_01/textures/security_camera_01_nor_gl_1k.jpg",
+          "bytes": 315604,
+          "sha256": "80e791da5d975177d16d5f30202deac0b262ffe6b13311605c09c630b93d0de5"
+        },
+        {
+          "filename": "models/security_camera_01/security_camera_01_smooth.gltf.json",
+          "bytes": 157719,
+          "sha256": "c0a69f4085f741b0c2be96eba2a9af46f8342493f30aa6e29ad74599e86cbb1e"
+        }
+      ],
+      "entry": "models/security_camera_01/security_camera_01_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 3393
+    },
+    {
+      "asset": "utility_box_01",
+      "name": "Utility Box 01",
+      "author": "James Ray Cock",
+      "source_url": "https://polyhaven.com/a/utility_box_01",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        520.0002193450928,
+        431.999996304512,
+        1120.3334331512451
+      ],
+      "files": [
+        {
+          "filename": "models/utility_box_01/utility_box_01_1k.gltf",
+          "bytes": 2766,
+          "sha256": "5b9f8c45f2640c9dd831dc3450529e45b24c987208ddcf73010fe717ce8c454e"
+        },
+        {
+          "filename": "models/utility_box_01/textures/utility_box_01_diff_1k.jpg",
+          "bytes": 558681,
+          "sha256": "6a703a4cdf20c3fc3d0400fa815e5a1834836c96c207bdb57ba9e4a5db3a5532"
+        },
+        {
+          "filename": "models/utility_box_01/textures/utility_box_01_nor_gl_1k.jpg",
+          "bytes": 557001,
+          "sha256": "1c4e377906c13e864c9c7ffbd31a7d86075f28b948bf54872d6ad3ab38a08124"
+        },
+        {
+          "filename": "models/utility_box_01/textures/utility_box_01_arm_1k.jpg",
+          "bytes": 716061,
+          "sha256": "e65428774e94b6a8aeb7a23802e0af8f1568952ea79e21a7a3475b957e34956b"
+        },
+        {
+          "filename": "models/utility_box_01/utility_box_01.bin",
+          "bytes": 142552,
+          "sha256": "e4249eb754d7802154eed36bb12070dc24c90fc331f355d60ef7570d61fc0f5c"
+        },
+        {
+          "filename": "models/utility_box_01/utility_box_01_smooth.gltf.json",
+          "bytes": 58727,
+          "sha256": "bf805a7a5197cb5775f0799e0ef4d1ecffa4511588ea244ca4f81acb198ab462"
+        }
+      ],
+      "entry": "models/utility_box_01/utility_box_01_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 1004
+    },
+    {
+      "asset": "exterior_aircon_unit",
+      "name": "Exterior Aircon Unit",
+      "author": "Monsta3D",
+      "source_url": "https://polyhaven.com/a/exterior_aircon_unit",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        1799.971342086792,
+        374.15920197963715,
+        927.8970956802368
+      ],
+      "files": [
+        {
+          "filename": "models/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+          "bytes": 9634,
+          "sha256": "f19d85c76948903047c2846068aeaa376d5e956a410675268cb6cb6aac5d97c2"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_01_nor_gl_1k.jpg",
+          "bytes": 472088,
+          "sha256": "e5a6f3c135b942d6efe62a24496c575d03f6a4316188efe65079035d7faf1c38"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_01_opacity_1k.jpg",
+          "bytes": 333675,
+          "sha256": "c19feb434c2b01923fbb3e16ace3aa6d9cb16b05c2a5c479ad237759b2d331d6"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_01_arm_1k.jpg",
+          "bytes": 673246,
+          "sha256": "51c103926b118bf00b902826001db802b15755c6eefa12b00afa24c60d7b341b"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_01_arm_1k.jpg",
+          "bytes": 651293,
+          "sha256": "14671920f716691dc3b8940432f7aba5c469e3b466441ff8ad500de92d3178fb"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_02_arm_1k.jpg",
+          "bytes": 484026,
+          "sha256": "1cdfa2d1c938c3af61a5f06510b0d94aeddddd4bdc1832008b3826240dd1535d"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_02_arm_1k.jpg",
+          "bytes": 605557,
+          "sha256": "6ac4cfca6a8d8bec6ef1ff756652eb1f36b780d1ff7d70d9cb3e0f7fe1faf271"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/exterior_aircon_unit.bin",
+          "bytes": 494784,
+          "sha256": "b4b9ad082bdaa8f8b437bc14d9981caeaf318334499d4bf65d616fb2ec0c5ca8"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_02_nor_gl_1k.jpg",
+          "bytes": 942230,
+          "sha256": "864c0fb1e55aff910d826a8c1f6a2ad459f7db0124b5846445d466cabf0cadf5"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_01_nor_gl_1k.jpg",
+          "bytes": 583620,
+          "sha256": "14f105cda9172290be2e8b23b8e895099b65e222619850af3b13105901d922e2"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_01_diff_1k.jpg",
+          "bytes": 606076,
+          "sha256": "a8771db98ed7f3d46ce48fd70867f58a74a2530666c339f8dcc14f3e5de86d0b"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_01_diff_1k.jpg",
+          "bytes": 506664,
+          "sha256": "2ae5005b4836d2c91d1e712d9acf425c7dcc4973b7c0fc6f23da9afaa6381da6"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_02_opacity_1k.jpg",
+          "bytes": 357558,
+          "sha256": "a86bcaf9c4858cf250fd67c9a0ee362504454b9972ff6e1ac44e38bac3213421"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/textures/exterior_aircon_unit_rusted_02_nor_gl_1k.jpg",
+          "bytes": 947477,
+          "sha256": "3af4716b42812b742577594c7a0a342accd79925f02037c152b1da1c5831bb78"
+        },
+        {
+          "filename": "models/exterior_aircon_unit/exterior_aircon_unit_smooth.gltf.json",
+          "bytes": 153613,
+          "sha256": "6d23c7cffa295995d17060c4489bdf6a5114d79d6fee887172bd47b83b489065"
+        }
+      ],
+      "entry": "models/exterior_aircon_unit/exterior_aircon_unit_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 6686
+    },
+    {
+      "asset": "concrete_road_barrier",
+      "name": "Concrete Road Barrier",
+      "author": "Amal Kumar",
+      "source_url": "https://polyhaven.com/a/concrete_road_barrier",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        1545.3570485115051,
+        640.9457623958588,
+        835.279269143939
+      ],
+      "files": [
+        {
+          "filename": "models/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+          "bytes": 2868,
+          "sha256": "c371e87d303fff3f0c9fbe88520f7837514364e5c66aac3244e115ffa673d061"
+        },
+        {
+          "filename": "models/concrete_road_barrier/textures/concrete_road_barrier_nor_gl_1k.jpg",
+          "bytes": 961760,
+          "sha256": "c1072f51ff5c3d7158f0fbb0aa26e82b816b745b9f03639c4816832af2b37c52"
+        },
+        {
+          "filename": "models/concrete_road_barrier/textures/concrete_road_barrier_arm_1k.jpg",
+          "bytes": 619502,
+          "sha256": "b940847648012f2db8c24b16e07ad1e39b3bd33ea493203364deca209606e4b4"
+        },
+        {
+          "filename": "models/concrete_road_barrier/textures/concrete_road_barrier_diff_1k.jpg",
+          "bytes": 792641,
+          "sha256": "88b2d79829ffec7b11ac4d9c8554328f30b665d2c17f634197fde4f1ca8696fe"
+        },
+        {
+          "filename": "models/concrete_road_barrier/concrete_road_barrier.bin",
+          "bytes": 1374016,
+          "sha256": "64a4f9bc6e4af64d714a252c3c13428c430a60569deba3d52ca6b7dd3aa70d8c"
+        },
+        {
+          "filename": "models/concrete_road_barrier/concrete_road_barrier_smooth.gltf.json",
+          "bytes": 235279,
+          "sha256": "29975319f1f96d3786b5686027197fdab747f5733006dd0e90106ac52a675042"
+        }
+      ],
+      "entry": "models/concrete_road_barrier/concrete_road_barrier_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 7310
+    },
+    {
+      "asset": "portable_generator",
+      "name": "Portable Generator",
+      "author": "James Ray Cock",
+      "source_url": "https://polyhaven.com/a/portable_generator",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        818.3408081531525,
+        564.0000104904175,
+        576.9232391612604
+      ],
+      "files": [
+        {
+          "filename": "models/portable_generator/portable_generator_1k.gltf",
+          "bytes": 10130,
+          "sha256": "d5afe27834f824dfe753391713c45be03479e8100831f320796030531f61b848"
+        },
+        {
+          "filename": "models/portable_generator/textures/portable_generator_spec_1k.jpg",
+          "bytes": 23119,
+          "sha256": "acf30e81c367898eb846f353d77e404f6831ac23bf071e0e718fddb8881b86cb"
+        },
+        {
+          "filename": "models/portable_generator/textures/portable_generator_nor_gl_1k.jpg",
+          "bytes": 818829,
+          "sha256": "8a868edab1a2f5ffa50b2b1680c2c342491b3eeeac443734178c445c7286c25d"
+        },
+        {
+          "filename": "models/portable_generator/textures/portable_generator_diff_1k.jpg",
+          "bytes": 755079,
+          "sha256": "32acc300105a2df2290d872889b24e1b29ff1ca2c56c0a0cf8fbba0c5966a063"
+        },
+        {
+          "filename": "models/portable_generator/textures/portable_generator_arm_1k.jpg",
+          "bytes": 887711,
+          "sha256": "10236e967baddd90ec7d4ab68969b06fb419f98782a2796db94edc0249b0dad2"
+        },
+        {
+          "filename": "models/portable_generator/portable_generator.bin",
+          "bytes": 939572,
+          "sha256": "fb7dcfedec1331ad541569e4ca8d4157284b2164084b7fe5a97928d4abc0ea2d"
+        },
+        {
+          "filename": "models/portable_generator/portable_generator_smooth.gltf.json",
+          "bytes": 498034,
+          "sha256": "e3629f14bf48fda8dd6868540805c094564e712fe24b6bb2a7490338e59c7ab4"
+        }
+      ],
+      "entry": "models/portable_generator/portable_generator_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 8152
+    },
+    {
+      "asset": "small_lpg_tank",
+      "name": "Small Lpg Tank",
+      "author": "Ulan Cabanilla",
+      "source_url": "https://polyhaven.com/a/small_lpg_tank",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        410.0192189216614,
+        409.1912806034088,
+        641.9749736785434
+      ],
+      "files": [
+        {
+          "filename": "models/small_lpg_tank/small_lpg_tank_1k.gltf",
+          "bytes": 2792,
+          "sha256": "fbe2e6c9c5f9f14d42c34b61f664decdb8a0e1c224776812d3a07a9175a98e05"
+        },
+        {
+          "filename": "models/small_lpg_tank/textures/small_lpg_tank_nor_gl_1k.jpg",
+          "bytes": 750461,
+          "sha256": "1e6690a7e7c64da080b2047fb316c5a439cbd3c720729f686f0b07d02ae8122f"
+        },
+        {
+          "filename": "models/small_lpg_tank/textures/small_lpg_tank_diff_1k.jpg",
+          "bytes": 712049,
+          "sha256": "7c998ddf9bf0824d5e7d7e0ba4dc171b2f39c6ac124f583d98dc0e8bb62d4f1b"
+        },
+        {
+          "filename": "models/small_lpg_tank/textures/small_lpg_tank_arm_1k.jpg",
+          "bytes": 926422,
+          "sha256": "419ece07a7dd6800e25b38357c0ac55f94664aa4d3253234abf78b3225a094a1"
+        },
+        {
+          "filename": "models/small_lpg_tank/small_lpg_tank.bin",
+          "bytes": 388716,
+          "sha256": "9f79b87d9aa4474f54bfd558075b03d04c9af99fb370170ab1bda0eefd5f9c40"
+        },
+        {
+          "filename": "models/small_lpg_tank/small_lpg_tank_smooth.gltf.json",
+          "bytes": 149447,
+          "sha256": "a4d69f4a4eac2c574cc0d694fe930998d31c760e090e56d0e9c284357842dc42"
+        }
+      ],
+      "entry": "models/small_lpg_tank/small_lpg_tank_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 3760
+    },
+    {
+      "asset": "fire_hydrant",
+      "name": "Fire Hydrant",
+      "author": "Gon\u00e7alo Fel\u00edcio",
+      "source_url": "https://polyhaven.com/a/fire_hydrant",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "dimensions_mm": [
+        874.623566865921,
+        317.74356961250305,
+        799.4560238003032
+      ],
+      "files": [
+        {
+          "filename": "models/fire_hydrant/fire_hydrant_1k.gltf",
+          "bytes": 20926,
+          "sha256": "aaca81b2904e6e5f1fb10a854c7b9a921232624387d1f8757b5c6bdaedcd9eb0"
+        },
+        {
+          "filename": "models/fire_hydrant/fire_hydrant.bin",
+          "bytes": 1928772,
+          "sha256": "a3c7ed023bc4aff190902764326e7f83ae1a108f6bac2a1b637c38a8e03eb516"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_nor_gl_1k.jpg",
+          "bytes": 490552,
+          "sha256": "f6786775276c7b48f0582fdd7c43984b63b15b7a8e0ea0e2f2af8cdab98c06d7"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_aged_diff_1k.jpg",
+          "bytes": 629331,
+          "sha256": "3198cabcaf5107e59109bd07dfe8e4c87b3f0533173d10fafdaf86f8024a291e"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_aged_arm_1k.jpg",
+          "bytes": 665642,
+          "sha256": "9c46b014735a4e8df5a80e4c030ddb321c9aeaa715ad4ea3eb60e6f0909c9d0a"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_aged_nor_gl_1k.jpg",
+          "bytes": 543768,
+          "sha256": "6fadc78fd5d696bf594ff021aaf93a0c6aced761830f9aa6971c51b17c869c35"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_diff_1k.jpg",
+          "bytes": 570746,
+          "sha256": "a3d0b8b6fcd8a39c8d5067f8ef95e3290053131887398f89baf57c1f8d24ab45"
+        },
+        {
+          "filename": "models/fire_hydrant/textures/fire_hydrant_arm_1k.jpg",
+          "bytes": 671743,
+          "sha256": "d15bf8fc6389ae48a1060a38057c2093469e62f585c8033d300b80af81d40f9d"
+        },
+        {
+          "filename": "models/fire_hydrant/fire_hydrant_smooth.gltf.json",
+          "bytes": 630147,
+          "sha256": "0ebbf5979df23c45e36a9f87e6b050111646f2d6af44f8e74650bcb161be3bbf"
+        }
+      ],
+      "entry": "models/fire_hydrant/fire_hydrant_1k.gltf",
+      "modifications": "Simplified geometry with gltfpack for real-time playback; original textures retained.",
+      "optimized_triangles": 21572
+    }
+  ]
+}
