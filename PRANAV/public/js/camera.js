@@ -20,15 +20,21 @@ const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected
 
 let engine = null, sky = null, coco = null, running = false, rafId = 0, t0 = 0, sent = 0, wakeLock = null;
 let corridor = JSON.parse(store.get('skysentry.corridor', 'null')) || WEBCAM_CORRIDOR;
-let drawing = null, socket = null, auth = null;
+let drawing = null, socket = null, auth = null, botState = null, streaming = false, inFlight = false, lastSent = 0, framesSent = 0;
+const frameCanvas = document.createElement('canvas'), frameCtx = frameCanvas.getContext('2d');
+const STREAM_W = 640, STREAM_FPS = 15;
 
 /* ---------- form state ---------- */
 for (const [k, s] of Object.entries(SCENARIOS)) $('scenario').add(new Option(s.describe ? `${k.replace(/_/g, ' ')}: ${s.describe}` : k, k));
 for (const id of ['cameraId', 'heading', 'fov', 'lat', 'lon']) {
   const saved = store.get('skysentry.' + id, null);
   if (saved !== null) $(id).value = saved;
-  $(id).addEventListener('change', () => { store.set('skysentry.' + id, $(id).value); applyCamera(); });
+  $(id).addEventListener('change', () => { store.set('skysentry.' + id, $(id).value); applyCamera(); sendConfig(); });
 }
+const mode = () => $('mode').value;
+$('mode').value = store.get('skysentry.mode', 'stream');
+$('mode').addEventListener('change', () => store.set('skysentry.mode', mode()));
+function sendConfig() { socket?.connected && socket.emit('camera:config', { camera: cameraConfig(), corridor }); }
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; };
 $('source').addEventListener('change', showSourceFields);
 // Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
@@ -55,7 +61,10 @@ async function connect() {
   $('signout').onclick = () => auth.signOut();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
-  socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; });
+  socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); });
+  // In stream mode the server's bot sends back what it sees, so the phone shows the same boxes as the tower.
+  socket.on('bot:state', ({ state }) => { if (mode() === 'stream' && running) { botState = fromCompact(state); draw(botState); showState(botState); } });
+  socket.on('bot:status', s => { if (mode() === 'stream') $('aiStatus').textContent = s.mode === 'server' ? 'The server bot is analysing this feed.' : `Server bot unavailable (${s.reason}); a tower screen is analysing the feed instead.`; });
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; });
   socket.on('connect_error', err => {
     $('conn').textContent = err.message === 'unauthorized' ? 'Key or sign-in rejected' : 'Server offline'; $('conn').dataset.ok = '0';
@@ -151,8 +160,8 @@ function loop() {
   } else if (video.readyState >= 2) {
     smallCtx.drawImage(video, 0, 0, small.width, small.height);
   } else { rafId = requestAnimationFrame(loop); return; }
-  const st = engine.process(smallCtx.getImageData(0, 0, small.width, small.height), t);
-  draw(st); showState(st);
+  if (mode() === 'stream') { streamFrame(t); if (!botState) draw(null); }
+  else { const st = engine.process(smallCtx.getImageData(0, 0, small.width, small.height), t); draw(st); showState(st); }
   rafId = requestAnimationFrame(loop);
 }
 
@@ -162,7 +171,8 @@ async function start() {
     const source = $('source').value;
     engine = new DetectionEngine();
     applyCamera();
-    engine.on('event', sendEvent);
+    if (mode() === 'local') engine.on('event', sendEvent);
+    botState = null; framesSent = 0; inFlight = false;
     video.hidden = source === 'synthetic'; srcCanvas.hidden = source !== 'synthetic';
     if (source === 'synthetic') {
       srcCanvas.width = 1280; srcCanvas.height = 960;
@@ -177,18 +187,42 @@ async function start() {
       }
       await video.play();
     }
-    engine.setCorridor(corridor);
+    engine.setCorridor(corridor); sendConfig();
+    if (mode() === 'stream') { $('aiStatus').textContent = 'Streaming to the website. The server bot analyses the feed; the tower shows it live.'; document.querySelector('#sSent').previousSibling.textContent = 'Frames sent'; }
     const el = source === 'synthetic' ? srcCanvas : video;
     const ar = (el.videoWidth || el.width) / (el.videoHeight || el.height) || 4 / 3;
     small.width = 320; small.height = Math.round(320 / ar);
     $('empty').hidden = true; fitOverlay();
-    if ($('coco').getAttribute('aria-pressed') === 'true') await startCoco();
+    if (mode() === 'local' && $('coco').getAttribute('aria-pressed') === 'true') await startCoco();
     t0 = performance.now(); running = true; $('start').textContent = 'Stop';
     try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
     log(`started · ${source === 'synthetic' ? $('scenario').value.replace(/_/g, ' ') : source}`);
     rafId = requestAnimationFrame(loop);
   } catch (err) { log(`could not start: ${err.message}`); }
   $('start').disabled = false;
+}
+
+// Stream mode: send a JPEG frame at most STREAM_FPS times a second, and only after the server acknowledged the
+// previous one, so a slow connection lowers the frame rate instead of building up a delay.
+function streamFrame(t) {
+  const now = performance.now();
+  if (inFlight || now - lastSent < 1000 / STREAM_FPS || !socket?.connected) return;
+  const el = $('source').value === 'synthetic' ? srcCanvas : video;
+  const W = el.videoWidth || el.width, H = el.videoHeight || el.height; if (!W || !H) return;
+  frameCanvas.width = Math.min(STREAM_W, W); frameCanvas.height = Math.round(frameCanvas.width * H / W);
+  frameCtx.drawImage(el, 0, 0, frameCanvas.width, frameCanvas.height);
+  inFlight = true; lastSent = now;
+  frameCanvas.toBlob(async blob => {
+    if (!blob || !socket?.connected) { inFlight = false; return; }
+    const buf = await blob.arrayBuffer();
+    socket.timeout(4000).emit('camera:frame', { t: +t.toFixed(3) }, buf, () => { inFlight = false; });
+    $('sSent').textContent = ++framesSent;
+  }, 'image/jpeg', 0.65);
+}
+// The server sends a compact state; reshape it to what draw() and showState() expect.
+function fromCompact(c) {
+  return { risk: { level: c.risk, reasons: c.reasons || [] }, primary: c.primary && { ...c.primary, heading: c.primary.heading ? { name: c.primary.heading } : null },
+    tracks: c.tracks, flocks: c.flocks, stats: { fps: c.fps } };
 }
 
 function stop() {
@@ -208,7 +242,7 @@ $('drawCorridor').addEventListener('click', () => {
   $('drawCorridor').onclick = finishCorridor;
 });
 function finishCorridor() {
-  if (drawing && drawing.length >= 3) { corridor = drawing; store.set('skysentry.corridor', JSON.stringify(corridor)); engine?.setCorridor(corridor); log('corridor saved'); }
+  if (drawing && drawing.length >= 3) { corridor = drawing; store.set('skysentry.corridor', JSON.stringify(corridor)); engine?.setCorridor(corridor); sendConfig(); log('corridor saved'); }
   drawing = null; overlay.classList.remove('drawing'); $('drawCorridor').textContent = 'Draw corridor'; $('drawCorridor').onclick = null;
   $('corridorHint').textContent = 'Corridor saved on this device. Draw again any time.';
   draw(engine?.state);

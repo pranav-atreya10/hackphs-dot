@@ -3,6 +3,7 @@
 // and drives the Arduino beacon through Vivan's BeaconLink (or the on-screen VirtualBeacon).
 import { signIn } from '/js/auth.js';
 import { BeaconLink, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
+import { startFeeds } from '/js/feeds.js';
 
 const $ = id => document.getElementById(id);
 const RANK = { green: 0, yellow: 1, red: 2 };
@@ -196,6 +197,7 @@ async function connect() {
     if (ev.risk === 'red' && prev?.risk !== 'red') alarm();
   });
   socket.on('incident', upsertIncident);
+  startFeeds(socket, { container: $('feeds'), hint: $('feedsHint') });
   socket.on('alert', announce);
 }
 setInterval(loadHourly, 30000);

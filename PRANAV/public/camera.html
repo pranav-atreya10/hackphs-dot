@@ -47,6 +47,8 @@
   <aside class="col">
     <section class="card">
       <h2>Source</h2>
+      <label for="mode">Where the bot runs
+        <select id="mode"><option value="stream">Stream to the website (bot on the server, tower sees the live feed)</option><option value="local">Detect on this device (works on a weak connection)</option></select></label>
       <label for="source">Video source
         <select id="source"><option value="synthetic">Synthetic sky (no camera needed)</option><option value="webcam">Webcam / phone camera</option><option value="clip">Video clip</option></select></label>
       <label for="scenario" id="scenarioWrap">Synthetic scenario<select id="scenario"></select></label>

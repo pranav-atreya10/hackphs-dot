@@ -17,6 +17,7 @@ const film = join(repo, 'ATHARV/skysentry/dist');
 // Vivan's engine, adapters and test pages, unchanged.
 rmSync(join(pub, 'detection'), { recursive: true, force: true });
 for (const p of ['index.js', 'src', 'adapters', 'test']) cpSync(join(vivan, p), join(pub, 'detection', p), { recursive: true });
+writeFileSync(join(pub, 'detection/package.json'), '{ "type": "module" }\n');   // lets the server import the engine without warnings
 
 // Atharv's film runtime. Binary originals (.glb/.bin/.hdr/.gltf) are skipped; the loaders read the .json forms.
 const skip = /\.(glb|bin|hdr|gltf)$|_1k\.gltf\.json$|ASSET_CREDITS/;

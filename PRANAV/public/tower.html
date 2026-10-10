@@ -24,6 +24,11 @@
   .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px}
   #qr canvas,#qr img{width:100%!important;height:100%!important}
   canvas#chart{max-height:220px}
+  #feeds{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .tile{position:relative;background:#0e1620;border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+  .tile canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .tile .tag{position:absolute;left:10px;top:10px;font:600 .78rem var(--sans);color:#fff;background:rgba(14,22,32,.75);padding:4px 10px;border-radius:99px}
+  .tile .bot{position:absolute;right:10px;bottom:10px;font:500 .72rem var(--mono);color:#e8eef1;background:rgba(14,22,32,.75);padding:3px 8px;border-radius:6px}
   @media (max-width:1000px){main.grid{grid-template-columns:1fr}#detail{grid-template-columns:1fr}}
 </style>
 </head>
@@ -38,6 +43,10 @@
 
 <main class="grid">
   <div class="col">
+    <section class="card" id="feedsCard"><h2>Live camera feed</h2>
+      <div id="feeds"></div>
+      <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
+    </section>
     <section class="card risk" id="risk" data-risk="green" aria-live="polite">
       <span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Clear sky</span><span class="why" id="riskWhy">Waiting for a camera</span>
     </section>
