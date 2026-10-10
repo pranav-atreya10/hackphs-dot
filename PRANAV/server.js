@@ -37,7 +37,7 @@ const DATABASE_URL = process.env.DATABASE_URL || "";
 
 if (!DATABASE_URL) console.warn("DATABASE_URL is not set; events will not be stored");
 
-const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5 }) : null;
+const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5, connectionTimeoutMillis: 5000 }) : null;
 // An idle client losing its connection emits on the pool; without a listener that crashes the process.
 db?.on("error", (err) => console.error("postgres pool error:", err.message));
 
@@ -46,8 +46,9 @@ const MONGODB_URI = process.env.MONGODB_URI || "";
 
 if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents will not be stored");
 
-// The driver connects lazily on first use and reconnects on its own.
-const mongo = MONGODB_URI ? new MongoClient(MONGODB_URI, { maxPoolSize: 5 }) : null;
+// The driver connects lazily on first use and reconnects on its own. A short server-selection timeout makes an
+// unreachable cluster fail in 5s instead of 30s (longer than DigitalOcean's gateway waits).
+const mongo = MONGODB_URI ? new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 }) : null;
 const incidents = mongo?.db("skysentry").collection("incidents");
 incidents?.createIndex({ time: -1 }).catch((err) => console.error("failed to index incidents:", err.message));
 
@@ -281,6 +282,26 @@ app.get("/health", (req, res) => {
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
   });
+});
+
+// Live database check for debugging deploys: "ok", "not configured", or the driver's error (never the password).
+// Kept off /health so a slow or broken database can't make DigitalOcean's health check restart the app.
+async function dbStatus(check) {
+  try {
+    await check();
+    return "ok";
+  } catch (err) {
+    return String(err.message).slice(0, 200);
+  }
+}
+
+app.get("/health/db", async (req, res) => {
+  const [tiger, mongodb] = await Promise.all([
+    db ? dbStatus(() => db.query("SELECT 1")) : "not configured",
+    mongo ? dbStatus(() => mongo.db("skysentry").command({ ping: 1 })) : "not configured",
+  ]);
+  const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
+  res.json({ tiger, mongodb, clerk: clerkStatus, airports: AIRPORT_CODES.size });
 });
 
 // Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
