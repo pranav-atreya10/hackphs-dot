@@ -38,7 +38,7 @@ function sendConfig() { socket?.connected && socket.emit('camera:config', { came
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; };
 $('source').addEventListener('change', showSourceFields);
 // Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
-if (/Android|iPhone|iPad/i.test(navigator.userAgent)) $('source').value = 'webcam';
+$('source').value = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'webcam' : 'synthetic';
 showSourceFields();
 
 function cameraConfig() {
@@ -113,6 +113,7 @@ function frameRect() {
 function draw(state) {
   const f = frameRect(), P = ([x, y]) => [f.x + x * f.w, f.y + y * f.h];
   ov.clearRect(0, 0, overlay.width, overlay.height);
+  if (!running && !drawing) return;   // nothing to line up against until the video is showing
   const poly = drawing || corridor;
   if (poly.length > 1) {
     ov.beginPath(); poly.forEach((p, i) => ov[i ? 'lineTo' : 'moveTo'](...P(p))); if (!drawing) ov.closePath();
