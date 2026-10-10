@@ -46,11 +46,29 @@ const MONGODB_URI = process.env.MONGODB_URI || "";
 
 if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents will not be stored");
 
-// The driver connects lazily on first use and reconnects on its own. A short server-selection timeout makes an
-// unreachable cluster fail in 5s instead of 30s (longer than DigitalOcean's gateway waits).
-const mongo = MONGODB_URI ? new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 }) : null;
-const incidents = mongo?.db("skysentry").collection("incidents");
-incidents?.createIndex({ time: -1 }).catch((err) => console.error("failed to index incidents:", err.message));
+// The driver connects lazily and reconnects on its own, except that some failures (e.g. Atlas closing the
+// connection because the caller's IP isn't allowed) close the client for good ("Topology is closed").
+// withMongo then starts a fresh client, so fixing the cause doesn't need an app restart.
+// A short server-selection timeout makes an unreachable cluster fail in 5s, before DigitalOcean's gateway gives up.
+let mongo = null;
+function newMongo() {
+  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  mongo.db("skysentry").collection("incidents").createIndex({ time: -1 })
+    .catch((err) => console.error("failed to index incidents:", err.message));
+}
+if (MONGODB_URI) newMongo();
+
+// Run fn(db), replacing the client once if it has closed for good.
+async function withMongo(fn) {
+  const client = mongo;
+  try {
+    return await fn(client.db("skysentry"));
+  } catch (err) {
+    if (err.name !== "MongoTopologyClosedError") throw err;
+    if (mongo === client) newMongo();
+    return fn(mongo.db("skysentry"));
+  }
+}
 
 // Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
 const toText = (v) => (typeof v === "string" && v ? v.slice(0, 100) : null);
@@ -83,9 +101,9 @@ async function storeDetection(event) {
 // Save a yellow/red event as an incident report (document shape per the team plan). The AI step fills
 // gemini_label, report, and solana_tx later by updating the document with _id = event.id.
 async function storeIncident(event) {
-  if (!incidents) return;
+  if (!mongo) return;
   try {
-    await incidents.insertOne({
+    await withMongo((mdb) => mdb.collection("incidents").insertOne({
       _id: event.id,
       time: new Date(event.receivedAt),
       camera_id: event.cameraId,
@@ -99,7 +117,7 @@ async function storeIncident(event) {
       gemini_label: null,
       report: null,
       solana_tx: null,
-    });
+    }));
   } catch (err) {
     console.error(`failed to store incident ${event.id}:`, err.message);
   }
@@ -298,7 +316,7 @@ async function dbStatus(check) {
 app.get("/health/db", async (req, res) => {
   const [tiger, mongodb] = await Promise.all([
     db ? dbStatus(() => db.query("SELECT 1")) : "not configured",
-    mongo ? dbStatus(() => mongo.db("skysentry").command({ ping: 1 })) : "not configured",
+    mongo ? dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured",
   ]);
   const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
   res.json({ tiger, mongodb, clerk: clerkStatus, airports: AIRPORT_CODES.size });
@@ -320,10 +338,10 @@ app.get("/api/hourly", requireDashboard, async (req, res) => {
 
 // Latest 20 incident reports, newest first (only the caller's airport for signed-in dashboards).
 app.get("/api/incidents", requireDashboard, async (req, res) => {
-  if (!incidents) return res.status(503).json({ error: "incident store not configured" });
+  if (!mongo) return res.status(503).json({ error: "incident store not configured" });
   try {
     const filter = req.airport ? { airport: req.airport } : {};
-    res.json(await incidents.find(filter).sort({ time: -1 }).limit(20).toArray());
+    res.json(await withMongo((mdb) => mdb.collection("incidents").find(filter).sort({ time: -1 }).limit(20).toArray()));
   } catch (err) {
     console.error("failed to read incidents:", err.message);
     res.status(500).json({ error: "query failed" });
