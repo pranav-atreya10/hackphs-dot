@@ -47,3 +47,13 @@ services:
       - key: AIRPORT_CODES
         type: SECRET
         scope: RUN_TIME
+      # AI step (optional; see ai.js). Leave unset to run with demo stand-ins.
+      - key: GEMINI_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: ELEVENLABS_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: SOLANA_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME

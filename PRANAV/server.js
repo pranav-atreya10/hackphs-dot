@@ -6,6 +6,7 @@ const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
 const { createClerkClient, verifyToken } = require("@clerk/express");
+const ai = require("./ai");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
@@ -217,7 +218,16 @@ function relayCameraEvent(cameraId, payload, airport = null) {
   };
   towersFor(airport).emit("camera:event", event);
   storeDetection(event);
-  if (event.risk === "yellow" || event.risk === "red") storeIncident(event);
+  if (event.risk === "yellow" || event.risk === "red") {
+    // After the incident is stored, the AI step fills gemini_label/report/solana_tx and pushes the
+    // finished report (and a spoken alert for red) to this airport's towers. See ai.js.
+    storeIncident(event)
+      .then(() => ai.processIncident(event, {
+        save: (fields) => (mongo ? withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields })) : Promise.resolve()),
+        emit: (name, data) => towersFor(airport).emit(name, data),
+      }))
+      .catch((err) => console.error(`AI step failed for ${event.id}:`, err.message));
+  }
   return event;
 }
 
@@ -299,6 +309,7 @@ app.get("/health", (req, res) => {
     clients: io.engine.clientsCount,
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
+    ai: ai.status(),
   });
 });
 
@@ -346,6 +357,21 @@ app.get("/api/incidents", requireDashboard, async (req, res) => {
     console.error("failed to read incidents:", err.message);
     res.status(500).json({ error: "query failed" });
   }
+});
+
+// "Ask SkySentry": answers a tower question from the last 7 days of hourly stats (Gemini when configured).
+app.post("/api/ask", requireDashboard, async (req, res) => {
+  const question = String(req.body?.question ?? "").trim().slice(0, 500);
+  if (!question) return res.status(400).json({ error: "type a question first" });
+  let hourly = [];
+  if (db) {
+    try {
+      ({ rows: hourly } = await db.query("SELECT hour, type, events, total_objects FROM detections_hourly WHERE hour > now() - interval '7 days' ORDER BY hour"));
+    } catch (err) {
+      console.error("failed to read stats for /api/ask:", err.message);
+    }
+  }
+  res.json(await ai.answerQuestion(question, hourly));
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).

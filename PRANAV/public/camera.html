@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkySentry Camera</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/css/app.css">
+<style>
+  main.grid{grid-template-columns:minmax(0,1fr) 340px}
+  .view{position:relative;background:#0e1620;border-radius:14px;overflow:hidden;aspect-ratio:4/3}
+  .view video,.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  #overlay{cursor:default} #overlay.drawing{cursor:crosshair}
+  .banner{position:absolute;left:14px;top:14px;display:flex;gap:8px;align-items:center;font:600 .9rem var(--sans);color:#fff;background:rgba(14,22,32,.75);padding:6px 12px;border-radius:99px}
+  .banner i{width:10px;height:10px;border-radius:50%;background:var(--go)}
+  .banner[data-risk="yellow"] i{background:var(--warn)} .banner[data-risk="red"] i{background:var(--stop)}
+  #empty{position:absolute;inset:0;display:grid;place-items:center;color:#c9d4dd;text-align:center;padding:30px}
+  @media (max-width:980px){main.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <a class="brand" href="/"><i></i>SkySentry</a><h1>Camera station</h1>
+  <nav><a href="/">Home</a><a href="/camera.html" aria-current="page">Camera</a><a href="/tower.html">Tower</a></nav>
+  <span class="pill" id="conn">Not connected</span><span class="pill" id="who">…</span><button class="linkbtn" id="signout" type="button">Sign out</button>
+</div></header>
+<div id="auth" hidden></div>
+
+<main class="grid">
+  <div class="col">
+    <div class="view">
+      <video id="video" playsinline muted></video>
+      <canvas id="src"></canvas>
+      <canvas id="overlay"></canvas>
+      <div class="banner" id="banner" data-risk="green"><i></i><span id="bannerText">Clear</span></div>
+      <div id="empty">Choose a source and press Start.<br>The shaded area is the runway approach corridor.</div>
+    </div>
+    <section class="card risk" id="risk" data-risk="green" aria-live="polite">
+      <span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Not running</span><span class="why" id="riskWhy">—</span>
+    </section>
+    <section class="card"><div class="stats">
+      <div>Objects<b id="sObjects">0</b></div><div>Time to corridor<b id="sEta">—</b></div><div>Bearing<b id="sBearing">—</b></div>
+      <div>Wingbeat<b id="sFlap">—</b></div><div>Engine<b id="sFps">—</b></div><div>Events sent<b id="sSent">0</b></div>
+    </div></section>
+  </div>
+
+  <aside class="col">
+    <section class="card">
+      <h2>Source</h2>
+      <label for="source">Video source
+        <select id="source"><option value="synthetic">Synthetic sky (no camera needed)</option><option value="webcam">Webcam / phone camera</option><option value="clip">Video clip</option></select></label>
+      <label for="scenario" id="scenarioWrap">Synthetic scenario<select id="scenario"></select></label>
+      <label for="clip" id="clipWrap" hidden>Video file<input id="clip" type="file" accept="video/*"></label>
+      <div class="row"><button id="start" type="button">Start</button><button class="ghost" id="drawCorridor" type="button">Draw corridor</button></div>
+      <p class="hint" id="corridorHint">Draw corridor: click points around the runway approach, then double-click to finish.</p>
+    </section>
+    <section class="card">
+      <h2>This camera</h2>
+      <label for="cameraId">Camera ID<input id="cameraId" value="runway-east"></label>
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label for="heading">Faces (compass °)<input id="heading" type="number" min="0" max="359" value="90"></label>
+        <label for="fov">Lens width (°)<input id="fov" type="number" min="20" max="140" value="65"></label>
+        <label for="lat">Latitude<input id="lat" type="number" step="0.0001" value="40.3987"></label>
+        <label for="lon">Longitude<input id="lon" type="number" step="0.0001" value="-74.6586"></label>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Second opinions</h2>
+      <div class="row"><button class="ghost" id="coco" type="button" aria-pressed="false">COCO-SSD check</button><button class="ghost" id="mic" type="button" aria-pressed="false">Listen for drones</button></div>
+      <button class="ghost" id="fakeDrone" type="button" aria-pressed="false">Simulate drone sound</button>
+      <p class="hint" id="aiStatus">COCO-SSD double-checks tracked objects; the microphone listens for a drone’s steady hum.</p>
+    </section>
+    <section class="card"><h2>Sent to the tower</h2><ul class="log" id="log"></ul></section>
+  </aside>
+</main>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="/js/camera.js"></script>
+</body>
+</html>

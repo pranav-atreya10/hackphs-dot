@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COCO-SSD Check</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+    pre { background: #f4f4f4; padding: 8px; overflow: auto; }
+    canvas { max-width: 100%; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>COCO-SSD integration check</h1>
+  <p>Loads TF.js + COCO-SSD, then runs the engine on a synthetic sky (1280×960 "camera") with COCO checking crops.
+     Add <code>?base=mobilenet_v2</code> or <code>?backend=cpu</code> to compare.</p>
+  <p id="status">Starting…</p>
+  <canvas id="cam"></canvas>
+  <pre id="out"></pre>
+  <script type="module">
+    import { DetectionEngine, SyntheticSky } from '../index.js';
+    import { CocoVerifier } from '../adapters/coco.js';
+
+    const q = new URLSearchParams(location.search);
+    const scene = q.get('scene') || 'flock_corridor';
+    const status = (s) => (document.getElementById('status').textContent = s);
+    const out = { scene };
+    window.__COCO__ = out;
+
+    // "Camera": synthetic sky at 1280x960 on a visible canvas.
+    const W = 1280, H = 960;
+    const cam = document.getElementById('cam');
+    cam.width = W; cam.height = H;
+    const camCtx = cam.getContext('2d');
+    const sky = new SyntheticSky({ width: W, height: H, scenario: scene, seed: 7 });
+    // Engine input: 320x240 downscale of the camera (what the frame grabber will do).
+    const small = document.createElement('canvas');
+    small.width = 320; small.height = 240;
+    const smallCtx = small.getContext('2d', { willReadFrequently: true });
+
+    const engine = new DetectionEngine();
+    engine.setCorridor(sky.corridor);
+    const coco = new CocoVerifier(engine, { base: q.get('base') || undefined, backend: q.get('backend') || undefined });
+
+    try {
+      status('Loading TensorFlow.js + COCO-SSD…');
+      out.load = { ...(await coco.load()) };
+      status(`Loaded (${out.load.backend}, TF.js ${out.load.tfVersion}) in ${out.load.loadMs} ms, warm-up ${out.load.warmupMs} ms. Running scene…`);
+
+      coco.start(cam);
+      const labels = [];
+      engine.on('frame', () => {});
+      const origApply = engine.applyLabel.bind(engine);
+      engine.applyLabel = (id, label, score, src, extra) => { labels.push({ t: +engine.lastT.toFixed(2), id, label, score, ms: extra && extra.ms }); return origApply(id, label, score, src, extra); };
+
+      const t0 = performance.now();
+      const seconds = Number(q.get('seconds') || 8);
+      await new Promise((resolve) => {
+        const frame = () => {
+          const t = (performance.now() - t0) / 1000;
+          const img = sky.render(t);
+          camCtx.putImageData(new ImageData(img.data, W, H), 0, 0);
+          smallCtx.drawImage(cam, 0, 0, 320, 240);
+          engine.process(smallCtx.getImageData(0, 0, 320, 240), t);
+          if (t < seconds) requestAnimationFrame(frame); else resolve();
+        };
+        requestAnimationFrame(frame);
+      });
+      coco.stop();
+
+      // One direct check on the biggest tracked object, to show a crop.
+      const st = engine.state;
+      out.engine = { risk: st.risk.level, tracks: st.tracks.length, fps: st.stats.fps, proc_ms: st.stats.proc_ms, coco_checks: st.stats.coco_checks, coco_nothing: st.stats.coco_nothing, coco_agreement: st.stats.coco_agreement };
+      out.coco = { inferences: coco.stats.inferences, avgMs: coco.stats.avgMs, lastMs: coco.stats.lastMs, intervalMs: coco.stats.intervalMs, errors: coco.stats.errors, lastError: coco.stats.lastError || null };
+      out.labels = labels;
+      out.trackCoco = st.tracks.map((t) => ({ id: t.id, cls: t.classification, reason: t.reason, coco: t.coco }));
+      status('Done.');
+    } catch (e) {
+      out.error = e.message;
+      status('Failed: ' + e.message);
+    }
+    document.getElementById('out').textContent = JSON.stringify(out, null, 2);
+    out.done = true;
+  </script>
+</body>
+</html>
