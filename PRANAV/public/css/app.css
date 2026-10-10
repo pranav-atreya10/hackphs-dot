@@ -1,0 +1,46 @@
+/* Shared look for the camera and tower pages: warm paper, serif headings, matching the landing page. */
+:root{--paper:#f4efe6;--paper-2:#ebe3d4;--card:#fbf8f2;--ink:#1f1b16;--mute:#6e6458;--line:#ddd2bf;--clay:#c2643f;
+  --go:#2e8b57;--warn:#d99a00;--stop:#c0392b;--blue:#1f6fd1;
+  --serif:"Source Serif 4",Georgia,serif;--sans:"DM Sans",system-ui,-apple-system,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;color-scheme:light}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+a{color:var(--clay)}
+.top{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--line)}
+.top-in{max-width:1360px;margin:0 auto;padding:0 20px;height:58px;display:flex;align-items:center;gap:14px}
+.brand{font:500 1.3rem var(--serif);color:var(--ink);text-decoration:none;display:flex;align-items:center;gap:9px}
+.brand i{width:9px;height:9px;border-radius:50%;background:var(--clay)}
+.top h1{margin:0;font:400 1.05rem var(--serif);color:var(--mute)}
+.top nav{display:flex;gap:18px;margin-left:auto}
+.top nav a{font:500 .88rem var(--sans);color:var(--mute);text-decoration:none}
+.top nav a[aria-current]{color:var(--ink)}
+.pill{font:500 .74rem var(--mono);border:1px solid var(--line);border-radius:99px;padding:4px 10px;color:var(--mute);white-space:nowrap}
+.pill[data-ok="1"]{color:var(--go);border-color:var(--go)} .pill[data-ok="0"]{color:var(--stop);border-color:var(--stop)}
+.linkbtn{all:unset;cursor:pointer;font:500 .82rem var(--sans);color:var(--mute)} .linkbtn:hover{color:var(--ink)}
+main.grid{max-width:1360px;margin:0 auto;padding:18px 20px 48px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+.card h2{margin:0;font:500 1.1rem var(--serif)}
+.col{display:grid;gap:16px;align-content:start;min-width:0}
+label{display:grid;gap:4px;font:500 .8rem var(--sans);color:var(--mute)}
+input,select{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+button{font:600 .92rem var(--sans);background:var(--ink);color:var(--paper);border:0;border-radius:99px;padding:10px 16px;cursor:pointer}
+button:hover{background:var(--clay)} button:disabled{opacity:.45;cursor:default}
+button.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)} button.ghost:hover{border-color:var(--clay)}
+button[aria-pressed="true"]{background:var(--clay);color:#fff}
+:focus-visible{outline:2px solid var(--clay);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{margin:0;font-size:.82rem;color:var(--mute)}
+.mono{font-family:var(--mono)}
+.risk{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;border-left:8px solid var(--go);border-radius:0 14px 14px 0;transition:border-color .3s}
+.risk[data-risk="yellow"]{border-left-color:var(--warn)} .risk[data-risk="red"]{border-left-color:var(--stop)}
+.risk .lvl{font:500 2.6rem/1 var(--serif);grid-row:span 2} .risk .what{font-weight:600} .risk .why{color:var(--mute);font:500 .8rem var(--mono)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.stats div{font:500 .75rem var(--mono);color:var(--mute)} .stats b{display:block;font:500 1.25rem var(--sans);color:var(--ink);font-variant-numeric:tabular-nums}
+.log{list-style:none;margin:0;padding:0;font:400 .78rem var(--mono);color:var(--mute);max-height:220px;overflow:auto;display:grid;gap:3px}
+.lv{display:inline-block;min-width:4.4em;text-align:center;border-radius:4px;color:#fff;font-weight:600;padding:0 5px}
+.lv.green{background:var(--go)} .lv.yellow{background:var(--warn)} .lv.red{background:var(--stop)}
+#auth[hidden]{display:none}
+#auth{position:fixed;inset:0;z-index:50;background:rgba(244,239,230,.97);display:grid;place-items:center;padding:20px}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;max-width:440px;width:100%;display:grid;gap:12px}
+.auth-card h2{margin:0;font:500 1.6rem var(--serif)} .auth-card p{margin:0;color:var(--mute)}
+.auth-card form{display:grid;gap:12px} .auth-err{color:var(--stop);min-height:1.2em}
+@media (max-width:760px){.top nav{display:none}}

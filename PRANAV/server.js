@@ -6,6 +6,8 @@ const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
 const { createClerkClient, verifyToken } = require("@clerk/express");
+const ai = require("./ai");
+const { CameraBot, BOT_ENABLED } = require("./bot");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
@@ -217,7 +219,16 @@ function relayCameraEvent(cameraId, payload, airport = null) {
   };
   towersFor(airport).emit("camera:event", event);
   storeDetection(event);
-  if (event.risk === "yellow" || event.risk === "red") storeIncident(event);
+  if (event.risk === "yellow" || event.risk === "red") {
+    // After the incident is stored, the AI step fills gemini_label/report/solana_tx and pushes the
+    // finished report (and a spoken alert for red) to this airport's towers. See ai.js.
+    storeIncident(event)
+      .then(() => ai.processIncident(event, {
+        save: (fields) => (mongo ? withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields })) : Promise.resolve()),
+        emit: (name, data) => towersFor(airport).emit(name, data),
+      }))
+      .catch((err) => console.error(`AI step failed for ${event.id}:`, err.message));
+  }
   return event;
 }
 
@@ -299,6 +310,8 @@ app.get("/health", (req, res) => {
     clients: io.engine.clientsCount,
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
+    ai: ai.status(),
+    bot: BOT_ENABLED ? "server bot on" : "server bot off (towers detect)",
   });
 });
 
@@ -348,6 +361,21 @@ app.get("/api/incidents", requireDashboard, async (req, res) => {
   }
 });
 
+// "Ask SkySentry": answers a tower question from the last 7 days of hourly stats (Gemini when configured).
+app.post("/api/ask", requireDashboard, async (req, res) => {
+  const question = String(req.body?.question ?? "").trim().slice(0, 500);
+  if (!question) return res.status(400).json({ error: "type a question first" });
+  let hourly = [];
+  if (db) {
+    try {
+      ({ rows: hourly } = await db.query("SELECT hour, type, events, total_objects FROM detections_hourly WHERE hour > now() - interval '7 days' ORDER BY hour"));
+    } catch (err) {
+      console.error("failed to read stats for /api/ask:", err.message);
+    }
+  }
+  res.json(await ai.answerQuestion(question, hourly));
+});
+
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).
 // Auth: a signed-in camera account ("Authorization: Bearer <Clerk session token>"), or for scripts and
 // microcontrollers "x-api-key: <CAMERA_API_KEY>" (or Bearer <CAMERA_API_KEY>) plus optional "x-airport: <code>".
@@ -392,8 +420,19 @@ cameras.on("connection", (socket) => {
     reply({ ok: true, id: event.id, towers: towers.sockets.size });
   });
 
+  // Live video: the phone streams JPEG frames; the server bot runs Vivan's engine on them (bot.js) and
+  // every tower at this airport gets the feed plus the bot's overlay. If the bot hands over, towers detect.
+  const live = openLive(cameraId, airport, (name, data) => socket.emit(name, data));
+  socket.on("camera:config", (config) => configureLive(live, config));
+  socket.on("camera:frame", async (meta, jpegBuf, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    if (!isPlainObject(meta) || !Buffer.isBuffer(jpegBuf) || jpegBuf.length > 900_000) return reply({ ok: false });
+    reply({ ok: true, bot: await liveFrame(live, jpegBuf, meta.t) });
+  });
+
   socket.on("disconnect", () => {
     console.log(`camera disconnected: ${cameraId}`);
+    if (liveCameras.get(cameraId) === live) liveCameras.delete(cameraId);
     towersFor(airport).emit("camera:status", { cameraId, airport, online: false, at: Date.now() });
   });
 });
@@ -416,8 +455,98 @@ towers.use(async (socket, next) => {
   next(new Error("unauthorized"));
 });
 
+// Streaming cameras by id: their server bot, settings, and which tower (if any) is the fallback detector.
+const liveCameras = new Map();
+
+// toCamera(name, data) sends bot results back to the streaming device (socket cameras); HTTP cameras read
+// the latest state from the response instead.
+function openLive(cameraId, airport, toCamera = () => {}) {
+  const old = liveCameras.get(cameraId);
+  if (old && old.airport === airport) { old.toCamera = toCamera; return old; }
+  const live = { cameraId, airport, config: null, fallbackOwner: null, fallbackAt: 0, toCamera, lastState: null, lastSeen: Date.now() };
+  live.bot = new CameraBot({
+    cameraId,
+    onEvent: (ev) => relayCameraEvent(cameraId, ev, airport),
+    onState: (state) => {
+      live.lastState = state;
+      towersFor(airport).emit("bot:state", { cameraId, state });   // small; not volatile, or it's dropped behind the frame
+      live.toCamera("bot:state", { cameraId, state });
+    },
+    onStatus: () => { towersFor(airport).emit("bot:status", live.bot.status()); live.toCamera("bot:status", live.bot.status()); },
+  });
+  liveCameras.set(cameraId, live);
+  towersFor(airport).emit("bot:status", live.bot.status());
+  return live;
+}
+function configureLive(live, config) {
+  if (!isPlainObject(config)) return false;
+  live.config = { camera: config.camera, corridor: config.corridor, camera_id: live.cameraId };
+  live.bot.configure(live.config);
+  towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, ...live.config });
+  return true;
+}
+async function liveFrame(live, jpegBuf, t) {
+  live.lastSeen = Date.now();
+  towersFor(live.airport).volatile.emit("camera:frame", { cameraId: live.cameraId, t, jpeg: jpegBuf });
+  return (await live.bot.frame(jpegBuf, Number(t) || 0)) ? "server" : "tower";
+}
+
+// HTTP streaming for native apps (no Socket.IO library needed). Same auth as /api/camera-events.
+//   POST /api/camera-config  JSON { camera: {lat, lon, heading_deg, hfov_deg}, corridor: [[x,y],...] }
+//   POST /api/camera-frame   body = one JPEG (Content-Type: image/jpeg), header x-frame-time = seconds
+//   -> { ok, bot: "server"|"tower", state }   state = the bot's latest tracks/flocks/risk for the app's overlay
+async function httpCamera(req, res) {
+  const bearer = bearerToken(req);
+  const airport = await cameraAirport(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
+  if (airport === undefined) { res.status(401).json({ error: "camera sign-in or camera key required" }); return null; }
+  const cameraId = String(req.get("x-camera-id") || "phone").slice(0, 60);
+  const fresh = !liveCameras.has(cameraId);
+  const live = openLive(cameraId, airport);
+  if (fresh) towersFor(airport).emit("camera:status", { cameraId, airport, online: true, at: Date.now() });
+  return live;
+}
+app.post("/api/camera-config", async (req, res) => {
+  const live = await httpCamera(req, res); if (!live) return;
+  if (!configureLive(live, req.body)) return res.status(400).json({ error: "body must be a JSON object" });
+  res.json({ ok: true });
+});
+app.post("/api/camera-frame", express.raw({ type: ["image/jpeg", "application/octet-stream"], limit: "900kb" }), async (req, res) => {
+  const live = await httpCamera(req, res); if (!live) return;
+  if (!Buffer.isBuffer(req.body) || req.body.length < 100) return res.status(400).json({ error: "send one JPEG frame as the request body" });
+  const bot = await liveFrame(live, req.body, req.get("x-frame-time"));
+  res.json({ ok: true, bot, state: live.lastState });
+});
+// HTTP cameras have no disconnect event; mark them offline after 10 s without frames.
+setInterval(() => {
+  for (const live of liveCameras.values()) {
+    if (live.toCamera.length === 0 && Date.now() - live.lastSeen > 10_000) {
+      liveCameras.delete(live.cameraId);
+      towersFor(live.airport).emit("camera:status", { cameraId: live.cameraId, airport: live.airport, online: false, at: Date.now() });
+    }
+  }
+}, 5000).unref();
+const towerSees = (socket, live) => !socket.data.airport || !live.airport || live.airport === socket.data.airport;
+
 towers.on("connection", (socket) => {
   socket.join(socket.data.airport ? `airport:${socket.data.airport}` : "airport:*");
+  for (const live of liveCameras.values()) {
+    if (!towerSees(socket, live)) continue;
+    socket.emit("bot:status", live.bot.status());
+    if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, ...live.config });
+  }
+
+  // Fallback detection: when a camera's server bot has handed over, the first tower to report owns that
+  // camera's events (others just draw), so alerts are never duplicated. Ownership lapses after 5 s of silence.
+  socket.on("tower:bot-event", (ev, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    const live = isPlainObject(ev) && liveCameras.get(String(ev.camera_id));
+    if (!live || live.bot.active || !towerSees(socket, live)) return reply({ ok: false, reason: "server bot is active" });
+    const now = Date.now();
+    if (live.fallbackOwner && live.fallbackOwner !== socket.id && now - live.fallbackAt < 5000) return reply({ ok: false, reason: "another tower is detecting" });
+    live.fallbackOwner = socket.id; live.fallbackAt = now;
+    relayCameraEvent(live.cameraId, { ...ev, detected_by: "tower" }, live.airport);
+    reply({ ok: true });
+  });
   console.log(`tower connected: ${socket.id}${socket.data.airport ? ` (${socket.data.airport})` : ""}`);
   socket.on("disconnect", () => console.log(`tower disconnected: ${socket.id}`));
 });

@@ -1,60 +1,80 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tower Dashboard</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-    #cameras span { display: inline-block; margin: 0 6px 6px 0; padding: 2px 8px; border-radius: 10px; background: #e6f4ea; }
-    #cameras span.offline { background: #fce8e6; }
-    #log { list-style: none; padding: 0; border: 1px solid #ccc; height: 400px; overflow-y: auto; }
-    #log li { padding: 6px 8px; border-bottom: 1px solid #eee; }
-    #log pre { margin: 4px 0 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkySentry Tower</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/css/app.css">
+<style>
+  main.grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr)}
+  #map{height:320px;border-radius:10px;border:1px solid var(--line)}
+  #alertText{margin:0;font:400 1.3rem/1.35 var(--serif);min-height:1.4em}
+  .risk[data-risk="red"]{animation:flash 1s infinite alternate} @keyframes flash{to{background:#f7e3dc}}
+  @media (prefers-reduced-motion:reduce){.risk[data-risk="red"]{animation:none}}
+  .feed li{display:grid;grid-template-columns:5.2rem 4.6rem 1fr;gap:8px;border-top:1px solid var(--line);padding-top:5px}
+  .incidents{list-style:none;margin:0;padding:0;display:grid;max-height:280px;overflow:auto}
+  .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
+  .incidents button:hover b,.incidents button:focus-visible b{color:var(--clay)} .incidents b{font:500 1rem var(--serif)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
+  #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
+  #beaconView{padding:8px 0}
+  form.ask{display:flex;gap:8px} form.ask input{flex:1}
+  #answer{margin:0;font:400 1.02rem/1.5 var(--serif);min-height:1.5em}
+  .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px}
+  #qr canvas,#qr img{width:100%!important;height:100%!important}
+  canvas#chart{max-height:220px}
+  #feeds{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .tile{position:relative;background:#0e1620;border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+  .tile canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .tile .tag{position:absolute;left:10px;top:10px;font:600 .78rem var(--sans);color:#fff;background:rgba(14,22,32,.75);padding:4px 10px;border-radius:99px}
+  .tile .bot{position:absolute;right:10px;bottom:10px;font:500 .72rem var(--mono);color:#e8eef1;background:rgba(14,22,32,.75);padding:3px 8px;border-radius:6px}
+  @media (max-width:1000px){main.grid{grid-template-columns:1fr}#detail{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <h1>Tower Dashboard</h1>
-  <p>Status: <span id="status">connecting…</span></p>
-  <div id="cameras"></div>
-  <ul id="log"></ul>
+<header class="top"><div class="top-in">
+  <a class="brand" href="/"><i></i>SkySentry</a><h1>Tower</h1>
+  <nav><a href="/">Home</a><a href="/camera.html">Camera</a><a href="/tower.html" aria-current="page">Tower</a></nav>
+  <span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No cameras</span><span class="pill" id="who">…</span>
+  <button class="ghost" id="sound" type="button">Turn on alert sound</button>
+</div></header>
+<div id="auth" hidden></div>
 
-  <!-- Served automatically by the Socket.IO server -->
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    // If the server has TOWER_API_KEY set, open this page as /tower.html?key=<TOWER_API_KEY>
-    const key = new URLSearchParams(location.search).get("key") || undefined;
-    const socket = io("/tower", { auth: { key } });
-    const statusEl = document.getElementById("status");
-    const log = document.getElementById("log");
-    const camerasEl = document.getElementById("cameras");
-    const cameraTags = {};
-
-    socket.on("connect", () => (statusEl.textContent = "connected"));
-    socket.on("disconnect", () => (statusEl.textContent = "disconnected"));
-    socket.on("connect_error", (err) => (statusEl.textContent = `error: ${err.message}`));
-
-    function setCamera(cameraId, online) {
-      if (!cameraTags[cameraId]) {
-        cameraTags[cameraId] = document.createElement("span");
-        camerasEl.appendChild(cameraTags[cameraId]);
-      }
-      cameraTags[cameraId].textContent = `${cameraId} ${online ? "●" : "○"}`;
-      cameraTags[cameraId].className = online ? "" : "offline";
-    }
-
-    socket.on("camera:status", ({ cameraId, online }) => setCamera(cameraId, online));
-
-    socket.on("camera:event", (event) => {
-      setCamera(event.cameraId, true);
-      const li = document.createElement("li");
-      const title = document.createElement("strong");
-      title.textContent = `${new Date(event.receivedAt).toLocaleTimeString()} · ${event.cameraId}`;
-      const body = document.createElement("pre");
-      body.textContent = JSON.stringify(event, null, 2);
-      li.append(title, body);
-      log.prepend(li);
-    });
-  </script>
+<main class="grid">
+  <div class="col">
+    <section class="card" id="feedsCard"><h2>Live camera feed</h2>
+      <div id="feeds"></div>
+      <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
+    </section>
+    <section class="card risk" id="risk" data-risk="green" aria-live="polite">
+      <span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Clear sky</span><span class="why" id="riskWhy">Waiting for a camera</span>
+    </section>
+    <section class="card"><h2>Latest alert</h2><p id="alertText">No alerts yet.</p></section>
+    <section class="card"><h2>Airport map</h2><div id="map"></div><p class="hint">Blue: cameras and what they can see. Pins: where each threat was, from the camera’s bearing.</p></section>
+    <section class="card"><h2>Live events</h2><ul class="log feed" id="feed"></ul></section>
+  </div>
+  <div class="col">
+    <section class="card phone">
+      <div id="qr" aria-label="QR code for the camera page"></div>
+      <div><h2>Add a phone camera</h2><p class="hint">Scan with the phone, open the camera page, point it at the sky by the runway and press Start. <span class="mono" id="camUrl"></span></p></div>
+    </section>
+    <section class="card"><h2>Tower beacon</h2>
+      <div id="beaconView"></div>
+      <div class="row"><button class="ghost" id="beaconBtn" type="button">Connect Arduino beacon</button><span class="hint" id="beaconStatus">On-screen beacon running. Plug the Arduino in by USB to drive the real one.</span></div>
+    </section>
+    <section class="card"><h2>Detections by hour</h2><canvas id="chart" aria-label="Detections by hour, last 24 hours"></canvas><p class="hint" id="chartNote"></p></section>
+    <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>
+    <section class="card"><h2>Ask SkySentry</h2>
+      <form class="ask" id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question"><button>Ask</button></form>
+      <p id="answer"></p>
+    </section>
+  </div>
+</main>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script type="module" src="/js/tower.js"></script>
 </body>
 </html>
