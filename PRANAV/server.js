@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
+const { MongoClient } = require("mongodb");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
@@ -27,6 +28,16 @@ if (!DATABASE_URL) console.warn("DATABASE_URL is not set; events will not be sto
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5 }) : null;
 // An idle client losing its connection emits on the pool; without a listener that crashes the process.
 db?.on("error", (err) => console.error("postgres pool error:", err.message));
+
+// MongoDB Atlas connection string; incident reports (with snapshots) are stored here.
+const MONGODB_URI = process.env.MONGODB_URI || "";
+
+if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents will not be stored");
+
+// The driver connects lazily on first use and reconnects on its own.
+const mongo = MONGODB_URI ? new MongoClient(MONGODB_URI, { maxPoolSize: 5 }) : null;
+const incidents = mongo?.db("skysentry").collection("incidents");
+incidents?.createIndex({ time: -1 }).catch((err) => console.error("failed to index incidents:", err.message));
 
 // Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
 const toText = (v) => (typeof v === "string" && v ? v.slice(0, 100) : null);
@@ -53,6 +64,30 @@ async function storeDetection(event) {
     );
   } catch (err) {
     console.error(`failed to store event ${event.id}:`, err.message);
+  }
+}
+
+// Save a yellow/red event as an incident report (document shape per the team plan). The AI step fills
+// gemini_label, report, and solana_tx later by updating the document with _id = event.id.
+async function storeIncident(event) {
+  if (!incidents) return;
+  try {
+    await incidents.insertOne({
+      _id: event.id,
+      time: new Date(event.receivedAt),
+      camera_id: event.cameraId,
+      type: toText(event.type),
+      object_count: toNumber(event.object_count),
+      direction: toText(event.direction),
+      confidence: toNumber(event.confidence),
+      risk: event.risk,
+      snapshot: typeof event.snapshot === "string" ? event.snapshot : null,
+      gemini_label: null,
+      report: null,
+      solana_tx: null,
+    });
+  } catch (err) {
+    console.error(`failed to store incident ${event.id}:`, err.message);
   }
 }
 
@@ -93,6 +128,7 @@ function relayCameraEvent(cameraId, payload) {
   };
   towers.emit("camera:event", event);
   storeDetection(event);
+  if (event.risk === "yellow" || event.risk === "red") storeIncident(event);
   return event;
 }
 
@@ -122,6 +158,17 @@ app.get("/api/hourly", async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("failed to read detections_hourly:", err.message);
+    res.status(500).json({ error: "query failed" });
+  }
+});
+
+// Latest 20 incident reports, newest first.
+app.get("/api/incidents", async (req, res) => {
+  if (!incidents) return res.status(503).json({ error: "incident store not configured" });
+  try {
+    res.json(await incidents.find().sort({ time: -1 }).limit(20).toArray());
+  } catch (err) {
+    console.error("failed to read incidents:", err.message);
     res.status(500).json({ error: "query failed" });
   }
 });
@@ -197,7 +244,7 @@ process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down");
   io.close();
   server.close(async () => {
-    await db?.end();
+    await Promise.allSettled([db?.end(), mongo?.close()]);
     process.exit(0);
   });
 });

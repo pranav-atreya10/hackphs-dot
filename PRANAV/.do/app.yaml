@@ -36,3 +36,6 @@ services:
       - key: DATABASE_URL
         type: SECRET
         scope: RUN_TIME
+      - key: MONGODB_URI
+        type: SECRET
+        scope: RUN_TIME
