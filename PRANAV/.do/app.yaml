@@ -33,3 +33,6 @@ services:
       - key: TOWER_API_KEY
         type: SECRET
         scope: RUN_TIME
+      - key: DATABASE_URL
+        type: SECRET
+        scope: RUN_TIME

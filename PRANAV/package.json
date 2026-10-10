@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "db:setup": "node db/setup.js"
   },
   "engines": {
     "node": ">=20.12"
@@ -13,6 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.3.0",
+    "pg": "^8.23.1",
     "socket.io": "^4.8.4"
   }
 }

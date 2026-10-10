@@ -3,6 +3,7 @@ const http = require("http");
 const crypto = require("crypto");
 const express = require("express");
 const { Server } = require("socket.io");
+const { Pool } = require("pg");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
@@ -18,6 +19,27 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const CAMERA_API_KEY = process.env.CAMERA_API_KEY || "";
 // Optional secret that tower dashboards must present to receive events. Unset = open.
 const TOWER_API_KEY = process.env.TOWER_API_KEY || "";
+// Tiger Data (TimescaleDB) connection string, e.g. postgres://tsdbadmin:<pw>@<host>:<port>/tsdb?sslmode=require
+const DATABASE_URL = process.env.DATABASE_URL || "";
+
+if (!DATABASE_URL) console.warn("DATABASE_URL is not set; events will not be stored");
+
+const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5 }) : null;
+// An idle client losing its connection emits on the pool; without a listener that crashes the process.
+db?.on("error", (err) => console.error("postgres pool error:", err.message));
+
+// Persist one relayed event. Failures are logged, not thrown, so a DB outage never blocks the live relay.
+async function storeDetection(event) {
+  if (!db) return;
+  try {
+    await db.query(
+      "INSERT INTO detections (time, id, camera_id, payload) VALUES (to_timestamp($1 / 1000.0), $2, $3, $4)",
+      [event.receivedAt, event.id, event.cameraId, event]
+    );
+  } catch (err) {
+    console.error(`failed to store event ${event.id}:`, err.message);
+  }
+}
 
 if (!CAMERA_API_KEY) {
   if (process.env.NODE_ENV === "production") {
@@ -55,6 +77,7 @@ function relayCameraEvent(cameraId, payload) {
     receivedAt: Date.now(),
   };
   towers.emit("camera:event", event);
+  storeDetection(event);
   return event;
 }
 
@@ -72,6 +95,20 @@ app.get("/health", (req, res) => {
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
   });
+});
+
+// Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
+app.get("/api/hourly", async (req, res) => {
+  if (!db) return res.status(503).json({ error: "database not configured" });
+  try {
+    const { rows } = await db.query(
+      "SELECT * FROM detections_hourly WHERE bucket > now() - interval '24 hours' ORDER BY bucket"
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("failed to read detections_hourly:", err.message);
+    res.status(500).json({ error: "query failed" });
+  }
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).
@@ -144,5 +181,8 @@ server.listen(PORT, HOST, () => {
 process.on("SIGTERM", () => {
   console.log("SIGTERM received, shutting down");
   io.close();
-  server.close(() => process.exit(0));
+  server.close(async () => {
+    await db?.end();
+    process.exit(0);
+  });
 });
