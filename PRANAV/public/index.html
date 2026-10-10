@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HackPHS Socket Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    #log { list-style: none; padding: 0; border: 1px solid #ccc; height: 300px; overflow-y: auto; }
+    #log li { padding: 4px 8px; border-bottom: 1px solid #eee; }
+    form { display: flex; gap: 8px; margin-top: 8px; }
+    input { flex: 1; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>HackPHS Socket Demo</h1>
+  <p>Status: <span id="status">connecting…</span> · Online: <span id="count">0</span></p>
+  <ul id="log"></ul>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Say something" />
+    <button>Send</button>
+  </form>
+
+  <!-- Served automatically by the Socket.IO server -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const log = document.getElementById("log");
+    const statusEl = document.getElementById("status");
+
+    socket.on("connect", () => (statusEl.textContent = "connected"));
+    socket.on("disconnect", () => (statusEl.textContent = "disconnected"));
+    socket.on("presence", ({ clients }) => (document.getElementById("count").textContent = clients));
+    socket.on("message", ({ id, text }) => {
+      const li = document.createElement("li");
+      li.textContent = `${id.slice(0, 5)}: ${text}`;
+      log.appendChild(li);
+      log.scrollTop = log.scrollHeight;
+    });
+
+    document.getElementById("form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("input");
+      if (input.value.trim()) socket.emit("message", input.value);
+      input.value = "";
+    });
+  </script>
+</body>
+</html>
