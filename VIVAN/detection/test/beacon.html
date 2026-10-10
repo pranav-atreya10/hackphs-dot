@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beacon Rehearsal</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+    button, select { font: inherit; padding: 4px 10px; margin-right: 6px; }
+    #virtual { margin: 12px 0; padding: 10px; border: 1px solid #ccc; border-radius: 8px; display: inline-block; }
+    canvas { max-width: 100%; border: 1px solid #ccc; display: block; margin: 8px 0; }
+    pre { background: #f4f4f4; padding: 8px; max-height: 220px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>SkySentry beacon rehearsal</h1>
+  <p>Plays a synthetic scene through the detection engine and drives the Arduino beacon (or the on-screen copy).
+     Web Serial needs desktop Chrome or Edge.</p>
+  <div>
+    <button id="connect">Connect Arduino</button>
+    <select id="scene"></select>
+    <button id="play">Play</button>
+    <button id="drone">Drone sound: off</button>
+    <span id="link">not connected</span>
+  </div>
+  <div id="virtual"></div>
+  <canvas id="sky" width="320" height="240"></canvas>
+  <pre id="log"></pre>
+  <script type="module">
+    import { DetectionEngine, SyntheticSky, SCENARIOS } from '../index.js';
+    import { BeaconLink, VirtualBeacon, frameFromState, encodeBeacon } from '../adapters/beacon.js';
+
+    const $ = (id) => document.getElementById(id);
+    for (const [name, s] of Object.entries(SCENARIOS)) $('scene').append(new Option(`${name}: ${s.describe}`, name));
+    const virtual = new VirtualBeacon($('virtual'));
+    const link = new BeaconLink();
+    const log = (line) => { const el = $('log'); el.textContent = (line + '\n' + el.textContent).slice(0, 4000); };
+
+    // Every line sent to the Arduino also drives the on-screen beacon, so both always match.
+    const realWrite = link.writeLine;
+    link.writeLine = async (line) => { virtual.feed(line); log('> ' + line); if (link.stats.connected) await realWrite(line); };
+    link.listeners.add((line) => log('< ' + line));
+    // Heartbeat even without hardware (the virtual beacon has the same 3 s watchdog).
+    setInterval(() => link.tick(), 100);
+
+    $('connect').onclick = async () => {
+      try {
+        $('link').textContent = 'connecting… (the Uno reboots, ~2 s)';
+        const st = await link.connect();
+        $('link').textContent = st.ready ? `connected: ${st.device}` : 'connected, but no READY (check the sketch / baud 115200)';
+      } catch (e) {
+        $('link').textContent = 'failed: ' + e.message;
+      }
+    };
+
+    let engine, droneOn = false;
+    $('drone').onclick = () => {
+      droneOn = !droneOn;
+      $('drone').textContent = `Drone sound: ${droneOn ? 'ON' : 'off'}`;
+      if (engine) engine.simulateDroneSound(droneOn ? true : null);
+    };
+
+    let running = 0;
+    $('play').onclick = () => {
+      const run = ++running;
+      const name = $('scene').value;
+      const sky = new SyntheticSky({ scenario: name, seed: 7 });
+      engine = new DetectionEngine();
+      engine.setCorridor(sky.corridor);
+      if (droneOn) engine.simulateDroneSound(true);
+      const ctx = $('sky').getContext('2d');
+      const t0 = performance.now();
+      const step = () => {
+        if (run !== running) return;
+        const t = (performance.now() - t0) / 1000;
+        if (sky.scenario.audioDrone && !droneOn) engine.setAudioProbability(sky.audioProbability(), 'synthetic');
+        const img = sky.render(t);
+        ctx.putImageData(new ImageData(img.data, img.width, img.height), 0, 0);
+        const st = engine.process(img, t);
+        link.push(frameFromState(st, engine.cfg.camera, link.opts));
+        // Draw the corridor and the primary target so you can compare with the arrow.
+        ctx.strokeStyle = 'rgba(200,0,0,.6)';
+        if (sky.corridor.length) { ctx.beginPath(); sky.corridor.forEach(([x, y], i) => (i ? ctx.lineTo(x * 320, y * 240) : ctx.moveTo(x * 320, y * 240))); ctx.closePath(); ctx.stroke(); }
+        for (const tr of st.tracks) { ctx.strokeStyle = tr.classification === 'bird' ? '#0a0' : tr.classification === 'drone' ? '#c00' : '#888'; ctx.strokeRect(tr.bbox.x * 320 - 2, tr.bbox.y * 240 - 2, tr.bbox.w * 320 + 4, tr.bbox.h * 240 + 4); }
+        if (t < sky.durationSec) requestAnimationFrame(step);
+        else log(`-- ${name} finished: risk ${st.risk.level} --`);
+      };
+      requestAnimationFrame(step);
+    };
+    window.__BEACON__ = { link, virtual };
+  </script>
+</body>
+</html>
