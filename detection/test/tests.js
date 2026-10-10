@@ -13,6 +13,7 @@ import { mulberry32 } from '../src/synthetic.js';
 import { runScenario, evaluateConfig } from '../src/tune.js';
 import { PARAMS, PRESETS, describeParams, getParam } from '../src/params.js';
 import { cropRect, interpretPredictions } from '../adapters/coco.js';
+import { beaconFrame, frameFromState, frameFromEvent, encodeBeacon, parseBeaconLine, BeaconLink, BEACON_DEFAULTS } from '../adapters/beacon.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -349,6 +350,50 @@ test('COCO interpretation: only boxes on our object count; sky classes preferred
   const r = interpretPredictions(preds, obj, 300, 0.75);
   ok(r.label === 'kite' && r.ignored === 1, JSON.stringify(r));
   ok(interpretPredictions([], obj, 300, 0.75).label === null);
+});
+
+// ---------- Arduino beacon protocol ----------
+test('beacon: servo points toward the threat (90 = straight ahead, scale 2 exaggerates)', () => {
+  const f = (bearing, opts = BEACON_DEFAULTS) => beaconFrame({ level: 'red', classification: 'bird', size: 6, eta_seconds: 9.4, bearing_deg: bearing, flap_hz: 3.84 }, 90, opts).servo;
+  ok(f(90) === 90, 'ahead');
+  ok(f(100) === 70 && f(80) === 110, `right ${f(100)} / left ${f(80)}`);
+  ok(f(180) === 0 && f(0) === 180, 'clamped');
+  ok(f(100, { ...BEACON_DEFAULTS, servoScale: 1 }) === 80, 'true pointing');
+  ok(f(100, { ...BEACON_DEFAULTS, servoInvert: true }) === 110, 'inverted mount');
+  ok(f(5) === 180 && beaconFrame({ level: 'red', classification: 'bird', bearing_deg: 350 }, 10).servo === 130, 'wraps across north');
+});
+test('beacon: encode -> parse round trip, green shows nothing, rejected never targeted', () => {
+  const f = beaconFrame({ level: 'red', classification: 'bird', size: 6, eta_seconds: 9.4, bearing_deg: 100, flap_hz: 3.84 }, 90);
+  const line = encodeBeacon(42, f);
+  ok(line === 'B 42 R B 6 9 70 38', line);
+  ok(line.length <= 40, 'fits the Uno buffer');
+  const p = parseBeaconLine(line);
+  ok(p.seq === 42 && p.level === 'R' && p.kind === 'B' && p.count === 6 && p.eta === 9 && p.servo === 70 && p.flap === 38, JSON.stringify(p));
+  ok(encodeBeacon(1, beaconFrame({ level: 'green', classification: 'bird', bearing_deg: 100 }, 90)) === 'B 1 G N 0 -1 -1 -1');
+  ok(beaconFrame({ level: 'yellow', classification: 'rejected', bearing_deg: 100 }, 90).kind === 'N');
+  ok(parseBeaconLine('B 1 X B 1 1 1 1') === null && parseBeaconLine('garbage') === null, 'bad lines rejected');
+});
+test('beacon: rate limit, deadband, instant escalation, heartbeat', () => {
+  const link = new BeaconLink();
+  const sent = [];
+  let clock = 0;
+  link.now = () => clock;
+  link.writeLine = async (l) => sent.push(l);
+  const fr = (level, servo, cls = 'bird') => ({ level, kind: level === 'G' ? 'N' : cls === 'drone' ? 'D' : 'B', count: 3, eta: 20, servo, flap: 40 });
+  link.push(fr('Y', 90)); ok(sent.length === 1, 'first frame sent');
+  clock = 50; link.push(fr('Y', 100)); ok(sent.length === 1, 'rate-limited inside 200 ms');
+  clock = 250; link.tick(); ok(sent.length === 2, 'sent after the interval');
+  clock = 500; link.push(fr('Y', 101)); ok(sent.length === 2, 'deadband: 1 deg change ignored');
+  clock = 520; link.push(fr('R', 101)); ok(sent.length === 3 && sent[2].includes(' R '), 'escalation skips the rate limit');
+  clock = 1600; link.tick(); ok(sent.length === 4, 'heartbeat after 1 s of no change');
+});
+test('beacon: frames from engine state and from server events agree', () => {
+  const { state, events, engine } = runScenario('flock_corridor');
+  const a = frameFromState(state, engine.cfg.camera);
+  ok(a.level === 'R' && a.kind === 'B' && a.count >= 5 && a.servo >= 0, JSON.stringify(a));
+  const ev = events.filter((e) => e.risk === 'red' && e.flock_size >= 5).pop();
+  const b = frameFromEvent(ev);
+  ok(b.level === 'R' && b.kind === 'B' && b.count === ev.flock_size && b.servo >= 0, JSON.stringify(b));
 });
 
 // ---------- runner ----------

@@ -264,6 +264,9 @@ export class DetectionEngine {
     const prevLevel = this.risk.level;
     const risk = this.risk.evaluate(groups, null, t);
     if (risk.level !== prevLevel) this.emit('risk_change', { from: prevLevel, to: risk.level, reasons: risk.reasons, t });
+    // The single most important thing in view (drone > soonest ETA > biggest flock).
+    // Hardware beacons and dashboards point at / describe this one.
+    const primary = this.pickPrimary(groups);
 
     // 8. Public state for the UI
     const trackById = new Map();
@@ -304,6 +307,7 @@ export class DetectionEngine {
       tentative: all.length - confirmed.length,
       flocks: flocksOut,
       groups: groups.map(publicGroup),
+      primary: primary ? publicGroup(primary) : null,
       risk,
       audio,
       stats: this.publicStats(),
