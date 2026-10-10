@@ -21,20 +21,39 @@ If anything here conflicts with a request, stop and ask the detection lead (Viva
 ## 2. The three tiers
 
 ### Tier 1: Dataset test split
-- The **Mendeley dataset's own test folder**, used as published.
-- A **fixed held-out slice of DADS**, chosen once with a fixed random seed (recorded in
+- The **Mendeley dataset's own test folder**, used as published
+  (Mendeley Data `6ghdz52pd7`, version 5, `Dataset.zip`, SHA-256 `5bf5b257…c51c`).
+- A **fixed held-out slice of DADS** (Hugging Face `geronimobasso/drone-audio-detection-samples`,
+  pinned revision in `data/dads/REVISION`), chosen once with a fixed random seed (recorded in
   `test_sets.json`), with the exact file list saved. The slice never changes.
+- **DADS is stored sorted by label, and drone clips (~0.6 s) are cut from longer recordings in
+  order.** Neighbouring rows are therefore likely the same recording. The test slice is made of
+  **whole contiguous shard blocks held apart from training**, never randomly scattered rows, so
+  pieces of one recording can't land in both train and test. It must contain both classes.
 
 ### Tier 2: Field set (`test_media/`)
 - Our own footage and recordings, split once into **`tune`** and **`holdout`** halves (split
-  recorded in `test_sets.json`).
+  recorded in `test_sets.json`). Byte-identical duplicates count once (matched by SHA-256), and
+  clips from the same recording session go in the same half.
+- **Privacy: the repo is public.** Only the **sky segments** of each clip are benchmarked (start/end
+  times stored in the manifest). Frames showing people are never saved to `benchmarks/`
+  (error galleries, reports, charts). `test_media/` itself is git-ignored.
+- Tier 2 is frozen only once there are enough clips to be meaningful (target 15–20 unique clips:
+  birds, empty sky, distractors, drone). Until then, versions run on tiers 1 and 3, and this is
+  stated on every report.
 - Thresholds and any other settings are tuned **only on `tune`**.
 - **`holdout` runs only when Vivan says "final run"** (`benchmark.py --final`, plus a confirmation
   checkbox in the testbench). Never peek at holdout results to make a decision.
 
 ### Tier 3: Stress set
-- **Audio:** drone audio mixed with ESC-50 **wind, rain, traffic** at **+10, +5, 0, −5, −10 dB SNR**.
-  The mixes are generated once with a fixed seed and then frozen like any other test file.
+- **Audio:** drone audio mixed with ESC-50 **wind (16), rain (10), traffic** at **+10, +5, 0, −5, −10 dB SNR**.
+  ESC-50 has no traffic category, so **traffic = engine (44)**. The mixes are generated once with a
+  fixed seed and then frozen like any other test file.
+- **Audio look-alikes (false-alarm tests):** ESC-50 **helicopter (40)** and **airplane (47)**, which
+  must not trigger a drone alert at an airport, and **chirping birds (14)** and **crow (9)** as
+  bird-only audio.
+- ESC-50 must be the complete, CRC-verified archive (all 40 clips per category). A partially
+  downloaded copy is never frozen.
 - **Images:** tagged by **target size** (box area / image area: small < 1%, medium 1–10%,
   large > 10%) and by **condition** (clear sky, cloudy, backlit/sunny, cluttered background).
   Tags are stored in the manifest, not inferred at run time.
