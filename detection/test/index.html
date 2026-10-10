@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detection Tests</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+    .pass { color: #0a7a2f; } .fail { color: #b3261e; font-weight: 600; }
+    table { border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    td, th { border: 1px solid #ccc; padding: 3px 6px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>SkySentry detection tests</h1>
+  <p id="summary">Running…</p>
+  <ul id="list"></ul>
+  <h2>Scenario accuracy table</h2>
+  <div id="table"></div>
+  <script type="module">
+    import { runAll } from './tests.js';
+    const list = document.getElementById('list');
+    const out = await runAll((r) => {
+      const li = document.createElement('li');
+      li.className = r.pass ? 'pass' : 'fail';
+      li.textContent = `${r.pass ? '✓' : '✗'} ${r.name} (${r.ms} ms)${r.error ? ' — ' + r.error : ''}`;
+      list.appendChild(li);
+    });
+    document.getElementById('summary').textContent = `${out.passed} / ${out.total} passed`;
+    const cols = Object.keys(out.table[0]);
+    document.getElementById('table').innerHTML = '<table><tr>' + cols.map((c) => `<th>${c}</th>`).join('') + '</tr>' +
+      out.table.map((r) => '<tr>' + cols.map((c) => `<td>${r[c] ?? ''}</td>`).join('') + '</tr>').join('') + '</table>';
+    window.__TEST_RESULTS__ = out;
+  </script>
+</body>
+</html>
