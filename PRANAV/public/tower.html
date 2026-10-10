@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tower Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    #cameras span { display: inline-block; margin: 0 6px 6px 0; padding: 2px 8px; border-radius: 10px; background: #e6f4ea; }
+    #cameras span.offline { background: #fce8e6; }
+    #log { list-style: none; padding: 0; border: 1px solid #ccc; height: 400px; overflow-y: auto; }
+    #log li { padding: 6px 8px; border-bottom: 1px solid #eee; }
+    #log pre { margin: 4px 0 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Tower Dashboard</h1>
+  <p>Status: <span id="status">connecting…</span></p>
+  <div id="cameras"></div>
+  <ul id="log"></ul>
+
+  <!-- Served automatically by the Socket.IO server -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // If the server has TOWER_API_KEY set, open this page as /tower.html?key=<TOWER_API_KEY>
+    const key = new URLSearchParams(location.search).get("key") || undefined;
+    const socket = io("/tower", { auth: { key } });
+    const statusEl = document.getElementById("status");
+    const log = document.getElementById("log");
+    const camerasEl = document.getElementById("cameras");
+    const cameraTags = {};
+
+    socket.on("connect", () => (statusEl.textContent = "connected"));
+    socket.on("disconnect", () => (statusEl.textContent = "disconnected"));
+    socket.on("connect_error", (err) => (statusEl.textContent = `error: ${err.message}`));
+
+    function setCamera(cameraId, online) {
+      if (!cameraTags[cameraId]) {
+        cameraTags[cameraId] = document.createElement("span");
+        camerasEl.appendChild(cameraTags[cameraId]);
+      }
+      cameraTags[cameraId].textContent = `${cameraId} ${online ? "●" : "○"}`;
+      cameraTags[cameraId].className = online ? "" : "offline";
+    }
+
+    socket.on("camera:status", ({ cameraId, online }) => setCamera(cameraId, online));
+
+    socket.on("camera:event", (event) => {
+      setCamera(event.cameraId, true);
+      const li = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = `${new Date(event.receivedAt).toLocaleTimeString()} · ${event.cameraId}`;
+      const body = document.createElement("pre");
+      body.textContent = JSON.stringify(event, null, 2);
+      li.append(title, body);
+      log.prepend(li);
+    });
+  </script>
+</body>
+</html>

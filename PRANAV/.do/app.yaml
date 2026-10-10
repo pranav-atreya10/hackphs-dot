@@ -24,3 +24,12 @@ services:
         value: production
       - key: CORS_ORIGIN
         value: "*"
+      # Secrets: don't commit real values. Set them in the DO dashboard
+      # (App → Settings → web → Environment Variables, tick "Encrypt").
+      # The server refuses to start in production without CAMERA_API_KEY.
+      - key: CAMERA_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: TOWER_API_KEY
+        type: SECRET
+        scope: RUN_TIME
