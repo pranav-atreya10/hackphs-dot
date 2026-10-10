@@ -4,6 +4,10 @@ import { classifyRisk, DroneGate } from '/shared/risk.js';
 import { makeEvent } from '/shared/event.js';
 import { createDetector } from './detect.js';
 import { createListener } from './sound.js';
+import { requireRole } from '/shared/auth.js';
+
+// Only signed-in camera accounts get past this line (no-op when sign-in is off on the server).
+export const auth = await requireRole('camera');
 
 const $ = id => document.getElementById(id);
 const video = $('video'), overlay = $('overlay'), ctx = overlay.getContext('2d');

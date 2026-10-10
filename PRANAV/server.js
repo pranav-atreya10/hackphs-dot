@@ -5,6 +5,7 @@ const express = require("express");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
+const { createClerkClient, verifyToken } = require("@clerk/express");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
@@ -20,6 +21,17 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const CAMERA_API_KEY = process.env.CAMERA_API_KEY || "";
 // Optional secret that tower dashboards must present to receive events. Unset = open.
 const TOWER_API_KEY = process.env.TOWER_API_KEY || "";
+// Clerk keys (dashboard.clerk.com → API keys). When set, people sign in as a "camera" or "dashboard" user.
+const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || "";
+const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || "";
+// Join codes per airport, e.g. "KPCT=pct-sky-4821,KTTN=ttn-sky-9310". Signing up needs one of these codes,
+// and each user only sees their own airport's alerts.
+const AIRPORT_CODES = new Map(
+  (process.env.AIRPORT_CODES || "")
+    .split(",")
+    .map((pair) => pair.split("=").map((s) => s.trim()))
+    .filter(([airport, code]) => airport && code)
+);
 // Tiger Data (TimescaleDB) connection string, e.g. postgres://tsdbadmin:<pw>@<host>:<port>/tsdb?sslmode=require
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
@@ -76,6 +88,7 @@ async function storeIncident(event) {
       _id: event.id,
       time: new Date(event.receivedAt),
       camera_id: event.cameraId,
+      airport: event.airport,
       type: toText(event.type),
       object_count: toNumber(event.object_count),
       direction: toText(event.direction),
@@ -108,6 +121,58 @@ function keyMatches(provided, expected) {
   return crypto.timingSafeEqual(a, b);
 }
 
+const clerk = CLERK_SECRET_KEY ? createClerkClient({ secretKey: CLERK_SECRET_KEY, publishableKey: CLERK_PUBLISHABLE_KEY }) : null;
+const ROLES = ["camera", "dashboard"];
+
+if (!clerk) console.warn("CLERK_SECRET_KEY is not set; sign-in is off (dashboards are open, cameras use CAMERA_API_KEY)");
+else if (!AIRPORT_CODES.size) console.warn("AIRPORT_CODES is not set; nobody can finish signing up");
+
+// Role and airport live in each Clerk user's publicMetadata, which only this server can write.
+// Cached briefly so dashboards polling the API don't hit Clerk's rate limits.
+const accessCache = new Map();
+const ACCESS_TTL_MS = 60_000;
+
+// Resolve a Clerk session token to { userId, role, airport }, or null if it isn't a valid signed-in session.
+async function clerkAccess(token) {
+  if (!clerk || typeof token !== "string" || !token) return null;
+  try {
+    const { sub } = await verifyToken(token, { secretKey: CLERK_SECRET_KEY });
+    const hit = accessCache.get(sub);
+    if (hit && Date.now() - hit.at < ACCESS_TTL_MS) return hit.access;
+    const { role, airport } = (await clerk.users.getUser(sub)).publicMetadata || {};
+    const access = {
+      userId: sub,
+      role: ROLES.includes(role) ? role : null,
+      airport: AIRPORT_CODES.has(airport) ? airport : null,
+    };
+    accessCache.set(sub, { at: Date.now(), access });
+    return access;
+  } catch {
+    return null;
+  }
+}
+
+const bearerToken = (req) => (req.get("authorization") || "").replace(/^Bearer\s+/i, "");
+
+// Find the airport whose join code matches, comparing every code in constant time.
+function airportForCode(code) {
+  let match = null;
+  for (const [airport, expected] of AIRPORT_CODES) if (keyMatches(code, expected)) match = airport;
+  return match;
+}
+
+// Dashboard-only HTTP routes. With Clerk on, the caller needs a dashboard account (scoped to its airport)
+// or TOWER_API_KEY in x-api-key (all airports). With Clerk off, they stay open as before.
+async function requireDashboard(req, res, next) {
+  if (!clerk) return next();
+  if (TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)) return next();
+  const access = await clerkAccess(bearerToken(req));
+  if (!access) return res.status(401).json({ error: "sign-in required" });
+  if (access.role !== "dashboard" || !access.airport) return res.status(403).json({ error: "dashboard account required" });
+  req.airport = access.airport;
+  next();
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -118,15 +183,20 @@ const io = new Server(server, {
 const cameras = io.of("/camera");
 const towers = io.of("/tower");
 
-// Stamp an incoming camera event and forward it to every connected tower dashboard.
-function relayCameraEvent(cameraId, payload) {
+// Towers join "airport:<code>" for their own airport, or "airport:*" (TOWER_API_KEY / sign-in off) to see all.
+// An event with no airport (API-key camera without x-airport) goes to every tower.
+const towersFor = (airport) => (airport ? towers.to([`airport:${airport}`, "airport:*"]) : towers);
+
+// Stamp an incoming camera event and forward it to the tower dashboards for its airport.
+function relayCameraEvent(cameraId, payload, airport = null) {
   const event = {
     ...payload,
     id: crypto.randomUUID(),
     cameraId: String(cameraId || payload.camera_id || payload.cameraId || "unknown"),
+    airport,
     receivedAt: Date.now(),
   };
-  towers.emit("camera:event", event);
+  towersFor(airport).emit("camera:event", event);
   storeDetection(event);
   if (event.risk === "yellow" || event.risk === "red") storeIncident(event);
   return event;
@@ -134,8 +204,73 @@ function relayCameraEvent(cameraId, payload) {
 
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
+// The camera and tower pages may be served from another origin (e.g. Atharv's app), so allow them to call /api.
+const allowedOrigins = CORS_ORIGIN === "*" ? null : CORS_ORIGIN.split(",");
+app.use("/api", (req, res, next) => {
+  const origin = req.get("origin");
+  if (origin && (!allowedOrigins || allowedOrigins.includes(origin))) {
+    res.set({
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Headers": "authorization, content-type, x-api-key, x-camera-id, x-airport",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      Vary: "Origin",
+    });
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// The publishable key is public by design; pages fetch it here so it lives in one .env.
+app.get("/api/auth/config", (req, res) => {
+  res.json({ publishableKey: clerk ? CLERK_PUBLISHABLE_KEY : null });
+});
+
+// Wrong-code attempts per user, so airport codes can't be brute-forced.
+const joinFailures = new Map();
+const MAX_JOIN_FAILURES = 10;
+const JOIN_WINDOW_MS = 10 * 60_000;
+
+// Finish sign-up: a signed-in user picks "camera" or "dashboard" and proves which airport they belong to.
+// Body: { role, code }. Saves { role, airport } to the user's Clerk publicMetadata.
+app.post("/api/auth/join", async (req, res) => {
+  if (!clerk) return res.status(503).json({ error: "sign-in is not configured" });
+  let userId;
+  try {
+    ({ sub: userId } = await verifyToken(bearerToken(req), { secretKey: CLERK_SECRET_KEY }));
+  } catch {
+    return res.status(401).json({ error: "sign-in required" });
+  }
+  const { role, code } = isPlainObject(req.body) ? req.body : {};
+  if (!ROLES.includes(role)) return res.status(400).json({ error: "role must be camera or dashboard" });
+
+  const failures = (joinFailures.get(userId) || []).filter((t) => Date.now() - t < JOIN_WINDOW_MS);
+  if (failures.length >= MAX_JOIN_FAILURES) return res.status(429).json({ error: "too many wrong codes, try again later" });
+  const airport = airportForCode(typeof code === "string" ? code.trim() : "");
+  if (!airport) {
+    joinFailures.set(userId, [...failures, Date.now()]);
+    return res.status(403).json({ error: "wrong airport code" });
+  }
+  joinFailures.delete(userId);
+
+  try {
+    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role, airport } });
+  } catch (err) {
+    console.error(`failed to save role for ${userId}:`, err.message);
+    return res.status(502).json({ error: "could not save your role, try again" });
+  }
+  accessCache.delete(userId);
+  res.json({ role, airport });
+});
+
+// Who am I: lets a page check the signed-in user's role and airport before connecting.
+app.get("/api/auth/me", async (req, res) => {
+  const access = await clerkAccess(bearerToken(req));
+  if (!access) return res.status(401).json({ error: "sign-in required" });
+  res.json({ role: access.role, airport: access.airport });
+});
 
 // Health check used by DigitalOcean to decide whether the app is up.
 app.get("/health", (req, res) => {
@@ -149,7 +284,7 @@ app.get("/health", (req, res) => {
 });
 
 // Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
-app.get("/api/hourly", async (req, res) => {
+app.get("/api/hourly", requireDashboard, async (req, res) => {
   if (!db) return res.status(503).json({ error: "database not configured" });
   try {
     const { rows } = await db.query(
@@ -162,11 +297,12 @@ app.get("/api/hourly", async (req, res) => {
   }
 });
 
-// Latest 20 incident reports, newest first.
-app.get("/api/incidents", async (req, res) => {
+// Latest 20 incident reports, newest first (only the caller's airport for signed-in dashboards).
+app.get("/api/incidents", requireDashboard, async (req, res) => {
   if (!incidents) return res.status(503).json({ error: "incident store not configured" });
   try {
-    res.json(await incidents.find().sort({ time: -1 }).limit(20).toArray());
+    const filter = req.airport ? { airport: req.airport } : {};
+    res.json(await incidents.find(filter).sort({ time: -1 }).limit(20).toArray());
   } catch (err) {
     console.error("failed to read incidents:", err.message);
     res.status(500).json({ error: "query failed" });
@@ -174,49 +310,76 @@ app.get("/api/incidents", async (req, res) => {
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).
-// Auth: "Authorization: Bearer <CAMERA_API_KEY>" or "x-api-key: <CAMERA_API_KEY>".
-app.post("/api/camera-events", (req, res) => {
-  const bearer = (req.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!keyMatches(req.get("x-api-key") || bearer, CAMERA_API_KEY)) {
-    return res.status(401).json({ error: "invalid camera key" });
-  }
+// Auth: a signed-in camera account ("Authorization: Bearer <Clerk session token>"), or for scripts and
+// microcontrollers "x-api-key: <CAMERA_API_KEY>" (or Bearer <CAMERA_API_KEY>) plus optional "x-airport: <code>".
+// Returns the camera's airport (null = all towers), or undefined if not allowed.
+async function cameraAirport(key, token, requestedAirport) {
+  if (keyMatches(key, CAMERA_API_KEY)) return AIRPORT_CODES.has(requestedAirport) ? requestedAirport : null;
+  const access = await clerkAccess(token);
+  if (access?.role === "camera" && access.airport) return access.airport;
+  return undefined;
+}
+
+app.post("/api/camera-events", async (req, res) => {
+  const bearer = bearerToken(req);
+  const airport = await cameraAirport(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
+  if (airport === undefined) return res.status(401).json({ error: "camera sign-in or camera key required" });
   if (!isPlainObject(req.body)) {
     return res.status(400).json({ error: "body must be a JSON object" });
   }
-  const event = relayCameraEvent(req.get("x-camera-id"), req.body);
+  const event = relayCameraEvent(req.get("x-camera-id"), req.body, airport);
   res.status(202).json({ ok: true, id: event.id, towers: towers.sockets.size });
 });
 
-cameras.use((socket, next) => {
-  if (keyMatches(socket.handshake.auth.key, CAMERA_API_KEY)) return next();
-  next(new Error("unauthorized"));
+// Socket auth: { token: <Clerk session token> } for camera accounts, or { key, airport } for API-key cameras.
+cameras.use(async (socket, next) => {
+  const { key, token, airport } = socket.handshake.auth;
+  const allowed = await cameraAirport(key, token, airport);
+  if (allowed === undefined) return next(new Error("unauthorized"));
+  socket.data.airport = allowed;
+  next();
 });
 
 cameras.on("connection", (socket) => {
   const cameraId = socket.handshake.auth.cameraId || socket.id;
-  console.log(`camera connected: ${cameraId}`);
-  towers.emit("camera:status", { cameraId, online: true, at: Date.now() });
+  const { airport } = socket.data;
+  console.log(`camera connected: ${cameraId}${airport ? ` (${airport})` : ""}`);
+  towersFor(airport).emit("camera:status", { cameraId, airport, online: true, at: Date.now() });
 
   socket.on("camera:event", (payload, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
     if (!isPlainObject(payload)) return reply({ ok: false, error: "payload must be an object" });
-    const event = relayCameraEvent(socket.handshake.auth.cameraId || payload.camera_id || cameraId, payload);
+    const event = relayCameraEvent(socket.handshake.auth.cameraId || payload.camera_id || cameraId, payload, airport);
     reply({ ok: true, id: event.id, towers: towers.sockets.size });
   });
 
   socket.on("disconnect", () => {
     console.log(`camera disconnected: ${cameraId}`);
-    towers.emit("camera:status", { cameraId, online: false, at: Date.now() });
+    towersFor(airport).emit("camera:status", { cameraId, airport, online: false, at: Date.now() });
   });
 });
 
-towers.use((socket, next) => {
-  if (!TOWER_API_KEY || keyMatches(socket.handshake.auth.key, TOWER_API_KEY)) return next();
+// Socket auth: { token: <Clerk session token> } for dashboard accounts (their airport only),
+// or { key: TOWER_API_KEY } to see every airport. With sign-in off and no TOWER_API_KEY, towers are open.
+towers.use(async (socket, next) => {
+  const { key, token } = socket.handshake.auth;
+  socket.data.airport = null;
+  if (TOWER_API_KEY && keyMatches(key, TOWER_API_KEY)) return next();
+  if (clerk) {
+    const access = await clerkAccess(token);
+    if (access?.role === "dashboard" && access.airport) {
+      socket.data.airport = access.airport;
+      return next();
+    }
+    return next(new Error("unauthorized"));
+  }
+  if (!TOWER_API_KEY) return next();
   next(new Error("unauthorized"));
 });
 
 towers.on("connection", (socket) => {
-  console.log(`tower connected: ${socket.id}`);
+  socket.join(socket.data.airport ? `airport:${socket.data.airport}` : "airport:*");
+  console.log(`tower connected: ${socket.id}${socket.data.airport ? ` (${socket.data.airport})` : ""}`);
   socket.on("disconnect", () => console.log(`tower disconnected: ${socket.id}`));
 });
 

@@ -39,3 +39,11 @@ services:
       - key: MONGODB_URI
         type: SECRET
         scope: RUN_TIME
+      - key: CLERK_PUBLISHABLE_KEY
+        scope: RUN_TIME
+      - key: CLERK_SECRET_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: AIRPORT_CODES
+        type: SECRET
+        scope: RUN_TIME

@@ -1,6 +1,11 @@
 // Tower dashboard (prompts T1-T4): risk meter and alert feed over Socket.IO, alarm + voice for
 // red alerts, Leaflet airport map with alert pins, hourly Chart.js bars, incident list, chat.
 
+import { requireRole } from '/shared/auth.js';
+
+// Only signed-in dashboard accounts get past this line (no-op when sign-in is off on the server).
+export const auth = await requireRole('dashboard');
+
 // Airport and camera placement. Adjust to the real runway and where the camera points.
 const AIRPORT = { name: 'Princeton Airport', lat: 40.3986, lng: -74.6585, zoom: 16 };
 const CAMERAS = { 'runway-east': { lat: 40.3981, lng: -74.6560, bearing: 330, range: 350 } };
