@@ -1,0 +1,6 @@
+# Standalone testbench (separate from the SkySentry app).
+# Install: .venv/bin/pip install -r testbench/requirements.txt
+# Launch:  .venv/bin/streamlit run testbench/app.py --server.port 8502
+-r ../benchmarks/requirements.txt
+streamlit>=1.39
+plotly>=5.20
