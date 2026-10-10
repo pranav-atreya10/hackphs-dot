@@ -5,3 +5,4 @@ data/
 models/*.pt
 runs/
 __pycache__/
+test_media/
