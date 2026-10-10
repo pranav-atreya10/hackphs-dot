@@ -28,13 +28,28 @@ const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5 }) :
 // An idle client losing its connection emits on the pool; without a listener that crashes the process.
 db?.on("error", (err) => console.error("postgres pool error:", err.message));
 
-// Persist one relayed event. Failures are logged, not thrown, so a DB outage never blocks the live relay.
+// Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
+const toText = (v) => (typeof v === "string" && v ? v.slice(0, 100) : null);
+const toNumber = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : null);
+
+// Persist one relayed event (columns per the team plan's event format; the snapshot is not stored here).
+// Failures are logged, not thrown, so a DB outage never blocks the live relay.
 async function storeDetection(event) {
   if (!db) return;
+  const count = toNumber(event.object_count);
   try {
     await db.query(
-      "INSERT INTO detections (time, id, camera_id, payload) VALUES (to_timestamp($1 / 1000.0), $2, $3, $4)",
-      [event.receivedAt, event.id, event.cameraId, event]
+      `INSERT INTO detections (time, camera_id, type, object_count, direction, confidence, risk)
+       VALUES (to_timestamp($1 / 1000.0), $2, $3, $4, $5, $6, $7)`,
+      [
+        event.receivedAt,
+        event.cameraId,
+        toText(event.type),
+        count === null ? null : Math.round(count),
+        toText(event.direction),
+        toNumber(event.confidence),
+        toText(event.risk),
+      ]
     );
   } catch (err) {
     console.error(`failed to store event ${event.id}:`, err.message);
@@ -73,7 +88,7 @@ function relayCameraEvent(cameraId, payload) {
   const event = {
     ...payload,
     id: crypto.randomUUID(),
-    cameraId: String(cameraId || payload.cameraId || "unknown"),
+    cameraId: String(cameraId || payload.camera_id || payload.cameraId || "unknown"),
     receivedAt: Date.now(),
   };
   towers.emit("camera:event", event);
@@ -102,7 +117,7 @@ app.get("/api/hourly", async (req, res) => {
   if (!db) return res.status(503).json({ error: "database not configured" });
   try {
     const { rows } = await db.query(
-      "SELECT * FROM detections_hourly WHERE bucket > now() - interval '24 hours' ORDER BY bucket"
+      "SELECT * FROM detections_hourly WHERE hour > now() - interval '24 hours' ORDER BY hour, type"
     );
     res.json(rows);
   } catch (err) {
@@ -138,7 +153,7 @@ cameras.on("connection", (socket) => {
   socket.on("camera:event", (payload, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
     if (!isPlainObject(payload)) return reply({ ok: false, error: "payload must be an object" });
-    const event = relayCameraEvent(cameraId, payload);
+    const event = relayCameraEvent(socket.handshake.auth.cameraId || payload.camera_id || cameraId, payload);
     reply({ ok: true, id: event.id, towers: towers.sockets.size });
   });
 
