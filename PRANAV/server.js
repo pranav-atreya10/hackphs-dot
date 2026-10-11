@@ -16,6 +16,7 @@ try {
 const ai = require("./ai");
 const { createChat, createRequestLimit } = require("./ai-voice/chat");
 const { createAirports, AirportError } = require("./airports");
+const { createRoleRequests, RequestError } = require("./role-requests");
 const { localHourLabel } = require("./ai-voice/describe");
 const { CameraBot, BOT_ENABLED } = require("./bot");
 const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
@@ -83,6 +84,15 @@ const airports = createAirports({
   matches: keyMatches,
 });
 airports.load().catch((err) => console.error("failed to load airports from MongoDB:", err.message));
+
+// Account-type switch requests (camera station <-> tower dashboard), approved by admins on admin.html.
+const roleRequests = createRoleRequests({
+  collection: async () => (mongo ? withMongo(async (mdb) => mdb.collection("role_requests")) : null),
+  setRole: async (userId, role, airport) => {
+    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role, airport } });
+    accessCache.delete(userId);
+  },
+});
 
 // Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
 const toText = (v) => (typeof v === "string" && v ? v.slice(0, 100) : null);
@@ -180,6 +190,8 @@ async function clerkAccess(token) {
       role: ROLES.includes(role) ? role : null,
       airport: airports.has(airport) ? airport : null,
       admin: verified.some((e) => ADMIN_EMAILS.has(e)),
+      email: user.primaryEmailAddress?.emailAddress || verified[0] || null,
+      name: user.fullName || user.username || null,
     };
     accessCache.set(sub, { at: Date.now(), access });
     return access;
@@ -344,6 +356,40 @@ app.get("/api/auth/me", async (req, res) => {
   const access = await clerkAccess(bearerToken(req));
   if (!access) return res.status(401).json({ error: "sign-in required" });
   res.json({ role: access.role, airport: access.airport, admin: access.admin, airportName: airports.get(access.airport)?.name ?? null });
+});
+
+// ---------- Account-type switch requests ----------
+const sendRequestError = (res, err) => {
+  if (err instanceof RequestError) return res.status(err.status).json({ error: err.message });
+  console.error("role request failed:", err.message);
+  res.status(500).json({ error: "could not save, try again" });
+};
+async function signedIn(req, res) {
+  const access = await clerkAccess(bearerToken(req));
+  if (!access) res.status(401).json({ error: "sign-in required" });
+  return access;
+}
+// The signed-in user's latest request (or null). Body for POST: { to: "camera"|"dashboard", note? }.
+app.get("/api/role-requests/mine", async (req, res) => {
+  const access = await signedIn(req, res); if (!access) return;
+  try { res.json({ request: await roleRequests.mine(access.userId) }); } catch (err) { sendRequestError(res, err); }
+});
+app.post("/api/role-requests", async (req, res) => {
+  const access = await signedIn(req, res); if (!access) return;
+  try { res.status(201).json({ request: await roleRequests.submit(access, isPlainObject(req.body) ? req.body : {}) }); }
+  catch (err) { sendRequestError(res, err); }
+});
+app.delete("/api/role-requests/mine", async (req, res) => {
+  const access = await signedIn(req, res); if (!access) return;
+  try { await roleRequests.cancel(access.userId); res.json({ ok: true }); } catch (err) { sendRequestError(res, err); }
+});
+app.get("/api/admin/role-requests", requireAdmin, async (req, res) => {
+  try { res.json({ requests: await roleRequests.pending() }); } catch (err) { sendRequestError(res, err); }
+});
+app.post("/api/admin/role-requests/:id/:decision", requireAdmin, async (req, res) => {
+  if (!["approve", "deny"].includes(req.params.decision)) return res.status(404).json({ error: "approve or deny" });
+  try { res.json({ request: await roleRequests.decide(req.params.id, req.params.decision === "approve", req.userId) }); }
+  catch (err) { sendRequestError(res, err); }
 });
 
 // ---------- Admin: airports and join codes ----------
@@ -535,6 +581,7 @@ async function cameraAirport(key, token, requestedAirport) {
   if (keyMatches(key, CAMERA_API_KEY)) return airports.has(requestedAirport) ? requestedAirport : null;
   const access = await clerkAccess(token);
   if (access?.role === "camera" && access.airport) return access.airport;
+  if (access?.admin) return airports.has(requestedAirport) ? requestedAirport : null;   // admins run a camera for any airport
   return undefined;
 }
 

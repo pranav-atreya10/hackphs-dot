@@ -358,3 +358,48 @@ It checks free disk space before starting and every second while rendering, and 
 - The map has no airport coordinates, so it starts at Princeton and centers on the picked airport's first camera once it reports.
 
 **Checked:** headless Chrome on a local server with KPCT, KTTN and KEWR. With "All airports" the feed showed both a KPCT and a KTTN alert; with KTTN only the KTTN one; typing `kewr` switched to KEWR. Tests: 79/79.
+
+## Each account type only sees its own side
+**Camera accounts** (and camera-key devices) no longer see anything that leads to the tower: no **Tower** link in the sidebar of any page. **Tower accounts** no longer see the camera side: no **Camera** sidebar link, no "Add a phone camera" QR card on the tower, and no "Use this demo" buttons on the Demos page (those open the camera). **Admins, tower-key and open dashboards** still see both.
+
+**How:**
+- `showRoleLinks(role)` in `js/auth.js` hides every link to the other role's page.
+- It runs as soon as a page loads, using the role this browser last signed in with, so nothing flashes. It runs again after sign-in with the real role.
+- `signIn()` now returns `role` (`camera`, `dashboard`, `admin` or `null`).
+- A global `[hidden]{display:none!important}` in `css/app.css` stops rules like `.side-nav a{display:flex}` from overriding `hidden`. The same bug caused the stuck camera hint and the admin panels.
+- The camera's demo hint no longer says "open Tower".
+
+**Switching account types:** not allowed. An account's type and airport are set once, with the join code. To use the other side, sign in with a different account.
+
+**Checked:** headless Chrome. A camera-key session showed Home/Camera/Demos. An open dashboard showed all links plus the QR card. A tower account on Demos showed Home/Tower/Demos and 0 of 6 demo buttons; a camera account showed 6 of 6. Tests: 79/79.
+
+## Admins: an Admin tab, and both camera and tower
+**Admin tab:** admins get an **Admin** item in the sidebar on the Tower, Camera and Demos pages. It opens `admin.html`, which now also links to Camera. Other accounts never see it (`[data-admin-only]`, toggled by `showRoleLinks`).
+
+**Both sides (mainly for the demo):** an admin can open the tower *and* the camera without a join code.
+- **Tower:** every airport, with the airport picker, as before.
+- **Camera:** the first time, it asks "Which airport is this camera at?" and lists the airports. The choice is remembered in this browser, and the camera's alerts go to that airport's tower. A **Change airport** button in the camera sidebar asks again.
+- **Server:** `cameraAirport()` accepts a signed-in admin for whichever airport the camera sends (`auth.airport` on the socket, or `x-airport` over HTTP).
+- An admin who also joined an airport as camera or tower uses that airport on that page instead.
+
+Everyone else still has exactly one account type (no switching).
+
+**Checked:** headless Chrome. The Demos sidebar shows Home/Tower/Camera/Demos/Admin for admins, Home/Tower/Demos for tower accounts and Home/Camera/Demos for camera accounts. Tests: 79/79. The signed-in admin camera flow needs the live Clerk secret key, so check it on the deployed site.
+
+## Account type shown everywhere, an Account tab, and switch requests
+**Account tab (bottom left):** on the Tower, Camera and Demos pages, the sidebar footer is a clickable **Account** tab. It shows the account type in bold (Camera station, Tower dashboard, Admin, Camera station (key), Tower (key) or Open dashboard) and, under it, the airport. It opens Settings. The Demos page has no sign-in, so it shows the last account used in this browser.
+
+**Settings:** an **Account type** badge at the top of the Account panel ("Camera station", "Tower dashboard", "Admin", or "Admin · Tower dashboard" for an admin who also joined an airport).
+
+**Switching account type (asking an admin):**
+- *User:* Settings → "Switch account type": an optional note, then **Request switch**. It then shows "Waiting for an admin" with **Cancel request**. A declined or approved request is mentioned the next time.
+- *Wrong page:* opening a page your account can't use (e.g. a camera account on the tower) says "This page is for tower dashboard accounts" and shows your type. It offers **Open the camera**, **Request a switch to Tower dashboard**, Account settings and Sign out.
+- *Admin:* the **Admin** sidebar tab shows a red count of waiting requests. `admin.html` has a **Switch requests** list at the top with each person's name and email, airport, from → to, note and age, and **Approve** / **Deny** buttons. Approving changes their role right away and keeps their airport.
+- *Server:* `role-requests.js` stores one request per user in MongoDB (`role_requests`). Routes: `POST /api/role-requests`, `GET` and `DELETE /api/role-requests/mine`, `GET /api/admin/role-requests`, and `POST /api/admin/role-requests/:id/approve|deny`. Approving writes the new role to Clerk and clears the access cache.
+
+**Removed:** the sidebar "Account security" button. Settings → Profile and security does the same.
+
+**Checked:**
+- 4 new unit tests for `role-requests.js` (approve keeps the airport, deny, can't decide twice, bad requests, cancel, MongoDB down); the full suite is 83/83.
+- Headless Chrome: the account tab shows the right type on camera (camera key), tower (open) and Demos, and the camera, tower, Demos, settings, admin and account pages have no script errors.
+- Not testable locally: the signed-in screens (request, wrong page, admin approve), which need the live Clerk secret key. Check them after deploy.

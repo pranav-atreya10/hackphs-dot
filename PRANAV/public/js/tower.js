@@ -277,9 +277,7 @@ async function setupAirports() {
 /* ---------- socket ---------- */
 async function connect() {
   auth = await signIn({ role: 'dashboard', mount: $('auth') });
-  $('who').textContent = auth.label;
-  $('accountSecurity').hidden = !auth.manageAccount;
-  $('accountSecurity').onclick = () => auth.manageAccount?.();
+  $('addCamera').hidden = auth.role === 'dashboard';   // tower accounts don't set up cameras; admins and keys still can
   await setupAirports();
   socket = io('/tower', { auth: cb => auth.socketAuth(view ? { airport: view } : undefined).then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Live'; $('conn').dataset.ok = '1'; loadIncidents(); loadHourly(); });

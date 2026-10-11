@@ -33,6 +33,10 @@
   .seg label:has(input:checked){background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
   .seg label:has(input:focus-visible){outline:2px solid var(--ink);outline-offset:2px}
   .panel > p.danger{color:var(--stop)}
+  .type-badge{display:inline-block;font:600 .84rem var(--sans);border:1px solid var(--line-2);border-radius:99px;padding:2px 10px}
+  .switch{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:14px} .switch h3{margin:0;font:600 .95rem var(--sans)} .switch p{margin:0;color:var(--mute)}
+  .switch .hint{font-size:.86rem} .switch p.danger{color:var(--stop);min-height:0}
+  form.req{display:flex;gap:8px} form.req input{flex:1;min-width:0}
   .danger-btn{background:var(--card);color:var(--stop);border:1px solid var(--line);padding:6px 12px;font-size:.86rem} .danger-btn:hover{opacity:1;background:var(--hover)}
   .rows div button{align-self:center}
 </style>

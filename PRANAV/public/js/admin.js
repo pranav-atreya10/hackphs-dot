@@ -41,6 +41,32 @@ function row(a, isNew = false) {
   return tr;
 }
 
+const LABEL = { camera: 'Camera station', dashboard: 'Tower dashboard' };
+const ago = t => { const m = Math.round((Date.now() - new Date(t)) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString(); };
+function showRequestCount() {
+  const n = $('reqs').querySelectorAll('li[data-id]').length;
+  $('reqCount').textContent = n || '';
+  if (!n) $('reqs').innerHTML = '<li class="empty">No requests waiting.</li>';
+}
+function requestRow(r) {
+  const li = document.createElement('li'); li.dataset.id = r._id;
+  li.innerHTML = `<div><b>${esc(r.name || r.email || 'Unknown user')}</b>
+      <span>${esc(r.email && r.name ? `${r.email} · ` : '')}${esc(r.airport)} · ${LABEL[r.from] || esc(r.from)} → <b>${LABEL[r.to] || esc(r.to)}</b> · ${ago(r.createdAt)}</span>
+      ${r.note ? `<q>${esc(r.note)}</q>` : ''}</div>
+    <div class="acts"><button data-act="approve" type="button">Approve</button><button class="ghost" data-act="deny" type="button">Deny</button></div>`;
+  for (const b of li.querySelectorAll('button')) b.onclick = async () => {
+    li.querySelectorAll('button').forEach(x => (x.disabled = true));
+    try { await api(`/api/admin/role-requests/${encodeURIComponent(r._id)}/${b.dataset.act}`, { method: 'POST' }); li.remove(); showRequestCount(); $('reqErr').textContent = ''; }
+    catch (err) { $('reqErr').textContent = err.message; li.querySelectorAll('button').forEach(x => (x.disabled = false)); }
+  };
+  return li;
+}
+async function loadRequests() {
+  try { const { requests } = await api('/api/admin/role-requests'); $('reqs').replaceChildren(...requests.map(requestRow)); }
+  catch (err) { $('reqs').replaceChildren(); $('reqErr').textContent = err.message; }
+  showRequestCount();
+}
+
 async function load() {
   const { airports, canSave } = await api('/api/admin/airports');
   $('rows').replaceChildren(...airports.map(a => row(a)));
@@ -68,7 +94,7 @@ async function main() {
   if (!clerk.user) return gate('<h2>Sign in</h2><p>Sign in with an admin account to manage airports.</p><p><a href="/account.html?mode=sign-in">Sign in</a></p>');
   const me = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${await clerk.session.getToken()}` } }).then(r => r.json()).catch(() => ({}));
   if (!me.admin) return gate(`<h2>Admins only</h2><p>${esc(clerk.user.primaryEmailAddress?.emailAddress || 'This account')} isn’t an admin. Admins are set by email in the server’s <code>ADMIN_EMAILS</code> setting.</p>`);
-  $('gate').hidden = true; $('addPanel').hidden = false; $('listPanel').hidden = false;
-  await load();
+  $('gate').hidden = true; $('reqPanel').hidden = false; $('addPanel').hidden = false; $('listPanel').hidden = false;
+  await Promise.all([load(), loadRequests()]);
 }
 main().catch(err => gate(`<h2>Something went wrong</h2><p>${esc(err.message)}</p>`));

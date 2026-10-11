@@ -1,3 +1,4 @@
+import { showRoleLinks } from '/js/auth.js';
 const catalog = document.getElementById('catalog');
 const status = document.getElementById('libraryStatus');
 const validFile = value => typeof value === 'string' && /^[a-z0-9-]+\.mp4$/.test(value);
@@ -25,4 +26,5 @@ try {
     card.append(category, video, title, description, credit, more, analyze); catalog.append(card);
   }
   status.textContent = `${clips.length} recorded demos · preview or stream through the model`;
+  try { showRoleLinks(localStorage.getItem('skysentry.role')); } catch {}   // tower accounts don't get the camera buttons
 } catch { status.textContent = 'Demo library could not load. Refresh once the server is connected.'; }
