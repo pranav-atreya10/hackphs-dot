@@ -1,0 +1,8 @@
+
+# Benchmarking (see benchmarks/BENCHMARK_PROTOCOL.md)
+.venv/
+data/
+models/**/*.pt
+runs/
+__pycache__/
+test_media/

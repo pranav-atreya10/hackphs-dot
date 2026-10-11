@@ -1,0 +1,9 @@
+{
+  "description": "v0 baseline: YOLO11n fine-tuned on Mendeley train (labels from file names, standard recipe) + small log-mel CNN on DADS training shards. Untuned default thresholds.",
+  "visual_weights": "models/visual/v0_yolo11n.pt",
+  "imgsz": 640,
+  "visual_conf": 0.25,
+  "audio_weights": "models/audio/v0_audio.pt",
+  "audio_threshold": 0.5,
+  "audio_min_consecutive": 1
+}

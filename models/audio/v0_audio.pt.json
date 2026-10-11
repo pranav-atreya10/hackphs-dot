@@ -1,0 +1,109 @@
+{
+ "weights": "models/audio/v0_audio.pt",
+ "sha256": "d55f4d60f7f79f0c33169a573f7736638d6010360885d5229e2d1694077befc0",
+ "trained_utc": "2026-10-11T01:33:44Z",
+ "args": {
+  "out": "models/audio/v0_audio.pt",
+  "epochs": 8,
+  "per_class": 12000,
+  "batch": 128,
+  "lr": 0.001,
+  "seed": 0,
+  "noise_aug": ""
+ },
+ "train_shards": [
+  2,
+  5,
+  10,
+  19,
+  24
+ ],
+ "val_shards": [
+  30
+ ],
+ "val_tail_of": {
+  "2": 0.15
+ },
+ "test_shards_excluded": [
+  3,
+  36
+ ],
+ "dads_revision": "981b832c35b45a57518c989f0f79101adb4ae91f",
+ "shard_sha256": {
+  "2": "37913cdf6074b14b4c198459d741b84c96ec1a67a19871a21f4402f104d639cd",
+  "5": "2b550d54d9349bd3c8456b57dea7a980fdcb983127cbaf8d23176dc221fbfb05",
+  "10": "1c55d7ab75b7743584b32d7d3219e63eb37ddf502b43b37b452ebdcf2c0e152f",
+  "19": "498eb6e48a63fc1fae84c447e88691672fa5df3dc40c4ae7360b87f77dee0fe9",
+  "24": "be874e2578010c11566705f2e45a04f4087f18205b429b3fc02e6ca0c695098a",
+  "30": "5a8d780811a0ae54bc144655cd9309d85932ec4023a812d429347d155bae910d"
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "loss": 0.05528062745740518,
+   "val_auc": 0.9999825,
+   "val_acc": 0.997
+  },
+  {
+   "epoch": 2,
+   "loss": 0.00698120432455053,
+   "val_auc": 0.9994434999999999,
+   "val_acc": 0.9945
+  },
+  {
+   "epoch": 3,
+   "loss": 0.0059447141693647395,
+   "val_auc": 0.9999997500000001,
+   "val_acc": 0.9995
+  },
+  {
+   "epoch": 4,
+   "loss": 0.005003104735341696,
+   "val_auc": 0.9999965,
+   "val_acc": 0.998
+  },
+  {
+   "epoch": 5,
+   "loss": 0.002690735893532079,
+   "val_auc": 1.0,
+   "val_acc": 0.9995
+  },
+  {
+   "epoch": 6,
+   "loss": 0.0015291941673878798,
+   "val_auc": 1.0,
+   "val_acc": 1.0
+  },
+  {
+   "epoch": 7,
+   "loss": 0.0016901708943979875,
+   "val_auc": 0.999997,
+   "val_acc": 0.99875
+  },
+  {
+   "epoch": 8,
+   "loss": 0.0012623485109020777,
+   "val_auc": 0.9999997500000001,
+   "val_acc": 0.9995
+  }
+ ],
+ "best_val_auc": 1.0,
+ "git": {
+  "commit": "484723020c48dcee1ac350e2af4aa1ab851d643c",
+  "branch": "feature/benchmarking",
+  "dirty": false
+ },
+ "hardware": {
+  "platform": "macOS-26.6-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "3.9.6",
+  "cpu": "Apple M5",
+  "ram_gb": 24.0,
+  "torch": "2.8.0",
+  "accelerator": "mps",
+  "ultralytics": "8.4.175",
+  "numpy": "1.26.4",
+  "librosa": "0.11.0",
+  "sklearn": "1.6.1"
+ }
+}
