@@ -1,0 +1,23 @@
+/* Standalone film (film.html) frame: monochrome Geist look in light + dark, matching css/app.css.
+   Linked after the film's own styles by scripts/sync-web.mjs; the 3D stage and its in-scene colours are untouched. */
+:root{--surround:#fafafa;--surround-2:#fff;--on-surround:#0a0a0a;--on-surround-mute:#6b7280;--frame-line:#e5e7eb;
+  --display:"Geist",system-ui,-apple-system,sans-serif;--body:var(--display);--mono:"Geist Mono",ui-monospace,Menlo,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--surround:#0a0a0a;--surround-2:#111;--on-surround:#fafafa;--on-surround-mute:#a1a1aa;--frame-line:#262626;color-scheme:dark}}
+:root[data-theme="dark"]{--surround:#0a0a0a;--surround-2:#111;--on-surround:#fafafa;--on-surround-mute:#a1a1aa;--frame-line:#262626;color-scheme:dark}
+body{-webkit-font-smoothing:antialiased}
+.top h1{display:flex;align-items:center;gap:10px;font:600 1.4rem/1 var(--display);letter-spacing:-.02em}
+.top h1 .mark{width:20px;height:24px;fill:currentColor}
+.top span{font:500 .78rem var(--body);letter-spacing:0;text-transform:none}
+.stage{box-shadow:0 0 0 1px var(--frame-line),0 24px 60px -28px rgba(0,0,0,.45)}
+.btn{border-color:var(--frame-line);border-radius:10px}
+.btn:hover{border-color:var(--on-surround-mute)}
+.btn.primary{background:var(--on-surround);border-color:var(--on-surround);color:var(--surround)}
+.btn:focus-visible,.seg:focus-visible{outline-color:var(--on-surround)}
+.seg i b{background:var(--on-surround)}
+.load-title{font-family:var(--display);font-weight:600;letter-spacing:-.02em}
+.load-title{display:inline-flex;align-items:center;gap:.22em}
+.load-title .mark{width:.72em;height:.86em;fill:currentColor}
+/* the loader sits on the stage, which stays dark in both themes */
+#assetLoader{background:#0a0a0a;color:#fafafa}
+.load-sub,.load-note{color:#a1a1aa}
+.load-track{background:linear-gradient(90deg,transparent,#fafafa,transparent);background-size:200%}

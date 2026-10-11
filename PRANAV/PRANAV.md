@@ -160,3 +160,19 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - the rate limit.
 
 **To turn it on:** add `OPENAI_API_KEY=sk-...` to `PRANAV/.env` (locally) or as an encrypted env var on DigitalOcean.
+
+## Modern look: monochrome, light + dark, new shield-gull logo
+**Why:** the old warm-paper, serif and clay look read as "old money". The new look follows the Gumloop references: white or near-black surfaces, one clean font (Geist), hairline borders, soft cards, and a left sidebar in the app.
+
+**What changed**
+- **Design system** (`public/css/app.css`): one set of color tokens with a light and a dark version. The UI is black and white only; color is kept for safety signals (risk green, yellow and red; detection boxes; map pins) so alerts stand out.
+- **Light / dark** (`public/js/theme.js`): it follows the computer's setting by default. The monitor/sun/moon button cycles System → Light → Dark and remembers the choice in this browser. It loads in `<head>` so the page never flashes the wrong theme.
+- **Sidebar shell** on Tower, Camera and Demos: logo, nav, a "Status" section (connection, cameras) and the account area at the bottom. Every element ID the scripts use (`conn`, `who`, `cams`, `sound`, `signout`, `accountSecurity`) is unchanged; only its location moved. On phones the sidebar becomes a top bar with a menu button.
+- **Logo** (`public/brand/`): the shield-gull mark is inline in the UI so it takes the text color in both themes. There's an SVG favicon that switches with the theme, plus PNG fallbacks and an apple-touch-icon.
+- **Tower:** the "Ask SkySentry" input is a composer box with a round send button. The chart reads its colors from the theme and recolors when the theme switches. Map tiles are dimmed in dark mode. The map no longer draws on top of the sign-in screen; this was an older bug where Leaflet's z-indexes leaked out.
+- **Sign-in:** the card shows the logo. The Clerk sign-in box gets the page's colors, so it matches in dark mode.
+- **Guide bubble** (`js/guide.js`): restyled to match, and it follows the page's theme.
+- **Landing + film:** `index.html` and `film.html` are generated from Atharv's files by `npm run sync-web`, so I didn't hand-edit them. The sync script now adds the logo, favicon, theme script and Geist, and links `css/site.css` / `css/film.css` after Atharv's styles so they win. The 3D scene is unchanged. Inside the film, highlights stay amber because they sit behind navy text.
+- **iOS app (Atharv's folder):** the app icon is now the white-on-black logo (1024px, no transparency, as iOS requires). AccentColor and LaunchBackground are black and white with dark-mode variants.
+
+**Checked:** headless-Chrome screenshots of Tower, Camera, Demos, the landing page and the film in light and dark. Phone layouts were checked in a 390px frame. The theme button cycles correctly. The 69-test server suite passes. No detection code, models or thresholds were touched, so no benchmark run was needed.

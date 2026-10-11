@@ -1,0 +1,84 @@
+/* Landing page (index.html) refresh: monochrome Geist look in light + dark, matching css/app.css.
+   index.html is generated from ATHARV/skysentry/dist/site.html by scripts/sync-web.mjs, which links this file
+   after the page's own styles, so these rules win without editing Atharv's source. The 3D film scene is untouched. */
+:root{
+  --paper:#fff;--paper-2:#f4f4f5;--card:#fff;--ink-s:#0a0a0a;--mute-s:#6b7280;--line-s:#e5e7eb;--line-2:#d4d4d8;
+  --accent:#0a0a0a;--on-accent:#fff;--clay:#0a0a0a;--hover:#f4f4f5;
+  --serif:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;--sans:var(--serif);--mono-s:"Geist Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0a0a0a;--paper-2:#141414;--card:#111;--ink-s:#fafafa;--mute-s:#a1a1aa;--line-s:#262626;--line-2:#3f3f46;
+  --accent:#fafafa;--on-accent:#0a0a0a;--clay:#fafafa;--hover:#1c1c1c;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0a0a0a;--paper-2:#141414;--card:#111;--ink-s:#fafafa;--mute-s:#a1a1aa;--line-s:#262626;--line-2:#3f3f46;
+  --accent:#fafafa;--on-accent:#0a0a0a;--clay:#fafafa;--hover:#1c1c1c;color-scheme:dark}
+
+body{-webkit-font-smoothing:antialiased}
+::selection{background:color-mix(in srgb,var(--ink-s) 16%,transparent)}
+
+/* top bar */
+.bar{background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px)}
+.brand{font:600 1.15rem/1 var(--sans);letter-spacing:-.02em;gap:9px}
+.brand .mark{width:20px;height:24px;fill:currentColor;flex:none}
+.nav a{font-weight:500}
+.tag{font:500 .74rem var(--sans);letter-spacing:0;border-radius:6px;padding:4px 9px;background:var(--paper-2)}
+.theme-btn{all:unset;box-sizing:border-box;display:grid;place-items:center;width:32px;height:32px;border-radius:8px;color:var(--mute-s);cursor:pointer;flex:none}
+.theme-btn:hover{background:var(--hover);color:var(--ink-s)}
+.theme-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.theme-btn:focus-visible{outline:2px solid var(--ink-s);outline-offset:2px}
+@media (max-width:820px){.bar-in .tag{margin-left:auto}}
+
+/* hero */
+.eyebrow-s{font:500 .8rem var(--sans);letter-spacing:0;color:var(--mute-s)}
+.hero h1{font:600 clamp(2.4rem,5.4vw,4rem)/1.04 var(--sans);letter-spacing:-.045em}
+.hero h1 em{font-style:normal;color:var(--mute-s)}
+.btn-s{font:500 .93rem var(--sans);border-radius:10px;padding:10px 16px;background:var(--card)}
+.btn-s:hover{border-color:var(--line-s);background:var(--hover)}
+.btn-s.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn-s.primary:hover{background:var(--accent);border-color:var(--accent);opacity:.86}
+.btn-s:focus-visible,.nav a:focus-visible,summary:focus-visible,#film .btn:focus-visible,#film .seg:focus-visible{outline-color:var(--ink-s)}
+.sheet{border-top-color:var(--line-s)}
+.sheet dt{font:500 .8rem var(--sans)}
+
+/* film frame (the stage itself keeps its daylight scene) */
+#film{--sign:#f2b705}   /* in-scene highlight sits behind navy text in both themes, so it can't follow --ink */
+#film .glass,#film .callout .lb{background:rgba(255,255,255,.95)}
+#film .dash{background:rgba(10,10,10,.96)}
+#film .stage{border-radius:14px;box-shadow:0 0 0 1px var(--line-s),0 24px 60px -28px rgba(0,0,0,.45)}
+#film .caption{font-family:var(--sans);font-weight:500;letter-spacing:-.01em}
+#film .btn{border-radius:10px}
+#film .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+#film .btn:hover{border-color:var(--line-2);background:var(--hover)}
+#film .btn.primary:hover{background:var(--accent);opacity:.86}
+#film .seg i b{background:var(--ink-s)}
+#film #creditsToggle a,#film #assetStatus{color:var(--ink-s)}
+#film .load-title{font-family:var(--sans);font-weight:600;letter-spacing:-.02em}
+
+/* sections */
+.sec h2{font:600 clamp(1.9rem,3.4vw,2.6rem)/1.1 var(--sans);letter-spacing:-.04em}
+.sec-head p{color:var(--mute-s)}
+.facts,.risk,.stack,.faq{border-top-color:var(--line-s)}
+.fact b{font:600 2.8rem/1 var(--sans);letter-spacing:-.04em}
+.fact b.warn{color:var(--ink-s);font-style:normal}
+.fact span,.risk-row.head span{font:500 .8rem var(--sans)}
+.step3{border-radius:12px;padding:22px;transition:border-color .15s,box-shadow .15s}
+a.step3:hover{border-color:var(--line-2);box-shadow:0 8px 28px -14px rgba(0,0,0,.22)}
+.step3 svg{width:22px;height:22px;stroke:var(--ink-s);padding:9px;box-sizing:content-box;border:1px solid var(--line-s);border-radius:10px;background:var(--paper-2)}
+.step3 h3{font:600 1.12rem/1.2 var(--sans);letter-spacing:-.02em}
+.step3 code{align-self:start;font:500 .74rem var(--mono-s);color:var(--mute-s);border:1px solid var(--line-s);border-radius:6px;padding:2px 8px;background:var(--paper-2)}
+.lvl{font:600 1.05rem var(--sans);color:var(--ink-s)!important}
+.journey li::before{border-color:var(--line-2);background:var(--card);color:var(--ink-s)}
+.journey b,.stack b{font:600 1.05rem var(--sans);letter-spacing:-.01em}
+.journey em{font:500 .74rem var(--mono-s);color:var(--mute-s)}
+.limits{border:1px solid var(--line-s)}
+.limits h3{font:600 1.1rem var(--sans)}
+.faq summary{font:500 1.08rem var(--sans);letter-spacing:-.01em}
+.faq summary::after{color:var(--mute-s)}
+.foot{border-top-color:var(--line-s)}
+.foot b{display:inline-flex;align-items:center;gap:8px;font:600 1.05rem var(--sans);letter-spacing:-.02em}
+.foot b .mark{width:16px;height:19px;fill:currentColor}
+.load-title{display:inline-flex;align-items:center;gap:.22em}
+.load-title .mark{width:.72em;height:.86em;fill:currentColor}
+#film .load-sub{color:var(--mute-s)}
+#film .load-track{background:linear-gradient(90deg,transparent,var(--ink-s),transparent);background-size:200%}

@@ -178,11 +178,24 @@ async function loadIncidents() {
 }
 
 /* ---------- hourly chart ---------- */
+// Monochrome bars from the page's theme tokens; recoloured when the theme switches (js/theme.js).
+const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+Chart.defaults.font.family = token('--sans');
 const chart = new Chart($('chart'), {
   type: 'bar',
-  data: { labels: [], datasets: [{ label: 'Birds', data: [], backgroundColor: '#c2643f' }, { label: 'Drones', data: [], backgroundColor: '#1f1b16' }] },
+  data: { labels: [], datasets: [{ label: 'Birds', data: [], borderRadius: 3 }, { label: 'Drones', data: [], borderRadius: 3 }] },
   options: { animation: false, responsive: true, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }, plugins: { legend: { labels: { boxWidth: 12 } } } }
 });
+function themeChart() {
+  const ink = token('--ink'), mute = token('--mute'), line = token('--line');
+  chart.data.datasets[0].backgroundColor = mute; chart.data.datasets[1].backgroundColor = ink;
+  for (const axis of [chart.options.scales.x, chart.options.scales.y]) { axis.ticks.color = mute; axis.border = { color: line }; }
+  chart.options.scales.y.grid = { color: line };
+  chart.options.plugins.legend.labels.color = mute;
+  chart.update();
+}
+themeChart();
+document.documentElement.addEventListener('themechange', themeChart);
 async function loadHourly() {
   try {
     const rows = await api('/api/hourly');

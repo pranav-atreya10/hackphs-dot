@@ -54,9 +54,16 @@ function loadClerk(publishableKey) {
   return clerkLoading;
 }
 
+const MARK = '<svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>';
+// Clerk's sign-in box takes the page's current light/dark tokens (css/app.css).
+function clerkAppearance() {
+  const css = getComputedStyle(document.documentElement), v = name => css.getPropertyValue(name).trim();
+  return { variables: { colorPrimary: v('--accent'), colorPrimaryForeground: v('--on-accent'), colorBackground: v('--card'), colorForeground: v('--ink'),
+    colorMutedForeground: v('--mute'), colorInput: v('--card'), colorInputForeground: v('--ink'), colorBorder: v('--line'), fontFamily: v('--sans'), borderRadius: '8px' } };
+}
 function panel(mount, html) {
   mount.hidden = false;
-  mount.innerHTML = `<div class="auth-card">${html}</div>`;
+  mount.innerHTML = `<div class="auth-card">${MARK}${html}</div>`;
   return mount.firstElementChild;
 }
 
@@ -70,7 +77,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const clerk = await loadClerk(cfg.publishableKey);
     if (!clerk.user) {
       const card = panel(mount, '<h2>Sign in</h2><p>Use your SkySentry account.</p><div id="clerk-sign-in"></div>');
-      clerk.mountSignIn(card.querySelector('#clerk-sign-in'), { forceRedirectUrl: location.href, signUpForceRedirectUrl: location.href });
+      clerk.mountSignIn(card.querySelector('#clerk-sign-in'), { forceRedirectUrl: location.href, signUpForceRedirectUrl: location.href, appearance: clerkAppearance() });
       await new Promise(resolve => clerk.addListener(({ user }) => { if (user) resolve(); }));
     }
     const token = () => clerk.session.getToken();
