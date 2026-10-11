@@ -372,3 +372,16 @@ It checks free disk space before starting and every second while rendering, and 
 **Switching account types:** not allowed. An account's type and airport are set once, with the join code. To use the other side, sign in with a different account.
 
 **Checked:** headless Chrome. A camera-key session showed Home/Camera/Demos. An open dashboard showed all links plus the QR card. A tower account on Demos showed Home/Tower/Demos and 0 of 6 demo buttons; a camera account showed 6 of 6. Tests: 79/79.
+
+## Admins: an Admin tab, and both camera and tower
+**Admin tab:** admins get an **Admin** item in the sidebar on the Tower, Camera and Demos pages. It opens `admin.html`, which now also links to Camera. Other accounts never see it (`[data-admin-only]`, toggled by `showRoleLinks`).
+
+**Both sides (mainly for the demo):** an admin can open the tower *and* the camera without a join code.
+- **Tower:** every airport, with the airport picker, as before.
+- **Camera:** the first time, it asks "Which airport is this camera at?" and lists the airports. The choice is remembered in this browser, and the camera's alerts go to that airport's tower. A **Change airport** button in the camera sidebar asks again.
+- **Server:** `cameraAirport()` accepts a signed-in admin for whichever airport the camera sends (`auth.airport` on the socket, or `x-airport` over HTTP).
+- An admin who also joined an airport as camera or tower uses that airport on that page instead.
+
+Everyone else still has exactly one account type (no switching).
+
+**Checked:** headless Chrome. The Demos sidebar shows Home/Tower/Camera/Demos/Admin for admins, Home/Tower/Demos for tower accounts and Home/Camera/Demos for camera accounts. Tests: 79/79. The signed-in admin camera flow needs the live Clerk secret key, so check it on the deployed site.

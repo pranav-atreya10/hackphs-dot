@@ -68,6 +68,30 @@ export function showRoleLinks(role) {
   const hide = { camera: '/tower.html', dashboard: '/camera.html' }[role];
   document.documentElement.dataset.role = role || '';
   for (const a of document.querySelectorAll('a[href^="/tower.html"], a[href^="/camera.html"]')) a.hidden = Boolean(hide) && a.getAttribute('href').startsWith(hide);
+  for (const el of document.querySelectorAll('[data-admin-only]')) el.hidden = role !== 'admin';
+}
+
+// Admins can run a camera for any airport (handy for demos). They pick it once; it's remembered in this browser.
+const ADMIN_CAMERA_AIRPORT = 'skysentry.adminCameraAirport';
+async function pickCameraAirport({ mount, headers }) {
+  const { airports = [] } = await fetch('/api/airports', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
+  const saved = store.get(ADMIN_CAMERA_AIRPORT);
+  if (airports.some(a => a.code === saved)) return saved;
+  if (!airports.length) {
+    panel(mount, '<h2>No airports yet</h2><p>Create an airport on the <a href="/admin.html">admin page</a> first, then come back to start this camera.</p>');
+    throw new Error('no airports');
+  }
+  return new Promise(resolve => {
+    const options = airports.map(a => `<option value="${a.code}">${a.code}${a.name && a.name !== a.code ? ` · ${a.name.replace(/[<>&"]/g, '')}` : ''}</option>`).join('');
+    const card = panel(mount, `<h2>Which airport is this camera at?</h2>
+      <p>You’re an admin, so this camera can report to any airport. Its alerts go to that airport’s tower.</p>
+      <form id="pick"><label for="ap">Airport<select id="ap">${options}</select></label><button>Start this camera</button></form>`);
+    card.querySelector('#pick').addEventListener('submit', e => {
+      e.preventDefault();
+      const code = card.querySelector('#ap').value;
+      store.set(ADMIN_CAMERA_AIRPORT, code); resolve(code);
+    });
+  });
 }
 
 if (typeof document !== 'undefined' && document.documentElement) showRoleLinks(store.get('skysentry.role'));   // before sign-in finishes, so nothing flashes
@@ -124,21 +148,26 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
     let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
 
-    // Admins open the tower for every airport without joining one.
-    const adminTower = me.admin && role === 'dashboard' && !(me.role === 'dashboard' && me.airport);
-    if (!adminTower && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
-    if (!adminTower && me.role !== role) {
+    // Admins use both pages without a join code: the tower for every airport, a camera for an airport they pick.
+    // (An admin who also joined an airport as this role uses that instead.)
+    const asAdmin = me.admin && !(me.role === role && me.airport);
+    const adminAirport = asAdmin && role === 'camera' ? await pickCameraAirport({ mount, headers }) : null;
+    if (!asAdmin && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
+    if (!asAdmin && me.role !== role) {
       panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
       throw new Error('wrong role');
     }
-    store.set('skysentry.role', adminTower ? 'admin' : me.role);   // the landing page's Dashboard button and showRoleLinks read this
-    showRoleLinks(adminTower || me.admin ? 'admin' : me.role);
+    store.set('skysentry.role', me.admin ? 'admin' : me.role);   // the landing page's Dashboard button and showRoleLinks read this
+    showRoleLinks(me.admin ? 'admin' : me.role);
     mount.hidden = true;
+    const airport = asAdmin ? adminAirport : me.airport;
     return {
-      mode: 'clerk', role: adminTower || me.admin ? 'admin' : me.role, airport: adminTower ? null : me.airport, label: adminTower ? 'Admin · all airports' : `${me.airport} · signed in`,
-      socketAuth: async extra => ({ token: await token(), ...extra }),
-      headers,
+      mode: 'clerk', role: me.admin ? 'admin' : me.role, airport,
+      label: asAdmin ? `Admin · ${airport || 'all airports'}` : `${me.airport} · signed in`,
+      socketAuth: async extra => ({ token: await token(), ...(adminAirport ? { airport: adminAirport } : {}), ...extra }),
+      changeAirport: adminAirport ? () => { store.set(ADMIN_CAMERA_AIRPORT, ''); location.reload(); } : null,
+      headers: adminAirport ? async () => ({ ...(await headers()), 'x-airport': adminAirport }) : headers,
       manageAccount: () => clerk.openUserProfile(),
       signOut: () => clerk.signOut().then(() => location.reload())
     };

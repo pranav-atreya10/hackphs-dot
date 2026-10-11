@@ -535,6 +535,7 @@ async function cameraAirport(key, token, requestedAirport) {
   if (keyMatches(key, CAMERA_API_KEY)) return airports.has(requestedAirport) ? requestedAirport : null;
   const access = await clerkAccess(token);
   if (access?.role === "camera" && access.airport) return access.airport;
+  if (access?.admin) return airports.has(requestedAirport) ? requestedAirport : null;   // admins run a camera for any airport
   return undefined;
 }
 
