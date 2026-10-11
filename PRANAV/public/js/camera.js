@@ -89,6 +89,8 @@ async function connect() {
   $('signout').disabled = false;
   $('signout').textContent = auth.mode === 'key' ? 'Change camera key' : 'Sign out';
   $('signout').onclick = () => auth.signOut();
+  $('accountSecurity').hidden = !auth.manageAccount;
+  $('accountSecurity').onclick = () => auth.manageAccount?.();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running) status('Connected. Press Start.'); });

@@ -208,6 +208,8 @@ $('ask').addEventListener('submit', async e => {
 async function connect() {
   auth = await signIn({ role: 'dashboard', mount: $('auth') });
   $('who').textContent = auth.label;
+  $('accountSecurity').hidden = !auth.manageAccount;
+  $('accountSecurity').onclick = () => auth.manageAccount?.();
   socket = io('/tower', { auth: cb => auth.socketAuth().then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Live'; $('conn').dataset.ok = '1'; loadIncidents(); loadHourly(); });
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; });
