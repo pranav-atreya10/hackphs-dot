@@ -78,3 +78,24 @@ test('late or duplicate ElevenLabs updates never repeat the browser fallback', a
   player.update({ id: ev.id, audio: 'late' }); player.receive({ id: ev.id, text: 'Warning', voice_pending: true });
   await new Promise(r => setImmediate(r)); assert.equal(spoken, 1); assert.equal(played, 0); assert.equal(alarms, 1);
 });
+test('only new alerts become incidents: 2-second repeats are not stored, an escalation is', async () => {
+  const created = [], saved = [];
+  const p = createPipeline({ settings: {}, voice: { speak: async () => null, health: () => ({}) }, solana: { stampReport: async () => ({}), health: () => ({}) },
+    analyzeEvent: async e => ({ label: 'birds', report: `Report ${e.id}`, source: 'gemini' }) });
+  const run = e => p.processIncident(e, { emit: () => {}, create: async () => created.push(e.id), save: async f => saved.push([e.id, f.report]) });
+  const bird = { ...ev, type: 'bird', risk: 'yellow', object_count: 4 };
+  assert.equal(await run({ ...bird, id: 'b1' }), true);
+  assert.equal(await run({ ...bird, id: 'b2' }), false);            // the camera's repeat 2 s later
+  assert.equal(await run({ ...bird, id: 'b3', risk: 'red' }), true); // escalation is a new incident
+  assert.deepEqual(created, ['b1', 'b3']);
+  assert.deepEqual(saved, [['b1', 'Report b1'], ['b3', 'Report b3']]);   // every stored incident gets its report
+});
+test('health reports a failing Gemini instead of just "configured"', () => {
+  const ai = require('../ai-voice/ai');
+  const p = createPipeline({ settings: { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }, voice: { health: () => ({}) }, solana: { health: () => ({}) } });
+  Object.assign(ai.geminiState, { lastError: 'm: Gemini HTTP 404', lastErrorAt: 2, lastSuccessAt: 1 });
+  assert.equal(p.status().gemini, 'failing (m: Gemini HTTP 404)');
+  Object.assign(ai.geminiState, { lastSuccessAt: 3 });
+  assert.equal(p.status().gemini, 'live');
+  Object.assign(ai.geminiState, { lastError: null, lastErrorAt: 0, lastSuccessAt: 0 });
+});

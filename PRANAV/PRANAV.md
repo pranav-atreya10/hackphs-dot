@@ -421,6 +421,19 @@ Everyone else still has exactly one account type (no switching).
 ## Fix: blank "Use this demo" buttons
 In the "demos for every account" change I put a `// comment` partway through a line of `demo.js`. JavaScript treats everything after `//` as comment, so it commented out the rest of the line: each button's link and its "Use this demo →" text. The buttons showed as empty white bars and went nowhere. The comment now sits on its own line. I also scanned every file I'd edited for the same mistake and found no others. **Checked:** the button reads "Use this demo →" and links to `/camera.html?demo=gulls-sky.mp4`. Tests: 83/83.
 
+## Fix: incident reports (empty duplicates, and seeing why Gemini fails)
+**What was wrong (from the live MongoDB data):** 75 incidents, all real (Demo Airport, ATR), from testing. 53 had no report at all, and the other 22 used the template report even though 21 of them had snapshots.
+- **No report:** while birds are in view, a camera repeats its yellow/red alert every 2 seconds, and *every* repeat was saved as a new incident. Reports and voice alerts are rate-limited (12 s per camera and type, unless the risk goes up), so only the first got a report and the rest stayed empty.
+- **Template instead of Gemini:** Gemini calls were failing, but `/health` only said "configured" (that just means a key is set). The reason was only in DigitalOcean's logs.
+
+**Fixes:**
+- Only a new alert becomes an incident: the first one, or one where the risk goes up. `processIncident` now calls a `create` step after the rate limit, and the server stores the incident there instead of on every event. Every event still goes to the live feed, Tiger Data and the charts; only the incident list is deduplicated. Every stored incident now gets a report.
+- `/health` now shows Gemini as `live`, `configured` (key set, not used yet), or `failing (<model>: <reason>)` after a failed call. `ai.js` keeps the last error and success; keys are redacted.
+
+**Not changed:** the 53 old empty incidents are still in MongoDB.
+
+**Checked:** 2 new tests (repeats aren't stored and an escalation is; health shows a failing Gemini); the suite is 85/85. On a local server (with MongoDB off, so real data wasn't touched), 3 repeated yellow alerts and a red one showed 4 rows in the live feed but 2 incidents (yellow, then red), both with reports.
+
 ## Tower: current risk in the sidebar
 The tower sidebar's Status section now starts with the current risk, e.g. **RED · Flock of 6 birds · toward runway**, so it's visible while scrolling. It has a green, yellow or red dot. At red the line gets a red tint and a pulsing dot (no pulse with reduce motion). Clicking it jumps to the big risk card. It comes from `refreshRisk()` in `js/tower.js`, so it always matches the risk card (the highest risk from any camera in the last 10 seconds).
 

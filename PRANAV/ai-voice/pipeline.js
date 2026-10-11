@@ -4,10 +4,13 @@ const ai = require('./ai');
 const { createVoice, createRateLimit, buildAlertText } = require('./voice');
 const { createSolana } = require('./solana');
 function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQuestion, voice = createVoice(), solana = createSolana(), shouldAlert = createRateLimit(), settings = config } = {}) {
-  async function processIncident(ev, { save = () => Promise.resolve(), emit }) {
-    if (!ev || !['bird', 'drone', 'unknown'].includes(ev.type) || !['yellow', 'red'].includes(ev.risk) || !shouldAlert(ev)) return;
+  // create() stores the incident; it's only called for a new alert. Cameras repeat a yellow/red event every couple
+  // of seconds, and those repeats (inside the alert cooldown, same or lower risk) are not new incidents.
+  async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit }) {
+    if (!ev || !['bird', 'drone', 'unknown'].includes(ev.type) || !['yellow', 'red'].includes(ev.risk) || !shouldAlert(ev)) return false;
     const send = (name, data) => { try { emit(name, data); } catch (err) { console.warn(`[pipeline] delivery failed: ${config.redact(err.message)}`); } };
-    const persist = async fields => { try { await save(fields); } catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); } };
+    const created = Promise.resolve().then(create).catch(err => console.warn(`[pipeline] store failed: ${config.redact(err.message)}`));
+    const persist = async fields => { try { await created; await save(fields); } catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); } };
     const alertText = buildAlertText(ev);
     const incident = {
       _id: ev.id, time: new Date(ev.receivedAt || Date.now()).toISOString(), camera_id: ev.cameraId || ev.camera_id,
@@ -39,17 +42,20 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     })();
     const result = await Promise.allSettled([voicePromise, reportPromise]);
     for (const row of result) if (row.status === 'rejected') console.warn(`[pipeline] ${config.redact(row.reason?.message || row.reason)}`);
+    return true;
   }
   async function answerQuestion(question, hourly) {
     return { answer: await answer(question, hourly), source: settings.GEMINI_API_KEY ? 'gemini or fallback' : 'template' };
   }
   function health() {
-    return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL },
+    const g = ai.geminiState || {};
+    return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
+        lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
       elevenlabs: voice.health(), solana: solana.health() };
   }
   function status() {
     const h = health();
-    return { gemini: h.gemini.configured ? 'configured' : 'template',
+    return { gemini: !h.gemini.configured ? 'template' : h.gemini.lastError ? `failing (${h.gemini.lastError})` : h.gemini.lastSuccess ? 'live' : 'configured',
       elevenlabs: h.elevenlabs.lastError ? 'browser voice (provider error)' : h.elevenlabs.lastSuccess ? 'live' : h.elevenlabs.configured ? 'configured' : 'browser voice',
       solana: h.solana.lastError ? 'hash only (stamp error)' : h.solana.lastSuccess ? 'live devnet' : h.solana.configured ? 'configured devnet' : 'hash only' };
   }
