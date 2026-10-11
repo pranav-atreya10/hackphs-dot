@@ -1076,7 +1076,18 @@ import { enhanceWorld } from './details.js';
     else if (e.key === "ArrowLeft") go(idx - 1);
   });
   go(0); setPlaying(false); requestAnimationFrame(loop);
-  detailReady.then(() => {
+  // The film can play with its generated base scene even if a detail asset stalls.
+  stage.dataset.assets = "loading";
+  let assetDeadline;
+  const filmReady = Promise.race([detailReady, new Promise(resolve => {
+    assetDeadline = setTimeout(() => {
+      stage.dataset.assets = "background";
+      $("assetStatus").textContent = "Base scenery is ready. Detailed aircraft and scenery continue loading in the background.";
+      resolve();
+    }, 8000);
+  })]);
+  filmReady.then(() => {
+    clearTimeout(assetDeadline);
     ready = true; $("assetLoader").classList.add("loaded");
     setTimeout(() => $("assetLoader").remove(), 650);
     const start = new URLSearchParams(location.search);
@@ -1085,9 +1096,17 @@ import { enhanceWorld } from './details.js';
     gt = scenes.slice(0,chapter).reduce((sum,s)=>sum+s.dur,0) + t;
     last = performance.now(); setPlaying(!reduce && start.get('paused') !== '1'); frame();
   }).catch(error => {
+    clearTimeout(assetDeadline);
     console.error(error); ready = true; $("assetLoader").remove();
     $("assetStatus").textContent = "Some detail assets could not load; base scene remains available.";
     setPlaying(false);
+  });
+  detailReady.then(() => {
+    stage.dataset.assets = "ready";
+    if (ready) frame();
+  }).catch(error => {
+    stage.dataset.assets = "partial";
+    if (ready) console.warn("Detail assets unavailable; base film remains playable", error);
   });
   // Keep overlays synchronized when paused, revisiting a chapter, or using reduced motion.
   let lastOverlayTime=-1, cachedAnimations=[], animationScene=-1;
