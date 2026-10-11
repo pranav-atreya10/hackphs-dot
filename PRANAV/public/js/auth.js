@@ -93,9 +93,12 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
   const params = new URLSearchParams(location.search);
 
   // ---------- Clerk sign-in ----------
-  if (cfg.publishableKey) {
+  // If Clerk's script can't load (e.g. a production key on a domain without Clerk's DNS records), fall back to
+  // the camera / tower keys below: the server accepts CAMERA_API_KEY and TOWER_API_KEY even with sign-in on.
+  let clerkDown = false;
+  const clerk = cfg.publishableKey ? await loadClerk(cfg.publishableKey).catch(err => { console.warn(err); clerkDown = true; return null; }) : null;
+  if (clerk) {
     onStatus('Sign in to connect');
-    const clerk = await loadClerk(cfg.publishableKey);
     if (!clerk.user) {
       const card = panel(mount, '<h2>Sign in</h2><p>Use your SkySentry account.</p><div id="clerk-sign-in"></div>');
       clerk.mountSignIn(card.querySelector('#clerk-sign-in'), { forceRedirectUrl: location.href, signUpForceRedirectUrl: location.href, appearance: clerkAppearance() });
@@ -105,16 +108,18 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
     let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
 
-    if (!me.role || !me.airport) me = await finishSetup({ mount, role, headers });
-    if (me.role !== role) {
+    // Admins open the tower for every airport without joining one.
+    const adminTower = me.admin && role === 'dashboard' && !(me.role === 'dashboard' && me.airport);
+    if (!adminTower && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers })) };
+    if (!adminTower && me.role !== role) {
       panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
       throw new Error('wrong role');
     }
-    store.set('skysentry.role', me.role);   // the landing page's Dashboard button reads this
+    store.set('skysentry.role', adminTower ? 'dashboard' : me.role);   // the landing page's Dashboard button reads this
     mount.hidden = true;
     return {
-      mode: 'clerk', airport: me.airport, label: `${me.airport} · signed in`,
+      mode: 'clerk', airport: adminTower ? null : me.airport, label: adminTower ? 'Admin · all airports' : `${me.airport} · signed in`,
       socketAuth: async extra => ({ token: await token(), ...extra }),
       headers,
       manageAccount: () => clerk.openUserProfile(),
@@ -122,7 +127,8 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     };
   }
 
-  // ---------- Keys (sign-in not configured) ----------
+  // ---------- Keys (sign-in not configured, or the sign-in service didn't load) ----------
+  const why = clerkDown ? 'The sign-in service didn’t load, so connect with the' : 'Sign-in isn’t set up on this server, so cameras use the';
   if (role === 'camera') {
     let key = params.get('key') || store.get('skysentry.cameraKey');
     let airport = params.get('airport') || store.get('skysentry.airport');
@@ -130,7 +136,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       onStatus('Camera key needed');
       ({ key, airport } = await new Promise(resolve => {
         const card = panel(mount, `<h2>Connect this camera</h2>
-          <p>Sign-in isn’t set up on this server, so cameras use the camera key from the server’s settings (<code>CAMERA_API_KEY</code>).</p>
+          <p>${why} camera key from the server’s settings (<code>CAMERA_API_KEY</code>).</p>
           <form id="keyForm"><label for="ck">Camera key<input id="ck" type="password" required autocomplete="off"></label>
           <label for="ap">Airport code (optional, e.g. KPCT)<input id="ap" value="${airport}" autocomplete="off"></label>
           <button>Connect</button></form>`);
@@ -149,8 +155,17 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       signOut: () => { store.set('skysentry.cameraKey', ''); location.reload(); }
     };
   }
-  const key = params.get('key') || store.get('skysentry.towerKey');
-  if (params.get('key')) store.set('skysentry.towerKey', key);
+  let key = params.get('key') || store.get('skysentry.towerKey');
+  if (!key && clerkDown) {   // the server still wants a sign-in, so ask for the tower key instead of opening a dashboard that gets refused
+    onStatus('Tower key needed');
+    key = await new Promise(resolve => {
+      const card = panel(mount, `<h2>Open the tower</h2>
+        <p>${why} tower key from the server’s settings (<code>TOWER_API_KEY</code>).</p>
+        <form id="keyForm"><label for="tk">Tower key<input id="tk" type="password" required autocomplete="off"></label><button>Connect</button></form>`);
+      card.querySelector('#keyForm').addEventListener('submit', e => { e.preventDefault(); resolve(card.querySelector('#tk').value.trim()); });
+    });
+  }
+  if (key) store.set('skysentry.towerKey', key);
   mount.hidden = true;
   return {
     mode: 'open', airport: null, label: key ? 'tower key' : 'open dashboard',

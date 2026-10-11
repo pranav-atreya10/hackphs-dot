@@ -36,6 +36,10 @@ The camera and tower pages use the existing Clerk sign-in service when its keys 
 
 Clerk UI loading follows the [official JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart). Enrollment options are described in [Clerk authentication configuration](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options).
 
+**Clerk keys:** use the Clerk *Development* instance keys (`pk_test_…` / `sk_test_…`) on the `ondigitalocean.app` address. Production keys only work on a domain you own with Clerk's DNS records.
+
+**Admins and airports:** set `ADMIN_EMAILS` (comma-separated) in DigitalOcean to the email addresses that should be admins. An admin signs in with one of those emails (it must be verified in Clerk) and opens `/admin.html` to create airports. Each airport gets a generated join code, and the admin can issue a new code or delete the airport. These airports are saved in MongoDB (`skysentry.airports`) and work alongside the fixed ones in `AIRPORT_CODES`. Admins also open the tower for every airport without a join code.
+
 ## Sponsor service readiness
 
 In DigitalOcean App Platform → Settings → web → Environment Variables, add encrypted `ELEVENLABS_API_KEY` and `GEMINI_API_KEY` values, plus an available `ELEVENLABS_VOICE_ID`. Save and wait for redeployment. Never commit keys. `/health` reports browser voice or template mode until these are present. In Tower, select **Turn on alert sound** and send a demo threat to verify actual ElevenLabs playback. The server requests MP3 speech and caches repeated phrases; browser speech handles unavailable or slow responses. A configured key alone is not proof of a successful provider response.

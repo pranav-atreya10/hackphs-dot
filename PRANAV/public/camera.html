@@ -23,7 +23,8 @@
   .banner[data-risk="yellow"] i{background:var(--warn)} .banner[data-risk="red"] i{background:var(--stop)} .banner[data-risk="wait"] i{background:#a1a1aa}
   #empty{position:absolute;inset:0;display:grid;place-items:center;color:#a1a1aa;text-align:center;padding:30px}
   #empty[hidden]{display:none}   /* display:grid above would otherwise beat the hidden attribute and leave the hint over the video */
-  .controls #start{width:100%;font-size:1.05rem;font-weight:600;padding:14px;border-radius:10px}
+  .controls{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:8px}
+  .controls button{font-size:1.05rem;font-weight:600;padding:14px;border-radius:10px}
   .status{margin:0;text-align:center;color:var(--mute);font:500 .9rem var(--sans)}
   details.fold[open]{gap:12px}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -56,7 +57,7 @@
     <div class="banner" id="banner" data-risk="green"><i></i><span id="bannerText">Ready</span></div>
     <div id="empty">Point the camera at the sky by the runway, then press Start.</div>
   </div>
-  <div class="controls"><button id="start" type="button">Start</button></div>
+  <div class="controls"><button id="start" type="button">Start</button><button class="ghost" id="upload" type="button">Upload a video</button><input id="uploadFile" type="file" accept="video/*" hidden></div>
   <p class="status" id="statusLine" aria-live="polite">Not streaming yet.</p>
 
   <details class="card fold" id="settings">
