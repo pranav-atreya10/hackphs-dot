@@ -176,3 +176,29 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - **iOS app (Atharv's folder):** the app icon is now the white-on-black logo (1024px, no transparency, as iOS requires). AccentColor and LaunchBackground are black and white with dark-mode variants.
 
 **Checked:** headless-Chrome screenshots of Tower, Camera, Demos, the landing page and the film in light and dark. Phone layouts were checked in a 390px frame. The theme button cycles correctly. The 69-test server suite passes. No detection code, models or thresholds were touched, so no benchmark run was needed.
+
+## Scroll and entrance animations
+**Landing page** (`css/site.css`):
+- The hero text rises in, staggered, when the page loads.
+- As you scroll:
+  - sections, cards, facts, risk rows, timeline steps and FAQ items rise into place, with neighbors slightly staggered;
+  - the film stage settles in from slightly smaller;
+  - the hero drifts up and fades;
+  - the top bar gains its edge and shadow;
+  - a thin reading-progress line fills under it;
+  - the risk-level dots pop in.
+
+**App pages** (`css/app.css`):
+- Cards rise in, staggered, on load.
+- Demo clips rise in as you scroll.
+- Opened panels slide in, and the "+" turns as it becomes "−".
+- The status dot pulses while connected, and the sign-in card pops in.
+
+**How:**
+- The scroll effects use CSS scroll-driven animations (`animation-timeline: view()` / `scroll()`), with no JavaScript. Content that's already on screen is never hidden, and nothing can get stuck invisible.
+- Browsers without support (Firefox today) show the page without the scroll effects.
+- Everything is turned off for people who set "reduce motion".
+- Only wrapper elements animate, so the Tower risk card's red flash still works.
+- I scoped the top-bar rules to `header.bar` because the film also uses a `.bar` class for its progress segments.
+
+**Checked:** headless-Chrome captures at the top of the page and scrolled to three depths, plus Tower after load. The 69-test suite passes. This is CSS only; no detection code was touched.
