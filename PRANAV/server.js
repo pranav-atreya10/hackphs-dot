@@ -6,13 +6,15 @@ const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
 const { createClerkClient, verifyToken } = require("@clerk/express");
-const ai = require("./ai");
-const { CameraBot, BOT_ENABLED } = require("./bot");
 
 // Load a local .env file if there is one (dev only; on DigitalOcean env vars come from the dashboard/app spec).
 try {
   process.loadEnvFile(path.join(__dirname, ".env"));
 } catch {}
+
+// Provider and bot modules read configuration as they load.
+const ai = require("./ai");
+const { CameraBot, BOT_ENABLED } = require("./bot");
 
 // DigitalOcean App Platform injects PORT; default to 8080 (its default http_port).
 const PORT = process.env.PORT || 8080;
@@ -220,13 +222,15 @@ function relayCameraEvent(cameraId, payload, airport = null) {
   towersFor(airport).emit("camera:event", event);
   storeDetection(event);
   if (event.risk === "yellow" || event.risk === "red") {
-    // After the incident is stored, the AI step fills gemini_label/report/solana_tx and pushes the
-    // finished report (and a spoken alert for red) to this airport's towers. See ai.js.
-    storeIncident(event)
-      .then(() => ai.processIncident(event, {
-        save: (fields) => (mongo ? withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields })) : Promise.resolve()),
+    // Show warnings immediately. Persistence and provider work proceed without blocking the feed.
+    const stored = storeIncident(event);
+    ai.processIncident(event, {
+        save: async (fields) => {
+          await stored;
+          if (mongo) await withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields }));
+        },
         emit: (name, data) => towersFor(airport).emit(name, data),
-      }))
+      })
       .catch((err) => console.error(`AI step failed for ${event.id}:`, err.message));
   }
   return event;
@@ -314,6 +318,8 @@ app.get("/health", (req, res) => {
     bot: BOT_ENABLED ? "server bot on" : "server bot off (towers detect)",
   });
 });
+
+app.get("/api/integrations", requireDashboard, (req, res) => res.json(ai.health()));
 
 // Live database check for debugging deploys: "ok", "not configured", or the driver's error (never the password).
 // Kept off /health so a slow or broken database can't make DigitalOcean's health check restart the app.
@@ -538,6 +544,22 @@ towers.on("connection", (socket) => {
     socket.emit("bot:status", live.bot.status());
     if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, ...live.config });
   }
+
+  // Trained checks run on tower crops; accept only fresh results for this airport's active tracks.
+  let lastLabelAt = 0;
+  const trackLabelsAt = new Map();
+  socket.on("tower:label", (payload, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    const live = isPlainObject(payload) && liveCameras.get(String(payload.cameraId));
+    if (!live || !live.bot.active || !towerSees(socket, live)) return reply({ ok: false });
+    const now = Date.now(), trackKey = `${live.cameraId}:${payload.trackId}`;
+    if (now - lastLabelAt < 400 || now - (trackLabelsAt.get(trackKey) || 0) < 2000) return reply({ ok: false });
+    if (!live.bot.applyLabel(payload)) return reply({ ok: false });
+    lastLabelAt = now; trackLabelsAt.set(trackKey, now);
+    // Keep this connection's bookkeeping bounded during long demos.
+    for (const [id, at] of trackLabelsAt) if (now - at > 60000) trackLabelsAt.delete(id);
+    reply({ ok: true });
+  });
 
   // Fallback detection: when a camera's server bot has handed over, the first tower to report owns that
   // camera's events (others just draw), so alerts are never duplicated. Ownership lapses after 5 s of silence.

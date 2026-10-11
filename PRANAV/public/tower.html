@@ -47,7 +47,7 @@
 <body>
 <header class="top"><div class="top-in">
   <a class="brand" href="/"><i></i>SkySentry</a><h1>Tower</h1>
-  <nav><a href="/">Home</a><a href="/camera.html">Camera</a><a href="/tower.html" aria-current="page">Tower</a></nav>
+  <nav><a href="/">Home</a><a href="/camera.html">Camera</a><a href="/tower.html" aria-current="page">Tower</a><a href="/demo.html">Demos</a></nav>
   <span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No cameras</span><span class="pill" id="who">…</span>
   <button class="ghost" id="sound" type="button">Turn on alert sound</button>
 </div></header>
@@ -58,6 +58,8 @@
     <section class="card" id="feedsCard"><h2>Live camera feed</h2>
       <div id="feeds"></div>
       <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
+      <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false">Enable trained bird check</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Bird check off · motion detection stays active.</span></div>
+      <p class="hint">Optional trained model checks tracked objects for birds on this Mac. Camera images stay in this browser. Tiny objects may remain unknown; this model does not identify drones.</p>
     </section>
     <div class="duo"><section class="card risk" id="risk" data-risk="green" aria-live="polite">
       <span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Clear sky</span><span class="why" id="riskWhy">Waiting for a camera</span>

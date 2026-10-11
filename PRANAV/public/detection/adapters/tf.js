@@ -35,8 +35,8 @@ export function loadScript(src) {
 }
 
 // backend: 'webgl' (GPU, default and fastest on phones), 'wasm', or 'cpu' (slow fallback).
-export async function loadTensorFlow({ backend } = {}) {
-  if (!window.tf) await loadScript(CDN.tfjs);
+export async function loadTensorFlow({ backend, scriptUrl = CDN.tfjs } = {}) {
+  if (!window.tf) await loadScript(scriptUrl);
   const tf = window.tf;
   const major = Number(String(tf.version && tf.version.tfjs).split('.')[0]);
   if (major !== 3) console.warn(`[skysentry] TF.js ${tf.version.tfjs} already on the page; adapters were tested with 3.21.0`);

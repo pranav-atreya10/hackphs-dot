@@ -28,7 +28,7 @@ enum ConnectionStatus: Equatable {
     }
 }
 
-enum ActiveSource { case camera, demo }
+enum ActiveSource { case camera, demo, clip }
 
 /// Latest demo frame, kept separate so only the demo image view redraws at frame rate.
 final class DemoFrameStore: ObservableObject {
@@ -57,6 +57,7 @@ final class StreamController: ObservableObject {
 
     let demoFrames = DemoFrameStore()
     let camera = CameraSource()
+    let clip = DemoClipSource()
     private let demo = DemoSkySource()
     private let api = SkyAPI()
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
@@ -82,6 +83,8 @@ final class StreamController: ObservableObject {
 
     init() {
         camera.onFrame = { [weak self] image in self?.offer(image) }
+        clip.onFrame = { [weak self] image in self?.offer(image) }
+        clip.onError = { [weak self] message in self?.errorMessage = message }
         camera.onError = { [weak self] message in self?.errorMessage = message }
         demo.onFrame = { [weak self] cg in
             guard let self else { return }
@@ -95,6 +98,7 @@ final class StreamController: ObservableObject {
     /// Picks and starts the frame source. The preview runs whenever the camera screen is open;
     /// frames are only uploaded while streaming.
     func activate(_ preference: SourcePreference) {
+        if preference == .clip { switchTo(.clip); return }
         let useDemo = preference == .demo || !CameraSource.isAvailable
         switchTo(useDemo ? .demo : .camera)
     }
@@ -102,8 +106,19 @@ final class StreamController: ObservableObject {
     func switchTo(_ newSource: ActiveSource) {
         camera.stop()
         demo.stop()
+        clip.stop()
         source = newSource
         cameraDenied = false
+        if newSource == .clip {
+            let s = StreamSettings.load()
+            let file = UserDefaults.standard.string(forKey: SettingKey.demoClip) ?? SettingDefaults.demoClip
+            guard let base = SkyAPI.baseURL(s.serverURL), !file.contains("/"), file.hasSuffix(".mp4") else {
+                errorMessage = "Choose a demo video from the library and check the server address."
+                return
+            }
+            clip.start(base.appendingPathComponent("clips").appendingPathComponent(file))
+            return
+        }
         if newSource == .demo {
             demo.start()
             return
@@ -135,6 +150,7 @@ final class StreamController: ObservableObject {
         stopStreaming()
         camera.stop()
         demo.stop()
+        clip.stop()
     }
 
     // MARK: Streaming
@@ -191,6 +207,9 @@ final class StreamController: ObservableObject {
         settings = s
         let gen = generation
         lock.unlock()
+        let preference = SourcePreference(rawValue: UserDefaults.standard.string(forKey: SettingKey.sourcePref) ?? "auto") ?? .auto
+        let desired: ActiveSource = preference == .clip ? .clip : preference == .demo || !CameraSource.isAvailable ? .demo : .camera
+        if desired != source { switchTo(desired) }
         if streaming { sendConfig(s, gen: gen) }
     }
 
@@ -213,7 +232,8 @@ final class StreamController: ObservableObject {
         let now = CACurrentMediaTime()
         let extent = image.extent
         guard extent.width > 0, extent.height > 0 else { return }
-        let scale = min(1, Self.targetWidth / extent.width)
+        // Bound the long edge: portrait frames otherwise contain over three times as many pixels.
+        let scale = min(1, Self.targetWidth / max(extent.width, extent.height))
         let outSize = CGSize(width: (extent.width * scale).rounded(), height: (extent.height * scale).rounded())
 
         lock.lock()

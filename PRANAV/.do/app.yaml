@@ -51,9 +51,24 @@ services:
       - key: GEMINI_API_KEY
         type: SECRET
         scope: RUN_TIME
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+        scope: RUN_TIME
+      - key: GEMINI_BACKUP_MODEL
+        value: gemini-3.5-flash-lite
+        scope: RUN_TIME
       - key: ELEVENLABS_API_KEY
         type: SECRET
         scope: RUN_TIME
+      - key: ELEVENLABS_VOICE_ID
+        value: 21m00Tcm4TlvDq8ikWAM
+        scope: RUN_TIME
+      - key: ELEVENLABS_MODEL
+        value: eleven_flash_v2_5
+        scope: RUN_TIME
       - key: SOLANA_SECRET_KEY
         type: SECRET
+        scope: RUN_TIME
+      - key: SOLANA_RPC_URL
+        value: https://api.devnet.solana.com
         scope: RUN_TIME

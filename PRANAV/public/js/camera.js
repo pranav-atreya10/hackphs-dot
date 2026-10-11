@@ -31,6 +31,8 @@ for (const id of ['cameraId', 'heading', 'fov', 'lat', 'lon']) {
   if (saved !== null) $(id).value = saved;
   $(id).addEventListener('change', () => { store.set('skysentry.' + id, $(id).value); applyCamera(); sendConfig(); });
 }
+const requestedCameraId = new URLSearchParams(location.search).get('cameraId');
+if (requestedCameraId) $('cameraId').value = requestedCameraId.slice(0, 60);
 const mode = () => $('mode').value;
 $('mode').value = store.get('skysentry.mode', 'stream');
 $('mode').addEventListener('change', () => store.set('skysentry.mode', mode()));
@@ -40,11 +42,18 @@ $('tuning').addEventListener('change', () => { store.set('skysentry.tuning', $('
 // Demo clips shipped with the site (public/clips/clips.json).
 fetch('/clips/clips.json').then(r => r.json()).then(list => {
   for (const c of list) $('demoClip').add(new Option(`${c.title} · ${c.expect}`, c.file));
+  const requested = new URLSearchParams(location.search).get('demo');
+  if (requested && list.some(c => c.file === requested)) {
+    $('demoClip').value = requested; $('source').value = 'demo'; showSourceFields();
+    $('empty').textContent = 'Recorded demo selected. Press Start, then open Tower to see the model.';
+  }
 }).catch(() => { $('source').querySelector('option[value="demo"]').disabled = true; });
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
 $('source').addEventListener('change', showSourceFields);
 // Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
 $('source').value = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'webcam' : 'synthetic';
+const requestedScenario = new URLSearchParams(location.search).get('scenario');
+if (SCENARIOS[requestedScenario]) { $('source').value = 'synthetic'; $('scenario').value = requestedScenario; }
 showSourceFields();
 
 function cameraConfig() {
@@ -70,8 +79,15 @@ function log(html) {
 
 /* ---------- connection to the server ---------- */
 async function connect() {
-  auth = await signIn({ role: 'camera', mount: $('auth') });
+  $('signout').disabled = true;
+  auth = await signIn({ role: 'camera', mount: $('auth'), onStatus: message => {
+    $('conn').textContent = message;
+    status(message === 'Camera key needed' ? 'Enter the camera key above, then press Connect.' : 'Sign in above to connect this camera.');
+  } });
+  $('conn').textContent = 'Connecting…';
   $('who').textContent = auth.label;
+  $('signout').disabled = false;
+  $('signout').textContent = auth.mode === 'key' ? 'Change camera key' : 'Sign out';
   $('signout').onclick = () => auth.signOut();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
@@ -82,7 +98,10 @@ async function connect() {
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; status('Lost the server, reconnecting automatically…'); });
   socket.on('connect_error', err => {
     $('conn').textContent = err.message === 'unauthorized' ? 'Key or sign-in rejected' : 'Server offline'; $('conn').dataset.ok = '0';
-    if (err.message === 'unauthorized' && auth.mode === 'key') log('The camera key was rejected. Use <b>Sign out</b> to enter it again.');
+    if (err.message === 'unauthorized' && auth.mode === 'key') {
+      status('Camera key rejected. Use Change camera key to enter it again.');
+      log('The camera key was rejected. Use <b>Change camera key</b> to enter it again.');
+    } else status(err.message === 'unauthorized' ? 'Sign-in rejected. Sign out and reconnect.' : 'Cannot reach the server. Retrying automatically…');
   });
 }
 
@@ -217,12 +236,13 @@ async function start() {
     const ar = (el.videoWidth || el.width) / (el.videoHeight || el.height) || 4 / 3;
     small.width = 320; small.height = Math.round(320 / ar);
     $('empty').hidden = true; fitOverlay();
-    if (mode() === 'local' && $('coco').getAttribute('aria-pressed') === 'true') await startCoco();
+    if (mode() === 'local' && $('coco').getAttribute('aria-pressed') === 'true') void startCoco().catch(err => { $('aiStatus').textContent = `Bird check unavailable: ${err.message}`; });
     t0 = performance.now(); running = true; $('start').textContent = 'Stop';
     status(socket?.connected ? 'Starting… keep the camera still for a few seconds' : 'Started, but not connected to the server yet. It will send as soon as it connects.');
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
     log(`started · ${source === 'synthetic' ? $('scenario').value.replace(/_/g, ' ') : source}`);
     rafId = requestAnimationFrame(loop);
+    // Optional screen-awake permission must never hold up video or model startup.
+    try { navigator.wakeLock?.request('screen').then(lock => { if (running) wakeLock = lock; else lock.release().catch(() => {}); }).catch(() => {}); } catch {}
   } catch (err) { log(`could not start: ${err.message}`); }
   $('start').disabled = false;
 }
@@ -234,7 +254,8 @@ function streamFrame(t) {
   if (inFlight || now - lastSent < 1000 / STREAM_FPS || !socket?.connected) return;
   const el = $('source').value === 'synthetic' ? srcCanvas : video;
   const W = el.videoWidth || el.width, H = el.videoHeight || el.height; if (!W || !H) return;
-  frameCanvas.width = Math.min(STREAM_W, W); frameCanvas.height = Math.round(frameCanvas.width * H / W);
+  const scale = Math.min(1, STREAM_W / Math.max(W, H));
+  frameCanvas.width = Math.round(W * scale); frameCanvas.height = Math.round(H * scale);
   frameCtx.drawImage(el, 0, 0, frameCanvas.width, frameCanvas.height);
   inFlight = true; lastSent = now;
   frameCanvas.toBlob(async blob => {
@@ -253,6 +274,7 @@ function fromCompact(c) {
 function stop() {
   running = false; cancelAnimationFrame(rafId); coco?.stop();
   video.srcObject?.getTracks().forEach(tr => tr.stop());
+  video.pause();
   wakeLock?.release().catch(() => {}); wakeLock = null;
   $('start').textContent = 'Start'; log('stopped'); status('Stopped.'); $('banner').dataset.risk = 'green'; $('bannerText').textContent = 'Ready';
 }
@@ -318,4 +340,8 @@ $('fakeDrone').addEventListener('click', () => {
 });
 
 draw(null);
-connect().catch(err => { if (err.message !== 'wrong role') log(`sign-in failed: ${err.message}`); });
+connect().catch(err => {
+  $('conn').textContent = 'Sign-in needs attention';
+  status(err.message === 'wrong role' ? 'Use a camera account to connect this page.' : `Could not connect: ${err.message}`);
+  if (err.message !== 'wrong role') log(`sign-in failed: ${err.message}`);
+});

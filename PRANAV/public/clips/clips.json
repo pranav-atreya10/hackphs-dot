@@ -1,6 +1,80 @@
 [
-  {"file": "gulls-sky.webm", "title": "Gulls swarming in open sky", "expect": "flock, should go red", "credit": "Marc Plomp / Beeld en Geluid, CC BY-SA 3.0 NL, Wikimedia Commons: Kokmeeuwen in de lucht-4961761.webm"},
-  {"file": "starling-murmuration.webm", "title": "Starling murmuration at dusk", "expect": "huge flock", "credit": "P K, CC BY 2.0, Wikimedia Commons: Starling cloud.webm"},
-  {"file": "drone-hover.webm", "title": "Drone hovering over a field", "expect": "steady object (drone)", "credit": "BLM Oregon & Washington, public domain, Wikimedia Commons: BLM drone training (34216006294).webm"},
-  {"file": "geese-beach.webm", "title": "Geese over a beach", "expect": "small flock", "credit": "Maoileann, CC BY-SA 4.0, Wikimedia Commons: Geese-1280554, Dingle Peninsula, Co. Kerry, Ireland.webm"}
+  {
+    "file": "gulls-sky.mp4",
+    "title": "Gulls in open sky",
+    "expect": "Several moving birds against a clear sky.",
+    "credit": "Marc Plomp / Beeld en Geluid \u00b7 CC BY-SA 3.0 NL",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kokmeeuwen_in_de_lucht-4961761.webm",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/nl/",
+    "category": "Birds",
+    "poster": "gulls-sky.jpg",
+    "changes": "Converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed; excerpt up to 32 seconds.",
+    "durationSeconds": 37.0,
+    "sizeBytes": 2252372
+  },
+  {
+    "file": "starling-murmuration.mp4",
+    "title": "Starling murmuration",
+    "expect": "A dense flock changes shape and direction at dusk.",
+    "credit": "P K \u00b7 CC BY 2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Starling_cloud.webm",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "category": "Flock",
+    "poster": "starling-murmuration.jpg",
+    "changes": "Converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed; excerpt up to 32 seconds.",
+    "durationSeconds": 32.0,
+    "sizeBytes": 1349712
+  },
+  {
+    "file": "drone-hover.mp4",
+    "title": "Drone hovering over a field",
+    "expect": "Compare steady object motion with the bird clips.",
+    "credit": "BLM Oregon & Washington \u00b7 Public domain",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:BLM_drone_training_(34216006294).webm",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "category": "Drone",
+    "poster": "drone-hover.jpg",
+    "changes": "Converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed; excerpt up to 32 seconds.",
+    "durationSeconds": 32.0,
+    "sizeBytes": 2768970
+  },
+  {
+    "file": "geese-beach.mp4",
+    "title": "Geese over a beach",
+    "expect": "A small flock with a more detailed background.",
+    "credit": "Maoileann \u00b7 CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Geese-1280554,_Dingle_Peninsula,_Co._Kerry,_Ireland.webm",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "category": "Birds",
+    "poster": "geese-beach.jpg",
+    "changes": "Converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed; excerpt up to 32 seconds.",
+    "durationSeconds": 12.4,
+    "sizeBytes": 533159
+  },
+  {
+    "file": "padilla-birds.mp4",
+    "title": "Birds near Padilla Bay",
+    "expect": "A moving flock against a coastal sky. Try distant-bird tuning.",
+    "credit": "Cody Logan \u00b7 CC BY-SA 4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Flock_of_birds_near_Padilla_Bay.webm",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "category": "Flock",
+    "poster": "padilla-birds.jpg",
+    "changes": "Excerpt of original footage; converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed.",
+    "durationSeconds": 28.0,
+    "sizeBytes": 1607116
+  },
+  {
+    "file": "quadcopter.mp4",
+    "title": "Quadcopter in flight",
+    "expect": "Real drone footage for comparing movement profiles.",
+    "credit": "Sounds of Changes / Ty\u00f6v\u00e4enmuseo Werstas / Mikael Maffei \u00b7 CC BY 3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Quadcopter_(drone).webm",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "category": "Drone",
+    "poster": "quadcopter.jpg",
+    "changes": "Excerpt of original footage; converted to H.264 MP4, resized to 854px wide, limited to 24fps, audio removed.",
+    "durationSeconds": 30.0,
+    "sizeBytes": 3913837
+  }
 ]

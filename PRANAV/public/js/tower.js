@@ -4,6 +4,8 @@
 import { signIn } from '/js/auth.js';
 import { BeaconLink, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
 import { startFeeds } from '/js/feeds.js';
+import { VisualBirdVerifier } from '/js/visual-ai.js';
+import { createAlertPlayer } from '/js/alert-player.mjs';
 
 const $ = id => document.getElementById(id);
 const RANK = { green: 0, yellow: 1, red: 2 };
@@ -33,13 +35,14 @@ function alarm() {
   }
   return new Promise(r => setTimeout(r, 900));
 }
-async function announce({ text, audio }) {
-  $('alertText').textContent = text;
-  await alarm();
-  if (!soundOn) return;
-  if (audio) return void new Audio(`data:audio/mpeg;base64,${audio}`).play().catch(() => {});
-  if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = .95; speechSynthesis.speak(u); }
-}
+const announcements = createAlertPlayer({
+  enabled: () => soundOn, alarm,
+  showText: text => { $('alertText').textContent = text; },
+  playAudio: audio => new Audio(`data:audio/mpeg;base64,${audio}`).play(),
+  speakText: text => {
+    if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = .95; speechSynthesis.speak(u); }
+  },
+});
 
 /* ---------- risk across all cameras (each camera's latest event, for 10 s) ---------- */
 const latest = new Map();
@@ -66,30 +69,41 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19,
 const camLayers = new Map(), pins = L.layerGroup().addTo(map);
 let centered = false;
 const dest = (lat, lon, brg, m) => { const b = brg * Math.PI / 180; return [lat + m * Math.cos(b) / 111320, lon + m * Math.sin(b) / (111320 * Math.cos(lat * Math.PI / 180))]; };
+const validGeo = p => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) < 90;
 function placeCamera(ev) {
-  const c = ev.camera; if (!c || c.lat == null) return;
+  const c = ev.camera;
+  if (!c || !validGeo([c.lon, c.lat]) || !Number.isFinite(c.heading_deg) || !Number.isFinite(c.hfov_deg) || c.hfov_deg <= 0 || c.hfov_deg > 180) return;
   const key = ev.cameraId, cone = [[c.lat, c.lon]];
-  for (let a = -c.hfov_deg / 2; a <= c.hfov_deg / 2; a += c.hfov_deg / 10) cone.push(dest(c.lat, c.lon, c.heading_deg + a, 400));
+  for (let i = 0; i <= 10; i++) cone.push(dest(c.lat, c.lon, c.heading_deg - c.hfov_deg / 2 + i * c.hfov_deg / 10, 400));
   camLayers.get(key)?.remove();
+  const tooltip = document.createElement('span'); tooltip.textContent = `Camera ${key}`;
   camLayers.set(key, L.layerGroup([
     L.polygon(cone, { color: '#1f6fd1', weight: 1, fillOpacity: .08 }),
-    L.circleMarker([c.lat, c.lon], { radius: 7, color: '#1f6fd1', fillOpacity: 1 }).bindTooltip(`Camera ${key}`)
+    L.circleMarker([c.lat, c.lon], { radius: 7, color: '#1f6fd1', fillOpacity: 1 }).bindTooltip(tooltip)
   ]).addTo(map));
   if (!centered) { map.setView([c.lat, c.lon], 16); centered = true; }
 }
 function pin(ev) {
-  if (!ev.target_geo || ev.risk === 'green') return;
+  if (!validGeo(ev.target_geo?.coordinates) || ev.risk === 'green') return;
   const [lon, lat] = ev.target_geo.coordinates, color = ev.risk === 'red' ? '#c0392b' : '#d99a00';
-  L.circleMarker([lat, lon], { radius: 8, color, fillOpacity: .85 }).bindPopup(`<b>${describe(ev)}</b><br>${time(ev.receivedAt)} · ${ev.cameraId}`).addTo(pins);
-  if (ev.path_geo?.coordinates?.length > 1) L.polyline(ev.path_geo.coordinates.map(([x, y]) => [y, x]), { color, weight: 2, opacity: .6, dashArray: '4 4' }).addTo(pins);
+  const popup = document.createElement('div'), description = document.createElement('b');
+  description.textContent = describe(ev);
+  popup.append(description, document.createElement('br'), document.createTextNode(`${time(ev.receivedAt)} · ${ev.cameraId}`));
+  L.circleMarker([lat, lon], { radius: 8, color, fillOpacity: .85 }).bindPopup(popup).addTo(pins);
+  const path = Array.isArray(ev.path_geo?.coordinates) ? ev.path_geo.coordinates.filter(validGeo) : [];
+  if (path.length > 1) L.polyline(path.map(([x, y]) => [y, x]), { color, weight: 2, opacity: .6, dashArray: '4 4' }).addTo(pins);
   while (pins.getLayers().length > 60) pins.removeLayer(pins.getLayers()[0]);
 }
 
 /* ---------- live feed ---------- */
 function feed(ev) {
   const li = document.createElement('li');
-  li.innerHTML = `<span>${time(ev.receivedAt)}</span><span class="lv ${ev.risk}">${ev.risk}</span><span></span>`;
-  li.lastChild.textContent = `${ev.cameraId} · ${describe(ev)}`;
+  const at = document.createElement('span'), level = document.createElement('span'), description = document.createElement('span');
+  at.textContent = time(ev.receivedAt);
+  level.className = `lv ${Object.hasOwn(RANK, ev.risk) ? ev.risk : 'unknown'}`;
+  level.textContent = String(ev.risk ?? 'unknown');
+  description.textContent = `${ev.cameraId} · ${describe(ev)}`;
+  li.append(at, level, description);
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
 }
 
@@ -112,31 +126,44 @@ $('beaconBtn').addEventListener('click', async () => {
 });
 
 /* ---------- incidents ---------- */
-const incidentEls = new Map();
+const incidentEls = new Map(), incidentData = new Map();
+let selectedIncident = null;
 function incidentItem(inc) {
   const li = document.createElement('li'), b = document.createElement('button');
   b.innerHTML = '<b></b><span></span>';
   const n = inc.object_count;
   b.firstChild.textContent = `${inc.risk === 'red' ? 'Red' : 'Yellow'} · ${inc.type === 'drone' ? 'Drone' : n > 1 ? `${n} ${inc.type}s` : inc.type} · ${inc.camera_id}`;
-  b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_tx ? ' · stamped on Solana' : ''}`;
+  b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_status === 'confirmed' || (inc.solana_tx && !inc.solana_status) ? ' · stamped on Solana' : inc.solana_status === 'pending' ? ' · stamp pending' : inc.solana_error ? ' · stamp needs attention' : ''}`;
   b.addEventListener('click', () => showIncident(inc));
   li.appendChild(b); return li;
 }
 function upsertIncident(inc) {
+  inc = { ...(incidentData.get(inc._id) || {}), ...inc };
+  incidentData.set(inc._id, inc);
   const li = incidentItem(inc), old = incidentEls.get(inc._id);
   if (old) old.replaceWith(li); else $('incidents').prepend(li);
   incidentEls.set(inc._id, li);
-  while ($('incidents').children.length > 40) $('incidents').lastChild.remove();
+  while ($('incidents').children.length > 40) {
+    const removed = $('incidents').lastChild;
+    for (const [id, row] of incidentEls) if (row === removed) { incidentEls.delete(id); incidentData.delete(id); }
+    removed.remove();
+  }
+  if (selectedIncident === inc._id) showIncident(inc);
 }
 function showIncident(d) {
+  selectedIncident = d._id;
   const box = $('detail'); box.hidden = false; box.replaceChildren();
   const img = document.createElement('img'); img.alt = 'Snapshot from the camera';
-  if (d.snapshot) img.src = `data:image/jpeg;base64,${d.snapshot}`;
+  if (d.snapshot) img.src = d.snapshot.startsWith('data:image/') ? d.snapshot : `data:image/jpeg;base64,${d.snapshot}`;
+  else img.hidden = true;
   const text = document.createElement('div'); text.style.cssText = 'display:grid;gap:6px;align-content:start';
-  const label = document.createElement('p'); label.innerHTML = '<b>Gemini sees:</b> '; label.append(d.gemini_label ?? 'waiting for the report…');
+  const label = document.createElement('p'); label.innerHTML = '<b>Image review:</b> '; label.append(d.gemini_label ?? 'waiting for the report…');
   const report = document.createElement('p'); report.textContent = d.report ?? '';
   text.append(label, report);
-  if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'View the Solana stamp'; text.append(a); }
+  if (d.report_hash) { const p = document.createElement('p'); p.textContent = `Report fingerprint: ${d.report_hash.slice(0, 16)}…`; text.append(p); }
+  if (d.solana_error) { const p = document.createElement('p'); p.textContent = `Solana: ${d.solana_error}`; text.append(p); }
+  else if (d.type === 'drone' && d.solana_status === 'hash only') { const p = document.createElement('p'); p.textContent = 'Report hashed locally. Connect a funded devnet wallet to stamp it on Solana.'; text.append(p); }
+  if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = d.solana_status === 'pending' ? 'Check pending Solana stamp' : 'View the Solana stamp'; text.append(a); }
   box.append(img, text);
 }
 async function api(path, opts = {}) {
@@ -146,7 +173,7 @@ async function api(path, opts = {}) {
   return data;
 }
 async function loadIncidents() {
-  try { const list = await api('/api/incidents'); $('incidents').replaceChildren(); incidentEls.clear(); list.reverse().forEach(upsertIncident); $('incNote').textContent = ''; }
+  try { const list = await api('/api/incidents'); $('incidents').replaceChildren(); incidentEls.clear(); incidentData.clear(); list.reverse().forEach(upsertIncident); $('incNote').textContent = ''; }
   catch (err) { $('incNote').textContent = err.message === 'incident store not configured' ? 'MongoDB is not connected yet, so reports appear here live only.' : `Could not load reports: ${err.message}`; }
 }
 
@@ -193,12 +220,13 @@ async function connect() {
     const prev = latest.get(ev.cameraId);
     latest.set(ev.cameraId, ev); refreshRisk(); feed(ev); placeCamera(ev); pin(ev);
     lastBeaconEv = ev; beacon.pushEvent(ev);
-    // Without the AI step's voice, still sound the alarm when a camera turns red.
-    if (ev.risk === 'red' && prev?.risk !== 'red') alarm();
+    // The server emits the immediate red alert separately; announce it once by incident ID.
   });
   socket.on('incident', upsertIncident);
-  startFeeds(socket, { container: $('feeds'), hint: $('feedsHint') });
-  socket.on('alert', announce);
+  const visualBirds = new VisualBirdVerifier({ socket, button: $('birdCheck'), status: $('birdCheckStatus') });
+  startFeeds(socket, { container: $('feeds'), hint: $('feedsHint'), onFeed: t => visualBirds.onFeed(t) });
+  socket.on('alert', announcements.receive);
+  socket.on('alert_update', announcements.update);
 }
 setInterval(loadHourly, 30000);
 connect().catch(err => { if (err.message !== 'wrong role') $('conn').textContent = `Sign-in failed: ${err.message}`; });

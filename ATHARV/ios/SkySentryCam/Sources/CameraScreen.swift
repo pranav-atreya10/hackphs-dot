@@ -13,6 +13,7 @@ struct CameraScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
+    @State private var showDemos = false
 
     var body: some View {
         ZStack {
@@ -22,6 +23,8 @@ struct CameraScreen: View {
                 ZStack {
                     if stream.source == .camera {
                         CameraPreview(camera: stream.camera, fill: fillVideo)
+                    } else if stream.source == .clip {
+                        DemoClipPreview(player: stream.clip.player, fill: fillVideo)
                     } else {
                         DemoSkyView(store: stream.demoFrames, fill: fillVideo)
                     }
@@ -67,6 +70,13 @@ struct CameraScreen: View {
                             Button("Done") { showSettings = false }
                         }
                     }
+            }
+        }
+        .sheet(isPresented: $showDemos) {
+            DemoLibraryView(serverURL: StreamSettings.load().serverURL) { clip in
+                UserDefaults.standard.set(clip.file, forKey: SettingKey.demoClip)
+                sourcePref = SourcePreference.clip.rawValue
+                stream.switchTo(.clip)
             }
         }
     }
@@ -162,8 +172,11 @@ struct CameraScreen: View {
             } label: {
                 Label("Demo sky", systemImage: "bird")
             }
+            Button { showDemos = true } label: {
+                Label("Real demo videos", systemImage: "play.rectangle")
+            }
         } label: {
-            circle(stream.source == .camera ? "camera.fill" : "cloud.sun.fill")
+            circle(stream.source == .camera ? "camera.fill" : stream.source == .clip ? "play.rectangle.fill" : "cloud.sun.fill")
         }
         .accessibilityLabel("Video source")
     }
@@ -284,7 +297,7 @@ struct RiskBanner: View {
     private var risk: String? { streaming ? state?.risk?.lowercased() : nil }
 
     private var color: Color {
-        guard streaming, state != nil, !stale else { return Theme.ink.opacity(0.8) }
+        guard streaming, state != nil, !stale, state?.learning != true, state?.shake != true else { return Theme.ink.opacity(0.8) }
         return Theme.riskColor(risk)
     }
 
@@ -292,6 +305,8 @@ struct RiskBanner: View {
         guard streaming else { return "Standby" }
         guard state != nil || stale else { return "Connecting to the bot" }
         if stale { return bot == "tower" ? "Tower is detecting" : "Waiting for fresh detections" }
+        if state?.shake == true { return "Hold the camera still" }
+        if state?.learning == true { return "Learning the sky" }
         switch risk {
         case "red": return "RED · Danger"
         case "yellow": return "YELLOW · Caution"
@@ -308,6 +323,8 @@ struct RiskBanner: View {
                 : "The bot's last result is out of date; still streaming."
         }
         guard let state else { return "Sending frames; waiting for the first detections…" }
+        if state.shake == true { return "Camera movement pauses detection. Prop the phone up; it resumes automatically." }
+        if state.learning == true { return "The model is starting. Keep the camera steady for a moment." }
         if let p = state.primary { return p.summary }
         if let reason = state.reasons?.first, !reason.isEmpty { return reason }
         return risk == "green" || risk == nil ? "Nothing near the runway." : "Holding the alert while the sky clears."

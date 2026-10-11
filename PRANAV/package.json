@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "test": "node --test test/*.test.cjs",
     "db:setup": "node db/setup.js",
     "sync-web": "node scripts/sync-web.mjs"
   },
@@ -19,6 +20,7 @@
     "jpeg-js": "^0.4.4",
     "mongodb": "^7.7.0",
     "pg": "^8.23.1",
+    "sharp": "0.35.5",
     "socket.io": "^4.8.4"
   },
   "optionalDependencies": {

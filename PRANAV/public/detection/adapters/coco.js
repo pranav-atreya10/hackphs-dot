@@ -53,14 +53,17 @@ export class CocoVerifier {
     };
   }
 
-  async load() {
+  async load(onProgress = () => {}) {
     if (this.model) return this.stats;
     this.stats.state = 'loading';
     const t0 = performance.now();
     try {
-      const { backend, version } = await loadTensorFlow({ backend: this.opts.backend });
-      if (!window.cocoSsd) await loadScript(CDN.cocoSsd);
-      this.model = await window.cocoSsd.load({ base: this.opts.base });
+      onProgress('Loading browser AI runtime…');
+      const { backend, version } = await loadTensorFlow({ backend: this.opts.backend, scriptUrl: this.opts.tfjsUrl });
+      onProgress('Loading the bird detector…');
+      if (!window.cocoSsd) await loadScript(this.opts.cocoScriptUrl || CDN.cocoSsd);
+      onProgress('Downloading trained model weights and preparing them…');
+      this.model = await window.cocoSsd.load({ base: this.opts.base, ...(this.opts.modelUrl ? { modelUrl: this.opts.modelUrl } : {}) });
       this.stats.loadMs = Math.round(performance.now() - t0);
       this.stats.backend = backend;
       this.stats.tfVersion = version;
@@ -68,6 +71,7 @@ export class CocoVerifier {
       // The first inference compiles GPU shaders and can take seconds. Do it now on a
       // blank image so the first real check (maybe during the demo) is fast.
       const t1 = performance.now();
+      onProgress('Warming up the bird detector…');
       this.ctx.fillStyle = '#87b5e6';
       this.ctx.fillRect(0, 0, this.opts.cropSize, this.opts.cropSize);
       await this.model.detect(this.canvas, 1, 0.99);
