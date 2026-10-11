@@ -39,6 +39,8 @@ const live = readFileSync(fileURLToPath(new URL('./live-section.html', import.me
 const anchor = '<section class="sec" id="why">';
 if (!site.includes(anchor)) throw new Error('site.html #why section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
+// The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide).
+site = site.includes('</body>') ? site.replace('</body>', '<script src="/js/guide.js" defer></script>\n</body>') : `${site}\n<script src="/js/guide.js" defer></script>\n`;
 writeFileSync(join(pub, 'index.html'), doc(site));
 
 console.log('synced: detection engine, film runtime, landing page ->', pub);

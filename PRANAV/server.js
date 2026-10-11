@@ -14,6 +14,8 @@ try {
 
 // Provider and bot modules read configuration as they load.
 const ai = require("./ai");
+const { createChat, createRequestLimit } = require("./ai-voice/chat");
+const { localHourLabel } = require("./ai-voice/describe");
 const { CameraBot, BOT_ENABLED } = require("./bot");
 
 // DigitalOcean App Platform injects PORT; default to 8080 (its default http_port).
@@ -314,12 +316,12 @@ app.get("/health", (req, res) => {
     clients: io.engine.clientsCount,
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
-    ai: ai.status(),
+    ai: { ...ai.status(), openai: chat.health().configured ? "configured" : "missing" },
     bot: BOT_ENABLED ? "server bot on" : "server bot off (towers detect)",
   });
 });
 
-app.get("/api/integrations", requireDashboard, (req, res) => res.json(ai.health()));
+app.get("/api/integrations", requireDashboard, (req, res) => res.json({ ...ai.health(), openai: chat.health() }));
 
 // Live database check for debugging deploys: "ok", "not configured", or the driver's error (never the password).
 // Kept off /health so a slow or broken database can't make DigitalOcean's health check restart the app.
@@ -367,19 +369,93 @@ app.get("/api/incidents", requireDashboard, async (req, res) => {
   }
 });
 
-// "Ask SkySentry": answers a tower question from the last 7 days of hourly stats (Gemini when configured).
+// Hourly detection totals for the last `hours` hours (optionally one type). Empty when Tiger Data isn't set up.
+async function readHourly(hours, type = null) {
+  if (!db) return [];
+  const { rows } = await db.query(
+    "SELECT hour, type, events, total_objects FROM detections_hourly WHERE hour > now() - make_interval(hours => $1) AND ($2::text IS NULL OR type = $2) ORDER BY hour",
+    [hours, type]
+  );
+  return rows;
+}
+
+// Incident fields the chatbot may see (never the snapshot), with times in airport local time.
+const incidentSummary = (d) => ({
+  id: d._id, time: localHourLabel(d.time, true), camera: d.camera_id, type: d.type, count: d.object_count,
+  direction: d.direction, confidence: d.confidence, risk: d.risk, ai_label: d.gemini_label, report: d.report,
+  solana: d.solana_status || (d.solana_tx ? "confirmed" : null),
+  solana_url: d.solana_tx ? `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet` : null,
+});
+const oneOf = (v, allowed) => (allowed.includes(v) ? v : null);
+const clamp = (v, lo, hi, fallback) => (Number.isInteger(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
+
+// Tools the tower copilot can call (ai-voice/chat.js). Each one only sees the caller's airport
+// (null = every airport, for TOWER_API_KEY or sign-in off), the same as /api/incidents and the socket rooms.
+const chatTools = {
+  async get_hourly_stats({ hours, type } = {}) {
+    if (!db) return { error: "the detections database is not connected" };
+    const rows = await readHourly(clamp(hours, 1, 168, 24), oneOf(type, ["bird", "drone"]));
+    return { note: "totals cover every camera", rows: rows.map((r) => ({ hour: localHourLabel(r.hour), type: r.type, events: Number(r.events) || 0, total_objects: Number(r.total_objects) || 0 })) };
+  },
+  async get_recent_incidents({ limit, risk, type } = {}, { airport }) {
+    if (!mongo) return { error: "the incident store is not connected" };
+    const filter = { ...(airport ? { airport } : {}) };
+    if (oneOf(risk, ["yellow", "red"])) filter.risk = risk;
+    if (oneOf(type, ["bird", "drone", "unknown"])) filter.type = type;
+    const docs = await withMongo((mdb) => mdb.collection("incidents").find(filter, { projection: { snapshot: 0 } }).sort({ time: -1 }).limit(clamp(limit, 1, 20, 10)).toArray());
+    return { incidents: docs.map(incidentSummary) };
+  },
+  async get_incident({ id } = {}, { airport }) {
+    if (!mongo) return { error: "the incident store is not connected" };
+    if (typeof id !== "string" || !id || id.length > 100) return { error: "id must be an incident id" };
+    const doc = await withMongo((mdb) => mdb.collection("incidents").findOne({ _id: id, ...(airport ? { airport } : {}) }, { projection: { snapshot: 0 } }));
+    return doc ? { incident: incidentSummary(doc) } : { error: "no incident with that id at this airport" };
+  },
+  async get_live_cameras(args, { airport }) {
+    const list = [...liveCameras.values()].filter((live) => !airport || live.airport === airport).map((live) => {
+      const st = live.lastState, bot = live.bot.status();
+      return {
+        camera: live.cameraId, last_frame_seconds_ago: Math.round((Date.now() - live.lastSeen) / 1000),
+        detector: bot.mode === "server" ? "server" : `tower fallback (${bot.reason})`,
+        risk: st?.risk ?? "unknown", reasons: st?.reasons ?? [], learning_background: st?.learning ?? null, camera_shaking: st?.shake ?? null,
+        main_track: st?.primary ?? null, tracks: st?.tracks?.length ?? 0, flocks: st?.flocks?.length ?? 0,
+      };
+    });
+    return { cameras: list, note: list.length ? undefined : "no cameras are streaming right now" };
+  },
+};
+
+// Gemini "Ask SkySentry" answers from the last 7 days of hourly stats; used when OpenAI is missing or fails.
+async function geminiAnswer(question) {
+  let hourly = [];
+  try { hourly = await readHourly(168); }
+  catch (err) { console.error("failed to read stats for the chat fallback:", err.message); }
+  return (await ai.answerQuestion(question, hourly)).answer;
+}
+const chat = createChat({ tools: chatTools, fallback: geminiAnswer });
+const guideLimit = createRequestLimit({ max: 10, windowMs: 60_000 });
+
+// Tower copilot: { messages: [{role: "user"|"assistant", content}] } -> { answer, source, tools, incident_ids }.
+app.post("/api/chat", requireDashboard, async (req, res) => {
+  const messages = req.body?.messages;
+  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: "send messages: [{ role, content }]" });
+  res.json(await chat.copilot(messages, { airport: req.airport ?? null }));
+});
+
+// "Ask SkySentry" (one question, kept for older clients): now the copilot, with Gemini as its fallback.
 app.post("/api/ask", requireDashboard, async (req, res) => {
   const question = String(req.body?.question ?? "").trim().slice(0, 500);
   if (!question) return res.status(400).json({ error: "type a question first" });
-  let hourly = [];
-  if (db) {
-    try {
-      ({ rows: hourly } = await db.query("SELECT hour, type, events, total_objects FROM detections_hourly WHERE hour > now() - interval '7 days' ORDER BY hour"));
-    } catch (err) {
-      console.error("failed to read stats for /api/ask:", err.message);
-    }
-  }
-  res.json(await ai.answerQuestion(question, hourly));
+  const { answer, source } = await chat.copilot([{ role: "user", content: question }], { airport: req.airport ?? null });
+  res.json({ answer, source });
+});
+
+// Public website guide: open to everyone, so rate-limited per visitor (DigitalOcean passes the client IP).
+app.post("/api/guide", async (req, res) => {
+  if (!guideLimit(req.get("do-connecting-ip") || req.ip)) return res.status(429).json({ error: "too many questions; wait a minute" });
+  const messages = req.body?.messages;
+  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: "send messages: [{ role, content }]" });
+  res.json(await chat.guide(messages));
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).

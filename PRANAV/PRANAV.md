@@ -131,3 +131,32 @@ Validated the real sign-in form using the deployed public key on a local test pa
 
 ## Solana transaction repair
 Fixed a signing failure: the blockheight-aware web3 Transaction constructor requires `blockhash` rather than `recentBlockhash`. Memo fees are now estimated before submission. RPC deadlines cancel work and prevent late submission; rejected and expired transactions are shown as failed. Public report verification reads devnet without a private key and rejects missing or failed transactions and changed report text. The full 59-test suite passes, including real web3 signing/serialization and seven transaction regressions. A real deployed transaction must still be checked before claiming live-chain success.
+
+## OpenAI chatbots: tower copilot + website guide
+**Why:** the old "Ask SkySentry" box answered one question at a time and could only see hourly totals. Now the tower can hold a real conversation that also checks incident reports and the live cameras. The landing page also gets a chat bubble for visitors.
+
+**What I built**
+- `ai-voice/chat.js` is the chatbot brain. It talks to OpenAI's Responses API with plain `fetch` (no new package). The key stays on the server.
+  - **Copilot** (`POST /api/chat`, tower sign-in required): the tower sends the whole chat so far, and the server keeps no memory. The model can call four **tools**, which the server runs. Each tool only sees *your* airport's data:
+    - `get_hourly_stats`: Tiger Data hourly totals.
+    - `get_recent_incidents` and `get_incident`: MongoDB reports. Snapshots are never sent to OpenAI.
+    - `get_live_cameras`: what each streaming camera's bot sees right now (risk, learning, shaking, main track).
+  - The model can loop "ask a tool, then read the result" up to 4 times within a 15-second budget. On the last round it must answer.
+  - Its rules: answer only from tool data, be brief like a tower briefing, ignore instructions hidden in messages, and stay advisory only, never giving clearance.
+  - **Fallback:** if there's no OpenAI key or OpenAI fails, it uses the old Gemini answer, then a polite canned message. The demo never breaks.
+  - **Guide** (`POST /api/guide`, public): it has no tools and no airport data. It only knows a fixed fact sheet taken from the landing page. It's limited to 10 questions a minute per visitor so nobody can burn the key.
+- `/api/ask` still works and now goes through the copilot.
+- Tower page: the Ask card is now a chat. Little chips show what it checked ("checked incidents"), and clicking an incident chip opens that report. There's a "New chat" button.
+- Landing page: `public/js/guide.js` is the "Ask about SkySentry" bubble. It lives in a Shadow DOM so its styles can't clash with the site, and `npm run sync-web` re-adds it automatically.
+- Settings: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-5-mini`) and `OPENAI_GUIDE_MODEL` (default `gpt-5-nano`). They're in `.env.example` and `.do/app.yaml`. `/health` and `/api/integrations` show whether OpenAI is set up.
+
+**Tested:** `test/chat.test.cjs` (9 tests, with OpenAI faked) covers:
+- the tool loop runs with your airport;
+- the loop always ends;
+- the Gemini fallback and the canned reply;
+- the key never shows up in errors;
+- message cleaning;
+- the guide has no tools;
+- the rate limit.
+
+**To turn it on:** add `OPENAI_API_KEY=sk-...` to `PRANAV/.env` (locally) or as an encrypted env var on DigitalOcean.

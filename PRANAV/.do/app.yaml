@@ -57,6 +57,16 @@ services:
       - key: GEMINI_BACKUP_MODEL
         value: gemini-3.5-flash-lite
         scope: RUN_TIME
+      # Chatbots (optional; see ai-voice/chat.js). Without a key the tower chat falls back to Gemini.
+      - key: OPENAI_API_KEY
+        type: SECRET
+        scope: RUN_TIME
+      - key: OPENAI_MODEL
+        value: gpt-5-mini
+        scope: RUN_TIME
+      - key: OPENAI_GUIDE_MODEL
+        value: gpt-5-nano
+        scope: RUN_TIME
       - key: ELEVENLABS_API_KEY
         type: SECRET
         scope: RUN_TIME
