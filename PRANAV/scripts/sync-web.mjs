@@ -39,35 +39,38 @@ const HEAD = `<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <script src="/js/theme.js"></script>
 </head>`;
 const must = (html, from, to, what) => { if (!html.includes(from)) throw new Error(`${what} changed; update sync-web.mjs`); return html.replace(from, to); };
-const themed = (html, css) => {
-  html = doc(html).replace('</head>', HEAD);
+const themed = (html, css, description) => {
+  html = doc(html).replace('</head>', `<meta name="description" content="${description}">\n${HEAD}`);
   const lastStyle = html.lastIndexOf('</style>');
   return html.slice(0, lastStyle + 8) + `\n<link rel="stylesheet" href="/css/${css}">` + html.slice(lastStyle + 8);
 };
+const decorative = html => html.replaceAll('<svg viewBox="0 0 36 36"', '<svg aria-hidden="true" viewBox="0 0 36 36"').replaceAll('<svg class="eng"', '<svg aria-hidden="true" class="eng"');
 const loader = html => must(html, '<span class="load-title">SKYSENTRY</span>', `<span class="load-title">${MARK}SkySentry</span>`, 'film loader title');
 
 let filmPage = readFileSync(join(film, 'index.html'), 'utf8');
 filmPage = must(filmPage, '<div class="top"><h1>SkySentry</h1>', `<div class="top"><h1>${MARK}SkySentry</h1>`, 'film.html title');
-writeFileSync(join(pub, 'film.html'), themed(loader(filmPage), 'film.css'));
+writeFileSync(join(pub, 'film.html'), themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film of SkySentry spotting birds and drones near a runway and alerting the control tower.'));
 
 // Landing page: the product site plus links into the live system.
 let site = readFileSync(join(film, 'site.html'), 'utf8');
 const nav = '<a href="#film">Film</a><a href="#why">Why</a><a href="#how">How it works</a><a href="#risk">Risk levels</a><a href="#system">System</a><a href="#faq">FAQ</a>';
 if (!site.includes(nav)) throw new Error('site.html nav changed; update sync-web.mjs');
-site = site.replace(nav, '<a href="#film">Film</a><a href="#how">How it works</a><a href="#live">Live system</a><a href="/camera.html">Camera</a><a href="/tower.html">Tower</a><a href="/demo.html">Demos</a><a href="#faq">FAQ</a>');
-site = site.replace('<a class="btn-s" href="#how">How it works</a>', '<a class="btn-s" href="/tower.html">Open the tower</a><a class="btn-s" href="/camera.html">Start a camera</a>');
+site = site.replace(nav, '<a href="#film">Film</a><a href="#how">How it works</a><a href="/demo.html">Demos</a><a href="#faq">FAQ</a>');
 const live = readFileSync(fileURLToPath(new URL('./live-section.html', import.meta.url)), 'utf8');
-const anchor = '<section class="sec" id="why">';
-if (!site.includes(anchor)) throw new Error('site.html #why section missing; update sync-web.mjs');
+const anchor = '<section class="sec" id="stack">';
+if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
 // The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide).
 site = site.includes('</body>') ? site.replace('</body>', '<script src="/js/guide.js" defer></script>\n</body>') : `${site}\n<script src="/js/guide.js" defer></script>\n`;
-// Logo in the bar and footer, a theme button, and Geist in place of the serif font link.
+// Logo in the bar and footer, sign in / sign up (account.html), a theme button, and Geist in place of the serif font link.
 site = must(site, '<a class="brand" href="#top"><i></i>SkySentry</a>', `<a class="brand" href="#top">${MARK}SkySentry</a>`, 'site.html brand');
-site = must(site, '<span class="tag">hackPHS 2026</span>', '<span class="tag">hackPHS 2026</span><button class="theme-btn" type="button" data-theme-toggle aria-label="Theme"></button>', 'site.html tag');
+site = must(site, '<span class="tag">hackPHS 2026</span>', '<a class="bar-link" href="/account.html?mode=sign-in">Sign in</a><a class="btn-s primary bar-cta" href="/account.html">Sign up</a><button class="theme-btn" type="button" data-theme-toggle aria-label="Theme"></button>', 'site.html tag');
+// Hero: the app is the main call to action; the film becomes the secondary button.
+site = must(site, '<div class="cta"><a class="btn-s primary" href="#film">Watch the 100-second film</a><a class="btn-s" href="#how">How it works</a></div>',
+  '<div class="cta"><a class="btn-s primary" href="/app.html">Get the app</a><a class="btn-s" href="#film">Watch the 100-second film</a></div>', 'site.html hero buttons');
 site = must(site, '<div><b>SkySentry</b>', `<div><b>${MARK}SkySentry</b>`, 'site.html footer');
 site = site.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Source\+Serif[^>]*>\n?/, '');
-writeFileSync(join(pub, 'index.html'), themed(loader(site), 'site.css'));
+writeFileSync(join(pub, 'index.html'), themed(decorative(loader(site)), 'site.css', 'SkySentry turns an ordinary phone into an early-warning lookout that spots birds and drones near runways and alerts the control tower.'));
 
 console.log('synced: detection engine, film runtime, landing page ->', pub);
 if (!existsSync(join(pub, 'chat.html'))) console.warn('note: public/chat.html (the original chat demo) is missing');

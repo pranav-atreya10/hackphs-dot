@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SkySentry Camera</title>
+<meta name="description" content="SkySentry camera station: point a phone at the sky by the runway to detect birds and drones.">
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
@@ -48,9 +49,9 @@
 
 <main class="cam">
   <div class="view">
-    <video id="video" playsinline muted></video>
-    <canvas id="src"></canvas>
-    <canvas id="overlay"></canvas>
+    <video id="video" playsinline muted aria-hidden="true"></video>
+    <canvas id="src" aria-hidden="true"></canvas>
+    <canvas id="overlay" role="img" aria-label="Camera view of the sky with the detector's boxes drawn over birds and drones"></canvas>
     <div class="banner" id="banner" data-risk="green"><i></i><span id="bannerText">Ready</span></div>
     <div id="empty">Point the camera at the sky by the runway, then press Start.</div>
   </div>

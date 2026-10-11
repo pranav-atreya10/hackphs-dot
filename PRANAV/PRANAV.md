@@ -176,3 +176,70 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - **iOS app (Atharv's folder):** the app icon is now the white-on-black logo (1024px, no transparency, as iOS requires). AccentColor and LaunchBackground are black and white with dark-mode variants.
 
 **Checked:** headless-Chrome screenshots of Tower, Camera, Demos, the landing page and the film in light and dark. Phone layouts were checked in a 390px frame. The theme button cycles correctly. The 69-test server suite passes. No detection code, models or thresholds were touched, so no benchmark run was needed.
+
+## Scroll and entrance animations
+**Landing page** (`css/site.css`):
+- The hero text rises in, staggered, when the page loads.
+- As you scroll:
+  - sections, cards, facts, risk rows, timeline steps and FAQ items rise into place, with neighbors slightly staggered;
+  - the film stage settles in from slightly smaller;
+  - the hero drifts up and fades;
+  - the top bar gains its edge and shadow;
+  - a thin reading-progress line fills under it;
+  - the risk-level dots pop in.
+
+**App pages** (`css/app.css`):
+- Cards rise in, staggered, on load.
+- Demo clips rise in as you scroll.
+- Opened panels slide in, and the "+" turns as it becomes "−".
+- The status dot pulses while connected, and the sign-in card pops in.
+
+**How:**
+- The scroll effects use CSS scroll-driven animations (`animation-timeline: view()` / `scroll()`), with no JavaScript. Content that's already on screen is never hidden, and nothing can get stuck invisible.
+- Browsers without support (Firefox today) show the page without the scroll effects.
+- Everything is turned off for people who set "reduce motion".
+- Only wrapper elements animate, so the Tower risk card's red flash still works.
+- I scoped the top-bar rules to `header.bar` because the film also uses a `.bar` class for its progress segments.
+
+**Checked:** headless-Chrome captures at the top of the page and scrolled to three depths, plus Tower after load. The 69-test suite passes. This is CSS only; no detection code was touched.
+
+## Landing polish, alt text and sitemap
+**Logo alignment:** the film's stylesheet has a global `.bar{display:flex}` that also hit the landing header. It shrink-wrapped the header row and centered it, so the logo started 118px to the right of the hero text. The header is now block layout, and the body's default 8px margin is gone. The logo, hero text, sections and the right edge all share one column.
+
+**Less crowded:**
+- The nav has 4 links (Film, How it works, Demos, FAQ) plus one "Open the tower" button. It replaces 7 links and the hackPHS chip.
+- The hero has 2 buttons instead of 3.
+- The "Live system" cards moved from right after the film to just before "Built with". Two 3-card rows no longer sit back to back.
+- The tech labels in the cards are plain small text instead of boxed chips.
+- Sections are about 50% further apart, with more padding inside cards, rows and the timeline.
+- The film's own 3D scene is unchanged; these are `sync-web.mjs` and `css/site.css` changes.
+
+**Alt text / accessibility:**
+- Each Tower live feed is one labeled image ("Live video from camera …").
+- The QR code has alt text.
+- Demo videos are labeled with their title and what to expect.
+- The camera view is labeled.
+- Decorative icons are hidden from screen readers because the text beside them already says the same thing.
+- Every page has a meta description.
+
+**Sitemap:** `GET /sitemap.xml` and `GET /robots.txt` (`sitemap.js`, wired in `server.js`).
+- The URLs must be absolute, so they use `SITE_URL` when set; otherwise they use the domain the request came in on, honoring DigitalOcean's https header.
+- A forged Host header gets a 400.
+- robots.txt keeps crawlers out of `/api/`.
+- 5 new tests; the full suite is 74/74.
+- Optional: set `SITE_URL=https://your-domain` once there's a custom domain.
+
+## Sign up / sign in, "Get the app" and the hero buttons
+**Top bar:** "Open the tower" is replaced by **Sign in** (text link) and **Sign up** (the highlighted button). Both go to the new `account.html`. On phones, the section links hide, but Sign in and Sign up stay visible.
+
+**Hero:** the highlighted button is now **Get the app**, which opens `app.html`. That page just says "Still Under Progress" and has a link back. Search engines are told not to index it. "Watch the 100-second film" is now the plain secondary button. "How it works" left the hero because it's already in the top bar.
+
+**How sign-up works (`account.html` + `js/account.js`):**
+- It uses the same Clerk setup the camera and tower pages already use, and the same server endpoints (`/api/auth/config`, `/api/auth/me`, `/api/auth/join`). No server changes.
+- `/account.html` shows Clerk's sign-up form. `/account.html?mode=sign-in` shows the sign-in form. Clerk's own "Already have an account?" links switch between them.
+- After signing up, the person picks "Tower dashboard" or "Camera station" and enters their airport's join code. This is the same step as before; I moved it out of `signIn()` into `finishSetup()` in `js/auth.js` so both places share it.
+- Once set up, the page shows the email, role and airport, plus buttons for Open the tower / Start the camera, Manage account and Sign out.
+- If the server has no Clerk keys, the page says accounts aren't on yet and links to the tower and camera pages.
+- Note: the production Clerk key only works on the DigitalOcean domain. On localhost the page shows "Could not load the sign-in service". That's expected.
+
+**Where the changes live:** the landing page is generated, so the nav and hero edits are in `scripts/sync-web.mjs`, followed by `npm run sync-web`. Atharv's `site.html` is untouched. The link styling is in `css/site.css`. `test/auth-ui.test.cjs` now strips every `export` from `auth.js` before loading it, because `auth.js` exports more functions. 74/74 tests pass.

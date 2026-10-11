@@ -10,6 +10,7 @@ try {
     const card = document.createElement('article'); card.className = 'card clip';
     const category = document.createElement('span'); category.className = 'category'; category.textContent = c.category || 'Recorded video';
     const video = document.createElement('video'); video.controls = true; video.playsInline = true; video.preload = 'none'; video.src = '/clips/' + c.file;
+    video.setAttribute('aria-label', `${c.title}: ${c.expect || 'recorded demo video'}`);
     if (typeof c.poster === 'string' && /^[a-z0-9-]+\.jpg$/.test(c.poster)) video.poster = '/clips/' + c.poster;
     video.addEventListener('play', () => { for (const other of catalog.querySelectorAll('video')) if (other !== video) other.pause(); });
     const title = document.createElement('h3'); title.textContent = c.title;
