@@ -307,3 +307,12 @@ It checks free disk space before starting and every second while rendering, and 
 **Still true:** alerts (tower alarm, voice, reports) come from the server bot or a tower's fallback. The on-device check is display only, so the same alert is never sent twice. If the live server keeps handing over, check DigitalOcean's runtime logs for `server bot for … handed over to towers:`. The usual fix is a bigger instance.
 
 **Checked:** headless Chrome on a local server with `SERVER_BOT=off` shows boxes and a red risk after 3 s. With the bot on, the server's results are used as before. Tests: 74/74.
+
+## Clerk not loading, and an "Upload a video" button for the demo
+**Why Clerk fails on the live site:** the site uses a *production* Clerk key (`pk_live_…`). Production Clerk loads from `clerk.<your domain>`, which needs DNS records on a domain you own. `lancerhacks-rvs8r.ondigitalocean.app` belongs to DigitalOcean, so `clerk.lancerhacks-rvs8r.ondigitalocean.app` doesn't exist and Clerk's script never loads. **Fix (no code):** in the Clerk dashboard, switch to the **Development** instance and copy its `pk_test_…` / `sk_test_…` keys into DigitalOcean's `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY`. Development keys work on any domain. It's a separate set of users, so people sign up again and re-enter the airport join code. The other option is buying a domain and adding Clerk's DNS records.
+
+**Fallback (js/auth.js):** if Clerk's script can't load, the camera page asks for the camera key (`CAMERA_API_KEY`) and the tower asks for the tower key (`TOWER_API_KEY`) instead of erroring out. The server already accepts these keys with sign-in on. The tower only works this way if `TOWER_API_KEY` is set in DigitalOcean.
+
+**Upload a video (camera page):** a button next to Start. Pick a video on this computer and it plays through the detector right away. In stream mode it also goes to the tower like a live camera. It uses the same path as Settings → "Video file from this device"; the button just makes it one click. Sky-only footage works best: waves, grass or a moving ground make lots of false "unknown" boxes.
+
+**Checked:** headless Chrome on a local server with the live (unreachable) Clerk key showed the camera-key panel and connected with the key. Uploading `clips/geese-beach.mp4` started streaming and showed detections. Tests: 74/74.

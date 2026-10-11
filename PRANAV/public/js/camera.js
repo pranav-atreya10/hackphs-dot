@@ -300,6 +300,17 @@ function stop() {
   $('start').textContent = 'Start'; log('stopped'); status('Stopped.'); $('banner').dataset.risk = 'green'; $('bannerText').textContent = 'Ready';
 }
 $('start').addEventListener('click', () => (running ? stop() : start()));
+// Demo: play a video from this computer through the detector (and stream it to the tower) instead of a live camera.
+$('upload').addEventListener('click', () => $('uploadFile').click());
+$('uploadFile').addEventListener('change', async () => {
+  const file = $('uploadFile').files[0]; if (!file) return;
+  const files = new DataTransfer(); files.items.add(file); $('clip').files = files.files;   // the Settings field start() reads
+  $('source').value = 'clip'; showSourceFields();
+  $('uploadFile').value = '';
+  if (running) stop();
+  log(`video chosen: ${file.name.replace(/[<>&]/g, '')}`);
+  await start();
+});
 addEventListener('resize', fitOverlay);
 document.addEventListener('visibilitychange', async () => { if (running && document.visibilityState === 'visible') { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {} } });
 
