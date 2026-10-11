@@ -3,6 +3,19 @@
 Real events only. Benchmark results are added here (and in `results.csv`) as each version actually runs.
 Illustrative example charts live in `benchmarks/demo/` and are NOT results.
 
+## Charts by development stage (real data; regenerate with `benchmarks/stage_charts.py`)
+
+| Stage | Chart | Shows |
+|---|---|---|
+| 1 Dataset audit | `charts/stages/stage1a_label_bug.png` | Published Mendeley labels: birds labelled as drones; after the file-name fix |
+| 1 Dataset audit | `charts/stages/stage1b_test_groups.png` | 889 test images = 176 independent video groups |
+| 1 Dataset audit | `charts/stages/stage1c_leakage.png` | Distance from each test image to its closest training image; none under the threshold |
+| 1 Dataset audit | `charts/stages/stage1d_test_composition.png` | Test boxes by size and class; images by sky condition |
+| 2 Model training | `charts/stages/stage2a_audio_training.png` | v0 audio loss and validation AUC per epoch |
+| 2 Model training | `charts/stages/stage2b_audio_shortcut_test.png` | Looped vs continuous no-drone audio: no shortcut |
+| 2 Model training | `charts/stages/stage2c_yolo_training.png` | v0 YOLO loss and validation mAP per epoch (in progress) |
+| 3 Benchmarks | `charts/01_…` to `charts/11_…` | Produced by `make_charts.py` once versions are benchmarked |
+
 ## 2026-10-10: benchmark infrastructure
 
 | Step | What happened | Outcome |
@@ -37,4 +50,4 @@ Illustrative example charts live in `benchmarks/demo/` and are NOT results.
 
 | Version | Status |
 |---|---|
-| v0 | Audio model trained (see above). YOLO11n (labels from file names) still training. No benchmark results yet. |
+| v0 | Audio model trained (see above). YOLO11n (labels from file names) training: 9/40 epochs done. No benchmark results yet. |
