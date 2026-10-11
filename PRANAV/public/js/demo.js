@@ -22,7 +22,8 @@ try {
       if (typeof url === 'string' && /^https:\/\//.test(url)) more.append(link(url, name), document.createTextNode(' · '));
     }
     const changes = document.createElement('p'); changes.textContent = c.changes || ''; more.append(changes);
-    const analyze = document.createElement('a'); analyze.className = 'analyze'; analyze.dataset.anyRole = '';   // demos work for every account analyze.href = '/camera.html?demo=' + encodeURIComponent(c.file); analyze.textContent = 'Use this demo →';
+    // demos work for every account, so these links skip showRoleLinks (data-any-role)
+    const analyze = document.createElement('a'); analyze.className = 'analyze'; analyze.dataset.anyRole = ''; analyze.href = '/camera.html?demo=' + encodeURIComponent(c.file); analyze.textContent = 'Use this demo →';
     card.append(category, video, title, description, credit, more, analyze); catalog.append(card);
   }
   status.textContent = `${clips.length} recorded demos · preview or stream through the model`;
