@@ -37,3 +37,11 @@ failed, the "Enable trained bird check" never showed results, and the Arduino be
 **Accuracy, honestly:** no detector is right 100% of the time, and the benchmark protocol forbids tuning on
 the frozen test sets. The judge is built to say "uncertain" rather than be confidently wrong. Measure it with
 `benchmarks/` on the "tune" split before quoting a number.
+
+## Demo footage when there is no camera (branch `feature/demo-feed-fallback`)
+- **Tower** (`public/js/feeds.js`): if a camera tile gets no video for 4 s, or no camera is connected at all,
+  a recorded clip loops in that spot with a yellow DEMO badge. The detector runs locally on it so the boxes
+  show (and the trained bird check can run on it), but it has no event listener: demo footage never creates
+  alerts, incidents or database rows. The first real frame from that camera replaces the demo instantly.
+- **Camera page** (`public/js/camera.js`): devices with no camera start on a demo clip; if camera access is
+  blocked or busy, pressing Start switches to a demo clip automatically and streams it as this camera.

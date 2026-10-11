@@ -8,9 +8,14 @@ import { DetectionEngine, PRESETS } from '/detection/index.js';
 
 const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)', debris: '#a08c78' };
 const FALLBACK_AFTER_MS = 3000;
+// When a camera sends no video (or no camera is connected at all), a recorded demo clip plays in its place.
+// Demo footage runs the detector locally only for the boxes: it never emits events, alerts or incidents.
+const DEMO_AFTER_MS = 4000;
+const DEMO_CLIPS = ['gulls-sky', 'starling-murmuration', 'geese-beach', 'padilla-birds', 'drone-hover'];
 
-export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove }) {
+export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove, demo = true }) {
   const tiles = new Map();
+  let demoCount = 0, emptyDemo = null;
 
   function tile(cameraId) {
     if (tiles.has(cameraId)) return tiles.get(cameraId);
@@ -30,8 +35,66 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
       decoding: false, pending: null, received: 0, fps: 0, fpsAt: performance.now(), offline: false };
     tiles.set(cameraId, t);
     setupZoom(t);
+    if (demo) setTimeout(() => { if (tiles.get(cameraId) === t && !t.frames) startDemo(t); }, DEMO_AFTER_MS);
+    if (emptyDemo && !emptyDemo.placeholderFor) removeEmptyDemo();
     return t;
   }
+
+  // ---------- demo footage ----------
+  function startDemo(t) {
+    if (t.demo) return;
+    const clip = DEMO_CLIPS[demoCount++ % DEMO_CLIPS.length];
+    const v = document.createElement('video');
+    v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('aria-hidden', 'true');
+    for (const [ext, type] of [['mp4', 'video/mp4'], ['webm', 'video/webm']]) { const so = document.createElement('source'); so.src = `/clips/${clip}.${ext}`; so.type = type; v.append(so); }
+    const engine = new DetectionEngine({ camera_id: `demo-${clip}` });   // no .on('event'): demo never alerts
+    engine.setConfig(PRESETS.laptop_30fps || {});
+    const d = t.demo = { v, engine, clip, raf: 0, last: 0 };
+    t.el.classList.add('is-demo');
+    t.el.querySelector('.wrap').setAttribute('aria-label', `Demo footage (${clip.replace(/-/g, ' ')}) shown because camera ${t.cameraId} is not sending video`);
+    const demoFeed = { cameraId: `demo:${t.cameraId}`, mode: 'tower', video: t.video, engine, offline: false, demo: true };
+    const step = now => {
+      if (t.demo !== d) return;
+      d.raf = requestAnimationFrame(step);
+      if (v.readyState < 2 || now - d.last < 66 || document.hidden) return;   // ~15 fps is plenty for the overlay
+      d.last = now;
+      const W = v.videoWidth, H = v.videoHeight; if (!W || !H) return;
+      if (t.video.width !== W || t.video.height !== H) { t.video.width = W; t.video.height = H; }
+      t.vctx.drawImage(v, 0, 0, W, H);
+      t.small.width = 320; t.small.height = Math.round(320 * H / W);
+      t.sctx.drawImage(v, 0, 0, t.small.width, t.small.height);
+      const state = engine.process(t.sctx.getImageData(0, 0, t.small.width, t.small.height), v.currentTime + d.loops * 1000);
+      draw(t, state); label(t);
+      Object.assign(demoFeed, { fallbackState: state, frameT: v.currentTime + d.loops * 1000, lastFrameAt: Date.now() });
+      onFeed?.(demoFeed);
+    };
+    d.loops = 0; v.addEventListener('seeked', () => { d.loops++; });   // keep engine time increasing across loops
+    v.play().catch(() => { v.controls = false; });
+    d.raf = requestAnimationFrame(step);
+    label(t);
+  }
+  function stopDemo(t) {
+    const d = t.demo; if (!d) return;
+    t.demo = null; cancelAnimationFrame(d.raf); d.v.pause(); d.v.removeAttribute('src'); d.v.replaceChildren(); d.v.load();
+    t.el.classList.remove('is-demo'); t.octx.clearRect(0, 0, t.overlay.width, t.overlay.height);
+    t.el.querySelector('.wrap').setAttribute('aria-label', `Live video from camera ${t.cameraId}, with the detector's boxes drawn over birds and drones`);
+  }
+  // No camera connected at all: one demo tile fills the feed area until a real camera appears.
+  function showEmptyDemo() {
+    if (!demo || emptyDemo || tiles.size) return;
+    const id = 'Demo footage';
+    emptyDemo = tile(id); emptyDemo.placeholder = true; emptyDemo.placeholderFor = null;
+    tiles.delete(id);                       // not a real camera: never matched by socket events
+    hint.hidden = false; hint.textContent = 'No camera is streaming yet, so recorded demo footage is playing. Open Camera on a phone (or scan the QR code) to go live.';
+    startDemo(emptyDemo);
+  }
+  function removeEmptyDemo() {
+    if (!emptyDemo) return;
+    stopDemo(emptyDemo); emptyDemo.el.remove(); emptyDemo = null;
+    hint.textContent = 'When a phone streams, its live video appears here with the bot’s boxes drawn on it.';
+    hint.hidden = tiles.size > 0;
+  }
+  if (demo) setTimeout(showEmptyDemo, DEMO_AFTER_MS);
 
   function fallbackActive(t) {
     return t.mode === 'tower' || (t.frames > 30 && Date.now() - t.lastBotAt > FALLBACK_AFTER_MS);
@@ -98,6 +161,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     const state = fb ? t.fallbackState : t.botState;
     const shake = state?.motion?.shake ?? state?.shake;
     const learning = state?.motion ? !state.motion.ready : state?.learning;
+    if (t.demo) { const el = t.el.querySelector('.bot'), text = `DEMO · recorded clip · alerts off${t.placeholder ? '' : ' · waiting for this camera'}`; if (el.textContent !== text) el.textContent = text; return; }
     let text = t.offline ? 'Camera offline' : !t.frames ? 'Waiting for video…' : shake ? 'Camera moving · hold still' : learning ? 'Model warming up · hold still' : !state ? 'Starting model…' : fb ? (t.owner ? 'Model active on this Mac' : 'Model active on another tower') : 'Model active on server';
     if (t.frames && !t.offline) text += ` · ${Math.round(t.fps)} fps`;
     const el = t.el.querySelector('.bot');
@@ -146,10 +210,11 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     const t = tiles.get(cameraId); if (!t) return;
     t.offline = !online; label(t);
     if (online) return;
-    setTimeout(() => { if (Date.now() - t.lastFrameAt > 9000) { t.bitmap?.close?.(); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; } }, 10000);
+    setTimeout(() => { if (Date.now() - t.lastFrameAt > 9000) { stopDemo(t); t.bitmap?.close?.(); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
   });
   socket.on('camera:frame', ({ cameraId, t: ft, jpeg }) => {
     const t = tile(cameraId);
+    if (t.demo) stopDemo(t);              // real video beats demo footage immediately
     t.lastFrameAt = Date.now(); t.offline = false; t.received++;
     const now = performance.now(), dt = now - t.fpsAt;
     if (dt >= 1000) { t.fps = t.received * 1000 / dt; t.received = 0; t.fpsAt = now; }
