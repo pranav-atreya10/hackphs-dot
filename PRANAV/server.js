@@ -206,6 +206,10 @@ async function requireDashboard(req, res, next) {
   next();
 }
 
+// All-access towers (admins, TOWER_API_KEY, sign-in off) can narrow the view to one airport with the tower
+// page's airport picker. Scoped dashboard accounts always see only their own airport.
+const viewAirport = (req, requested) => req.airport || (typeof requested === "string" && airports.has(requested) ? requested : null);
+
 // Admin-only routes (admin.html): a signed-in account whose verified email is in ADMIN_EMAILS.
 async function requireAdmin(req, res, next) {
   if (!clerk) return res.status(503).json({ error: "sign-in is not configured" });
@@ -419,7 +423,8 @@ app.get("/api/hourly", requireDashboard, async (req, res) => {
 app.get("/api/incidents", requireDashboard, async (req, res) => {
   if (!mongo) return res.status(503).json({ error: "incident store not configured" });
   try {
-    const filter = req.airport ? { airport: req.airport } : {};
+    const airport = viewAirport(req, req.query.airport);
+    const filter = airport ? { airport } : {};
     res.json(await withMongo((mdb) => mdb.collection("incidents").find(filter).sort({ time: -1 }).limit(20).toArray()));
   } catch (err) {
     console.error("failed to read incidents:", err.message);
@@ -497,7 +502,13 @@ const guideLimit = createRequestLimit({ max: 10, windowMs: 60_000 });
 app.post("/api/chat", requireDashboard, async (req, res) => {
   const messages = req.body?.messages;
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: "send messages: [{ role, content }]" });
-  res.json(await chat.copilot(messages, { airport: req.airport ?? null }));
+  res.json(await chat.copilot(messages, { airport: viewAirport(req, req.body?.airport) }));
+});
+
+// Airports this tower can pick from (no join codes): just its own for a scoped account, every one otherwise.
+app.get("/api/airports", requireDashboard, (req, res) => {
+  const list = req.airport ? [airports.get(req.airport)].filter(Boolean) : airports.all();
+  res.json({ airports: list.map(({ code, name }) => ({ code, name })), scoped: Boolean(req.airport) });
 });
 
 // "Ask SkySentry" (one question, kept for older clients): now the copilot, with Gemini as its fallback.
@@ -673,9 +684,13 @@ setInterval(() => {
 const towerSees = (socket, live) => !socket.data.airport || !live.airport || live.airport === socket.data.airport;
 
 towers.on("connection", (socket) => {
-  socket.join(socket.data.airport ? `airport:${socket.data.airport}` : "airport:*");
+  // An all-access tower that picked one airport (auth.airport) joins only that airport's room.
+  const requested = socket.handshake.auth?.airport;
+  if (!socket.data.airport && typeof requested === "string" && airports.has(requested)) socket.data.view = requested;
+  const scope = socket.data.airport || socket.data.view;
+  socket.join(scope ? `airport:${scope}` : "airport:*");
   for (const live of liveCameras.values()) {
-    if (!towerSees(socket, live)) continue;
+    if (!towerSees(socket, live) || (socket.data.view && live.airport && live.airport !== socket.data.view)) continue;
     socket.emit("bot:status", live.bot.status());
     if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, ...live.config });
   }

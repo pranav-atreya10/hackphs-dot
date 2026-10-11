@@ -339,3 +339,22 @@ It checks free disk space before starting and every second while rendering, and 
 - Everyone gets a **Delete my account** button (with a confirmation). It uses Clerk's account deletion, which needs "allow users to delete their accounts" left on in the Clerk dashboard (it's on by default).
 
 **Checked:** 5 new unit tests for `airports.js` (create, join, new code, delete, env airports locked, MongoDB down); the full suite is 79/79. On a local server, `/api/admin/airports` refuses requests that aren't signed in (401), and admin.html shows only the sign-in prompt when signed out. The signed-in admin flow needs the real Clerk secret key, so test it on the live site after deploy.
+
+## Tower: airport picker
+**What:** a searchable **Airport** box in the tower sidebar, under Status. Type a code or name (e.g. `kttn`, or `trenton` for admin-created airports with names) and pick from the list, or choose "All airports". The page reconnects showing only that airport: live feeds, camera list, alerts and voice, map pins, incident reports and the assistant's answers. The choice goes in the URL (`tower.html?airport=KTTN`, so the link can be shared) and is remembered in this browser. The title shows "Tower · KTTN".
+
+**Who gets it:**
+- **Admins and tower-key users** (who see every airport) can pick any airport.
+- **Regular tower accounts** see a locked box with their own airport, since they only ever see that one.
+
+**Server:**
+- `GET /api/airports` returns the airports this tower may pick from (codes and names, never join codes).
+- An all-access tower that passes `airport` when it connects joins only that airport's room.
+- `/api/incidents?airport=` and the chat's `airport` narrow the same way.
+- Scoped accounts can't use any of this to see another airport: their own airport always wins.
+
+**Limits:**
+- The hourly chart still covers every airport, because the detections table has no airport column. The chart says so when an airport is picked.
+- The map has no airport coordinates, so it starts at Princeton and centers on the picked airport's first camera once it reports.
+
+**Checked:** headless Chrome on a local server with KPCT, KTTN and KEWR. With "All airports" the feed showed both a KPCT and a KTTN alert; with KTTN only the KTTN one; typing `kewr` switched to KEWR. Tests: 79/79.
