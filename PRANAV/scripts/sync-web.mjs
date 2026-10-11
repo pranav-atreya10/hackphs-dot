@@ -60,14 +60,17 @@ const live = readFileSync(fileURLToPath(new URL('./live-section.html', import.me
 const anchor = '<section class="sec" id="stack">';
 if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
-// The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide).
-site = site.includes('</body>') ? site.replace('</body>', '<script src="/js/guide.js" defer></script>\n</body>') : `${site}\n<script src="/js/guide.js" defer></script>\n`;
-// Logo in the bar and footer, sign in / sign up (account.html), a theme button, and Geist in place of the serif font link.
+// The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), and the top bar's
+// signed-in swap (public/js/nav-account.js: Settings in place of Sign in / Sign up).
+const scripts = '<script src="/js/guide.js" defer></script>\n<script src="/js/nav-account.js" defer></script>\n';
+site = site.includes('</body>') ? site.replace('</body>', `${scripts}</body>`) : `${site}\n${scripts}`;
+// Logo in the bar and footer, sign in / sign up (account.html; the theme lives in settings.html), and Geist in place of the serif font link.
 site = must(site, '<a class="brand" href="#top"><i></i>SkySentry</a>', `<a class="brand" href="#top">${MARK}SkySentry</a>`, 'site.html brand');
-site = must(site, '<span class="tag">hackPHS 2026</span>', '<a class="bar-link" href="/account.html?mode=sign-in">Sign in</a><a class="btn-s primary bar-cta" href="/account.html">Sign up</a><button class="theme-btn" type="button" data-theme-toggle aria-label="Theme"></button>', 'site.html tag');
-// Hero: the app is the main call to action; the film becomes the secondary button.
+site = must(site, '<span class="tag">hackPHS 2026</span>', '<a class="bar-link" href="/account.html?mode=sign-in">Sign in</a><a class="btn-s primary bar-cta" href="/account.html">Sign up</a>', 'site.html tag');
+// Hero: Sign up is the main call to action (it works today); the app page is only a placeholder, so it stays secondary.
+// The film already sits right below the hero, so it has no button.
 site = must(site, '<div class="cta"><a class="btn-s primary" href="#film">Watch the 100-second film</a><a class="btn-s" href="#how">How it works</a></div>',
-  '<div class="cta"><a class="btn-s primary" href="/app.html">Get the app</a><a class="btn-s" href="#film">Watch the 100-second film</a></div>', 'site.html hero buttons');
+  '<div class="cta"><a class="btn-s primary" href="/account.html">Sign up</a><a class="btn-s" href="/app.html">Get the app</a></div>', 'site.html hero buttons');
 site = must(site, '<div><b>SkySentry</b>', `<div><b>${MARK}SkySentry</b>`, 'site.html footer');
 site = site.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Source\+Serif[^>]*>\n?/, '');
 writeFileSync(join(pub, 'index.html'), themed(decorative(loader(site)), 'site.css', 'SkySentry turns an ordinary phone into an early-warning lookout that spots birds and drones near runways and alerts the control tower.'));

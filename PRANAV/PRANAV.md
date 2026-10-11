@@ -232,7 +232,7 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 ## Sign up / sign in, "Get the app" and the hero buttons
 **Top bar:** "Open the tower" is replaced by **Sign in** (text link) and **Sign up** (the highlighted button). Both go to the new `account.html`. On phones, the section links hide, but Sign in and Sign up stay visible.
 
-**Hero:** the highlighted button is now **Get the app**, which opens `app.html`. That page just says "Still Under Progress" and has a link back. Search engines are told not to index it. "Watch the 100-second film" is now the plain secondary button. "How it works" left the hero because it's already in the top bar.
+**Hero:** two buttons. **Sign up** is the highlighted one; **Get the app** is the plain one and opens `app.html`. That page just says "Still Under Progress" and has a link back, and search engines are told not to index it. Sign up is highlighted because it leads to something that works today. The app page is a placeholder, and the main button shouldn't lead to a dead end. When the app ships, swap the two. "Watch the 100-second film" and "How it works" are gone from the hero: the film sits right below it, and both are in the top bar.
 
 **How sign-up works (`account.html` + `js/account.js`):**
 - It uses the same Clerk setup the camera and tower pages already use, and the same server endpoints (`/api/auth/config`, `/api/auth/me`, `/api/auth/join`). No server changes.
@@ -243,3 +243,18 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - Note: the production Clerk key only works on the DigitalOcean domain. On localhost the page shows "Could not load the sign-in service". That's expected.
 
 **Where the changes live:** the landing page is generated, so the nav and hero edits are in `scripts/sync-web.mjs`, followed by `npm run sync-web`. Atharv's `site.html` is untouched. The link styling is in `css/site.css`. `test/auth-ui.test.cjs` now strips every `export` from `auth.js` before loading it, because `auth.js` exports more functions. 74/74 tests pass.
+
+## Account settings page, theme moved off the website
+**No theme button on the website.** The landing page, `account.html` and `app.html` no longer have the light/dark button. The theme is now picked in Settings. The tower, camera and demo dashboards still have their sidebar button for now.
+
+**Settings (`settings.html` + `js/settings.js`):**
+- **Account:** name, email, role and airport.
+  - A button opens the tower or camera page, or "Finish setting up" if the airport join code hasn't been entered yet.
+  - **Profile and security** opens Clerk's account window: name, email, password, two-step verification, signed-in devices and deleting the account.
+  - **Sign out** returns to the home page.
+- **Appearance:** System / Light / Dark. It's saved in this browser, so it works even when signed out. `js/theme.js` now has `skysentryTheme.set(mode)` and `skysentryTheme.mode()` for this.
+- Signed out: the page shows Sign in / Sign up buttons. Accounts off on the server: it says there's nothing to manage yet.
+
+**Getting there:**
+- After signing in or finishing sign-up, `account.html` sends you straight to Settings. The old "You're all set" card is gone.
+- On the landing page, `js/nav-account.js` checks Clerk's `__client_uat` cookie. If someone is signed in, the top bar shows **Settings** in place of Sign in / Sign up. It doesn't load Clerk, so the landing page stays fast. If the cookie is out of date, Settings just asks you to sign in.
