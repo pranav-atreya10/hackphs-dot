@@ -67,7 +67,7 @@ export function clerkAppearance() {
 export function showRoleLinks(role) {
   const hide = { camera: '/tower.html', dashboard: '/camera.html' }[role];
   document.documentElement.dataset.role = role || '';
-  for (const a of document.querySelectorAll('a[href^="/tower.html"], a[href^="/camera.html"]')) a.hidden = Boolean(hide) && a.getAttribute('href').startsWith(hide);
+  for (const a of document.querySelectorAll('a[href^="/tower.html"]:not([data-any-role]), a[href^="/camera.html"]:not([data-any-role])')) a.hidden = Boolean(hide) && a.getAttribute('href').startsWith(hide);
   for (const el of document.querySelectorAll('[data-admin-only]')) el.hidden = role !== 'admin';
 }
 
@@ -153,7 +153,7 @@ export function finishSetup({ mount, role = 'dashboard', headers, admin = false 
   });
 }
 
-export async function signIn({ role, mount, onStatus = () => {} }) {
+export async function signIn({ role, mount, onStatus = () => {}, demo = false }) {
   const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
   const params = new URLSearchParams(location.search);
 
@@ -178,7 +178,9 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const asAdmin = me.admin && !(me.role === role && me.airport);
     const adminAirport = asAdmin && role === 'camera' ? await pickCameraAirport({ mount, headers }) : null;
     if (!asAdmin && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
-    if (!asAdmin && me.role !== role) {
+    // Demos work for every account: a tower account may run a demo clip through the camera page for its airport.
+    const demoTower = demo && role === 'camera' && me.role === 'dashboard' && me.airport;
+    if (!asAdmin && !demoTower && me.role !== role) {
       const mine = ROLE_LABEL[me.role], wanted = ROLE_LABEL[role], own = me.role === 'camera' ? 'camera' : 'tower';
       showAccount({ role: me.role, type: mine, sub: me.airport });
       const card = panel(mount, `<h2>This page is for ${wanted.toLowerCase()} accounts</h2>
