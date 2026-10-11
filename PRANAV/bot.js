@@ -13,6 +13,7 @@ const { pathToFileURL } = require("url");
 const ENABLED = (process.env.SERVER_BOT || "on") !== "off";
 const PROC_W = 320;                 // Vivan's engine is tuned for 320 px wide frames
 const BUDGET_MS = 60;               // average decode+detect time above this = overloaded, hand over to towers
+const RETRY_MS = 20000;             // after handing over, try running on the server again this often
 const enginePath = pathToFileURL(path.join(__dirname, "public/detection/index.js")).href;
 let enginePromise = null;
 const loadEngine = () => (enginePromise ??= import(enginePath));
@@ -60,7 +61,7 @@ class CameraBot {
   constructor({ cameraId, onEvent, onState, onStatus }) {
     Object.assign(this, { cameraId, onEvent, onState, onStatus });
     this.engine = null; this.last = null; this.avgMs = 0; this.busy = false; this.dropped = 0;
-    this.active = ENABLED; this.reason = ENABLED ? null : "SERVER_BOT=off";
+    this.active = ENABLED; this.reason = ENABLED ? null : "SERVER_BOT=off"; this.retryAt = 0; this.timed = 0;
   }
 
   configure({ camera, corridor, camera_id }) {
@@ -75,10 +76,14 @@ class CameraBot {
   }
 
   async frame(buf, t) {
-    if (!this.active) return false;
+    if (!this.active) {
+      if (!ENABLED || Date.now() < this.retryAt) return false;
+      this.active = true; this.reason = null; this.avgMs = 0; this.timed = 0;   // take the camera back
+      console.log(`server bot for ${this.cameraId} is running again`);
+      this.onStatus();
+    }
     if (this.busy) { this.dropped++; return true; }   // still working on the previous frame: skip this one
     this.busy = true;
-    const t0 = performance.now();
     try {
       if (!this.engine) {
         const { DetectionEngine } = await loadEngine();
@@ -90,13 +95,14 @@ class CameraBot {
           this.onEvent(ev);
         });
       }
+      const t0 = performance.now();   // timed after the engine has loaded, so start-up isn't counted as slowness
       const img = jpeg.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 64 });
       this.last = img;
       const st = this.engine.process(downscale(img.data, img.width, img.height), t);
       this.onState(compact(st));
       const ms = performance.now() - t0;
       this.avgMs = this.avgMs ? this.avgMs * 0.9 + ms * 0.1 : ms;
-      if (this.avgMs > BUDGET_MS && this.engine.stats.frames > 60) this.stop(`overloaded (${Math.round(this.avgMs)} ms per frame)`);
+      if (++this.timed > 60 && this.avgMs > BUDGET_MS) this.stop(`overloaded (${Math.round(this.avgMs)} ms per frame)`);
     } catch (err) {
       this.stop(`error: ${err.message}`);
     } finally {
@@ -107,7 +113,7 @@ class CameraBot {
 
   stop(reason) {
     if (!this.active) return;
-    this.active = false; this.reason = reason;
+    this.active = false; this.reason = reason; this.retryAt = Date.now() + RETRY_MS;
     console.warn(`server bot for ${this.cameraId} handed over to towers: ${reason}`);
     this.onStatus();
   }
