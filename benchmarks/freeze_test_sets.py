@@ -209,6 +209,15 @@ def freeze_audio(shards):
                           "seconds": round(len(y) / SR, 3), "source": "dads" if lab else "dads_no_drone", "shard": s, "row": first + j,
                           "snr_db": None, "noise_type": None})
         print(f"shard {s}: {t.num_rows} clips", flush=True)
+    # Group ids for the bootstrap: DADS is ordered by recording but boundaries aren't marked, so
+    # consecutive clips of the same label form ~30 s blocks (block bootstrap for ordered data).
+    block, acc, prev = 0, 0.0, None
+    for it in sorted(items, key=lambda it: it["row"]):
+        if prev is not None and (it["label"] != prev or acc >= 30.0):
+            block, acc = block + 1, 0.0
+        it["group"] = f"dads_block{block:05d}"
+        acc += it["seconds"]
+        prev = it["label"]
     # The long no-drone recordings double as ambient audio for false alarms per hour (same files).
     amb = [{**it, "item_id": "amb_" + it["item_id"], "tier": "ambient"} for it in items if it["label"] == 0]
     man["tiers"].setdefault("dataset", {})["audio"] = {
@@ -264,13 +273,15 @@ def freeze_stress(esc_dir, n_drone=60):
                 sf.write(p, y, SR, subtype="PCM_16")
                 items.append({"item_id": p.stem, "path": rel(p), "sha256": sha256_file(p), "tier": "stress", "label": 1,
                               "seconds": 3.0, "source": f"dads_test+esc50_{target}", "snr_db": snr, "noise_type": nt,
+                              "group": f"drone_seg{si:05d}",
                               "drone_rows": [c["row"] for c in segs[si]], "noise_file": noises[ni].name})
         print(f"{nt}: {len(pick)} drone segments x {len(SNRS)} SNRs", flush=True)
     look = []
     for name, target in LOOKALIKES.items():
         for p in esc50_clips(esc_dir, target, {1, 2, 3, 4, 5}):
             look.append({"item_id": f"esc_{name}_{p.stem}", "path": rel(p), "sha256": sha256_file(p), "tier": "lookalike", "label": 0,
-                         "seconds": 5.0, "source": f"esc50_{name}", "snr_db": None, "noise_type": None})
+                         "seconds": 5.0, "source": f"esc50_{name}", "snr_db": None, "noise_type": None,
+                         "group": "esc50_src" + p.stem.split("-")[1]})  # fold-SOURCE-take-target: same source = one group
     man["tiers"].setdefault("stress", {})["audio_mix"] = {
         "seed": SEED, "snrs_db": SNRS, "noise_classes": NOISES, "esc50_folds_used": sorted(STRESS_FOLDS),
         "rule": "v3+ noise augmentation may only use ESC-50 folds 4-5", "items": items}
