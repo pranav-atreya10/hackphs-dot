@@ -123,3 +123,8 @@ Ran the server locally with keys set and checked that:
 
 ## Streaming and AI integration update
 JPEG decoding now runs in native workers with a bounded latest-frame queue on Tower. Synthetic startup tests preserve empty-sky behavior and flock alerts; phone warmup uses eight frames. Six licensed H.264 demo excerpts and a gallery are available at /demo.html. Tower can optionally run a same-origin COCO-SSD bird verifier; stale labels are rejected. Alerts appear immediately while Shreyansh's report, speech and devnet stamp run in parallel. Restart instructions are in OPERATIONS.md. Performance numbers are synthetic processing measurements, not accuracy or field validation.
+
+## Clerk sign-in and account security
+Clerk JS v6 separates its prebuilt UI from its core bundle. Loading only the core caused the deployed login to fail with “Clerk was not loaded with Ui components.” The browser now loads the instance's Clerk UI bundle first and passes its constructor to Clerk.load. Script failures time out with a clear message. Camera and Tower show an Account security button for signed-in Clerk accounts, opening Clerk's user profile. API-key connections keep their existing behavior.
+
+Validated the real sign-in form using the deployed public key on a local test page without submitting credentials. Three loader regressions and the full 52-test server suite pass. Authenticator enrollment requires enabling Authenticator application in the Clerk dashboard; adding the profile button does not enable or enforce MFA by itself.

@@ -83,3 +83,6 @@ A third option on the camera page, **Detect on this phone**, runs the engine on 
 
 ## Camera and real-video demos update
 Added a server demo library with AVPlayer frame replay through the camera uploader, explicit warmup/shake status, and long-edge 640px upload scaling to reduce portrait payload. All Swift sources pass device SDK type checking. A full Xcode asset build is blocked by unavailable simulator runtime services on this Mac; the installed iPhone app still needs a rebuild and install.
+
+## Film loading recovery
+The landing page and standalone film now limit the blocking scenery loader to eight seconds. If an aircraft, texture, or scanned prop stalls, the generated base film becomes playable while detailed assets continue loading. Late completion refreshes the current frame without restarting the timeline. Both `ATHARV/skysentry/dist` sources and the deployed `PRANAV/public` copies include the fix.

@@ -29,3 +29,15 @@ After a deploy, check `/health` for server and bot status, `/health/db` for conf
 Before publishing changes, run `npm test` in `PRANAV` and ensure `npm ci` works with the builder's npm version. Commit `package.json` and `package-lock.json` together whenever dependencies change.
 
 `npm run sync-web` copies the upstream film and detector sources into the deployed public folder. It replaces `public/detection` and the landing page. If modifying the deployed detector directly, apply the corresponding change to `VIVAN/detection` before using that copy command.
+
+## Account security and authenticator apps
+
+The camera and tower pages use the existing Clerk sign-in service when its keys are configured. Signed-in users can select **Account security** to open Clerk's profile and security settings. In Clerk Dashboard → User & authentication → Multi-factor, enable **Authenticator application**, then save. Users enroll their own authenticator and recovery codes through the profile; do not store those secrets in this repository. Do not turn on required MFA without testing the session task flow first. The native iPhone camera's API key is a separate device credential and is not protected by a user's authenticator enrollment.
+
+Clerk UI loading follows the [official JavaScript quickstart](https://clerk.com/docs/js-frontend/getting-started/quickstart). Enrollment options are described in [Clerk authentication configuration](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options).
+
+## Sponsor service readiness
+
+In DigitalOcean App Platform → Settings → web → Environment Variables, add encrypted `ELEVENLABS_API_KEY` and `GEMINI_API_KEY` values, plus an available `ELEVENLABS_VOICE_ID`. Save and wait for redeployment. Never commit keys. `/health` reports browser voice or template mode until these are present. In Tower, select **Turn on alert sound** and send a demo threat to verify actual ElevenLabs playback. The server requests MP3 speech and caches repeated phrases; browser speech handles unavailable or slow responses. A configured key alone is not proof of a successful provider response.
+
+For Solana, confirm one devnet memo transaction and compare its report hash before claiming an on-chain stamp works. Database health checks confirm connectivity; show a stored camera event, hourly chart and retrieved incident to demonstrate the complete Tiger Data and MongoDB workflows. The DEV writing challenge requires a separately published project story.

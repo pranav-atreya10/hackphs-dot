@@ -8,22 +8,50 @@
 //   auth.headers()     -> headers for fetch('/api/...')
 //   auth.label         -> short text for the page header
 
-const CLERK_JS = 'https://cdn.jsdelivr.net/npm/@clerk/clerk-js@6.39.0/dist/clerk.browser.js';
+const CLERK_VERSION = '6.39.0';
+let clerkLoading = null;
 const store = {
   get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }
 };
 
-function loadClerk(publishableKey) {
+function frontendApi(publishableKey) {
+  try {
+    if (!/^pk_(test|live)_/.test(publishableKey)) throw new Error();
+    const domain = atob(publishableKey.split('_')[2].replace(/-/g, '+').replace(/_/g, '/')).replace(/\$$/, '');
+    if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(domain) || !domain.includes('.')) throw new Error();
+    return `https://${domain}`;
+  } catch { throw new Error('The sign-in service has an invalid publishable key.'); }
+}
+function loadScript(src, publishableKey) {
   return new Promise((resolve, reject) => {
-    if (window.Clerk) return resolve(window.Clerk);
-    const s = document.createElement('script');
-    s.src = CLERK_JS; s.async = true; s.crossOrigin = 'anonymous';
-    s.dataset.clerkPublishableKey = publishableKey;
-    s.onload = () => resolve(window.Clerk);
-    s.onerror = () => reject(new Error('Could not load the sign-in service. Check your connection.'));
-    document.head.appendChild(s);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => fail(), 15000);
+    const fail = () => {
+      clearTimeout(timer); script.remove();
+      reject(new Error('Could not load the sign-in service. Check your connection and refresh.'));
+    };
+    script.src = src; script.async = true; script.crossOrigin = 'anonymous';
+    if (publishableKey) script.dataset.clerkPublishableKey = publishableKey;
+    script.onload = () => { clearTimeout(timer); resolve(); };
+    script.onerror = fail;
+    document.head.appendChild(script);
   });
+}
+function loadClerk(publishableKey) {
+  if (clerkLoading) return clerkLoading;
+  clerkLoading = (async () => {
+    const origin = frontendApi(publishableKey);
+    // ClerkJS v6's core no longer contains the prebuilt SignIn/UserProfile UI.
+    // Load the separate UI constructor before initializing the core, as Clerk's JS quickstart specifies.
+    if (!window.__internal_ClerkUICtor) await loadScript(`${origin}/npm/@clerk/ui@1/dist/ui.browser.js`);
+    if (!window.__internal_ClerkUICtor) throw new Error('The sign-in screen did not load. Refresh to try again.');
+    if (!window.Clerk) await loadScript(`${origin}/npm/@clerk/clerk-js@${CLERK_VERSION}/dist/clerk.browser.js`, publishableKey);
+    if (!window.Clerk) throw new Error('The sign-in service did not initialize. Refresh to try again.');
+    await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+    return window.Clerk;
+  })().catch(err => { clerkLoading = null; throw err; });
+  return clerkLoading;
 }
 
 function panel(mount, html) {
@@ -40,7 +68,6 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
   if (cfg.publishableKey) {
     onStatus('Sign in to connect');
     const clerk = await loadClerk(cfg.publishableKey);
-    await clerk.load();
     if (!clerk.user) {
       const card = panel(mount, '<h2>Sign in</h2><p>Use your SkySentry account.</p><div id="clerk-sign-in"></div>');
       clerk.mountSignIn(card.querySelector('#clerk-sign-in'), { forceRedirectUrl: location.href, signUpForceRedirectUrl: location.href });
@@ -78,6 +105,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       mode: 'clerk', airport: me.airport, label: `${me.airport} · signed in`,
       socketAuth: async extra => ({ token: await token(), ...extra }),
       headers,
+      manageAccount: () => clerk.openUserProfile(),
       signOut: () => clerk.signOut().then(() => location.reload())
     };
   }
