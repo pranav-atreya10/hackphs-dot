@@ -49,3 +49,74 @@ Started the server locally, confirmed `/health` returns ok, the demo page return
 ### Possible next steps
 - Scaling past 1 instance needs a shared adapter (e.g. `@socket.io/redis-adapter`) so messages reach clients on every instance.
 - Add rooms (`socket.join(room)`) for per-team or per-game channels.
+
+## Camera → Tower relay (API keys from env vars)
+
+### What was built
+Cameras send events to the server, and the server instantly forwards each one to **every connected tower dashboard**. Secrets (API keys) are never hard-coded. They're read from environment variables.
+
+### New / changed files
+| File | Change |
+|------|--------|
+| `server.js` | Added the `/camera` and `/tower` Socket.IO namespaces, the `POST /api/camera-events` HTTP route, API-key checks, and `.env` loading. The chat demo still works. |
+| `public/tower.html` | A live tower dashboard: shows which cameras are online and every event as it arrives. Open `/tower.html` (or `/tower.html?key=<TOWER_API_KEY>` if a tower key is set). |
+| `.env.example` | Template listing every env var. Copy it to `.env` for local dev (`.env` is git-ignored). |
+| `.do/app.yaml` | Declares `CAMERA_API_KEY` and `TOWER_API_KEY` as encrypted secrets. Their values are set in the DO dashboard, never in git. |
+| `package.json` | Node `>=20.12` (needed for `process.loadEnvFile`, which reads `.env`). |
+
+### Environment variables
+| Var | Required? | Purpose |
+|-----|-----------|---------|
+| `CAMERA_API_KEY` | Yes in production | Cameras must send this to publish events. If it's missing in production (`NODE_ENV=production`), the server **refuses to start**, so you can't accidentally deploy with no protection. Locally it just warns and rejects all camera events. |
+| `TOWER_API_KEY` | Optional | If set, dashboards must send it to receive events. If empty, any dashboard can watch. |
+| `CORS_ORIGIN` | Optional | Same as before. |
+| `PORT` | Set by DO | Same as before. |
+
+Keys are compared with a constant-time check (`crypto.timingSafeEqual`), so an attacker can't learn a key by timing the server's responses.
+
+### How a camera sends an event
+The event can be **any JSON object** (e.g. `{ "type": "motion", "zone": "A" }`). Before forwarding, the server adds:
+- `id`: a unique id (a UUID)
+- `cameraId`: which camera sent it
+- `receivedAt`: server timestamp in ms
+
+These three fields always come from the server, so a camera can't fake them.
+
+**Option 1: Socket.IO (best for cameras that stay connected):**
+```js
+const { io } = require("socket.io-client");
+const cam = io("https://<your-app>.ondigitalocean.app/camera", {
+  auth: { key: process.env.CAMERA_API_KEY, cameraId: "gate-1" },
+});
+cam.emit("camera:event", { type: "motion" }, (ack) => console.log(ack));
+// ack = { ok: true, id: "...", towers: <how many dashboards got it> }
+```
+
+**Option 2: HTTP POST (best for scripts, microcontrollers, webhooks):**
+```bash
+curl -X POST https://<your-app>.ondigitalocean.app/api/camera-events \
+  -H "Authorization: Bearer $CAMERA_API_KEY" \
+  -H "x-camera-id: lot-2" \
+  -H "content-type: application/json" \
+  -d '{"type":"plate","plate":"ABC123"}'
+# → 202 { ok: true, id: "...", towers: 1 }   (401 if the key is wrong)
+```
+`x-api-key: <key>` works in place of the `Authorization` header.
+
+### What tower dashboards receive
+Connect to the `/tower` namespace (with `auth: { key }` if `TOWER_API_KEY` is set) and listen for:
+- `camera:event`: the stamped event above.
+- `camera:status`: `{ cameraId, online, at }` when a socket camera connects or disconnects.
+
+`/health` now also reports how many `cameras` and `towers` are connected.
+
+### Deploying the keys on DigitalOcean
+App → Settings → `web` component → Environment Variables → add `CAMERA_API_KEY` (and `TOWER_API_KEY` if wanted), tick **Encrypt**, save. DO redeploys automatically. Generate a strong key with `openssl rand -hex 32`.
+
+### Tested
+Ran the server locally with keys set and checked that:
+- a tower and a camera connect;
+- the camera's Socket.IO event and an HTTP POST both reach the tower, with server-stamped fields (a fake `id` from the camera was overwritten);
+- wrong camera/tower keys are rejected (`unauthorized` / HTTP 401);
+- `/tower.html` is served and `.env` is loaded;
+- `NODE_ENV=production` with no `CAMERA_API_KEY` exits with an error.
