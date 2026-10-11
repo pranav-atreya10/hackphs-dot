@@ -106,7 +106,7 @@ input::placeholder{color:var(--mute)}
 button{font:500 .9rem var(--sans);background:var(--accent);color:var(--on-accent);border:1px solid var(--accent);border-radius:8px;padding:8px 14px;cursor:pointer;transition:opacity .15s,background .15s}
 button:hover{opacity:.86} button:disabled{opacity:.4;cursor:default}
 button.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)} button.ghost:hover{opacity:1;background:var(--hover)}
-button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)} button[aria-pressed="true"]:hover,button.ghost[aria-pressed="true"],button.ghost[aria-pressed="true"]:hover{background:var(--accent);color:var(--on-accent);border-color:var(--accent);opacity:.92}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .hint{margin:0;font-size:.82rem;color:var(--mute)}
