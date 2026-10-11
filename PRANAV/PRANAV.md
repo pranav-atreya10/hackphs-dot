@@ -287,3 +287,14 @@ It checks free disk space before starting and every second while rendering, and 
 - The top-right button (Sign up / Dashboard) is smaller: 5px × 12px padding, 0.82rem text, 8px corners. A later `.btn-s` rule had been overriding its padding, so the rule is now `header.bar .bar-cta`.
 - The gap is fixed: the negative margin that tucks Sign up next to Sign in now only applies when Sign in is there, so Dashboard no longer crowds "FAQ".
 - **Hover and press:** every pill button (top bar and hero) lifts 1px with a soft shadow on hover and presses in (scaled to 96%) on click. The Sign in link dims when pressed. All of this is off for people who set "reduce motion".
+
+## Camera page: hint no longer sits on top of the video
+**What was wrong:** after you pressed Start, the grey "Point the camera at the sky…" hint stayed on top of the video. Its CSS (`display:grid`) beat the `hidden` attribute, so it never hid. The shaded orange box on the right had no label, so it wasn't clear what it was.
+
+**Fixes (camera.html / js/camera.js, display only; detection untouched):**
+- The hint hides once the camera starts (`#empty[hidden]{display:none}`).
+- The shaded area is labeled **Runway corridor**. It's the runway approach zone: a bird or flock heading into it turns the risk red. You can redraw it under Settings → Draw runway corridor.
+- In stream mode, the pill says "Waiting for the server bot…" until the first result comes back. Before, it said "Ready" while the camera was already running.
+- Stop goes back to a clean black view with "Stopped. Press Start to go again." No frozen frame or corridor is left behind.
+
+**Checked:** headless Chrome pressed Start and Stop on the synthetic sky in stream mode, with screenshots at each step. Tests: 74/74.
