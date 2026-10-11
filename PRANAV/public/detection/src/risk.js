@@ -3,6 +3,7 @@
 //  red    : any drone, any bird flock of 5+, or any bird/flock under 30 s from the corridor
 //  yellow : any confirmed bird (or, by default, any unverified object so Gemini can check it)
 //  green  : nothing confirmed in the sky
+//  (debris, meaning thrown rocks and falling objects, never raises the level; it is only listed)
 //
 // The level rises immediately but only steps down after it has been lower for
 // `holdSec`, so the tower display and voice alerts don't flicker.
@@ -34,9 +35,11 @@ export class RiskEngine {
       raw = 2;
       reasons.push(`Drone sound (${audio.confidence} confidence)`);
     }
+    let debris = 0;
     for (const g of groups) {
       const cls = g.classification;
       if (cls === 'rejected') continue;
+      if (cls === 'debris') { debris += g.size; continue; }
       if (cls === 'drone') {
         raw = 2;
         reasons.push(`Drone ${g.label}`);
@@ -60,6 +63,7 @@ export class RiskEngine {
       if (birds) reasons.push(`${birds} bird${birds > 1 ? 's' : ''} in view`);
       if (unknown) reasons.push(`${unknown} unverified object${unknown > 1 ? 's' : ''}`);
     }
+    if (debris) reasons.push(`${debris} falling object${debris > 1 ? 's' : ''} ignored (debris, not birds)`);
 
     const cur = RANK[this.level];
     if (raw >= cur) {

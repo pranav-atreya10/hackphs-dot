@@ -19,7 +19,7 @@ export function chooseBirdCandidate(feeds, checked, now = Date.now()) {
       now - t.lastFrameAt > MAX_FRAME_AGE || state.shake || state.learning ||
       state.motion?.shake || (state.motion && !state.motion.ready)) continue;
     for (const tr of state.tracks || []) {
-      if (!Number.isSafeInteger(tr.id) || !validBox(tr.bbox) || tr.classification === 'rejected') continue;
+      if (!Number.isSafeInteger(tr.id) || !validBox(tr.bbox) || tr.classification === 'rejected' || tr.classification === 'debris') continue;
       const key = `${t.cameraId}:${tr.id}`;
       if (now - (checked.get(key) ?? -Infinity) < CHECK_COOLDOWN) continue;
       const px = Math.max(tr.bbox.w * t.video.width, tr.bbox.h * t.video.height);

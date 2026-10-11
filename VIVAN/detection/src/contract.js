@@ -13,7 +13,7 @@ export function isoAt(wallSec) {
 // primary: the most important group right now (see DetectionEngine.pickPrimary), or null.
 export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop }) {
   const cam = cfg.camera;
-  const active = groups.filter((g) => g.classification !== 'rejected');
+  const active = groups.filter((g) => g.classification !== 'rejected' && g.classification !== 'debris');
   const objectCount = active.reduce((s, g) => s + g.size, 0);
 
   const ev = {

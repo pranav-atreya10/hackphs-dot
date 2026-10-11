@@ -9,6 +9,7 @@ import { Tracker } from '../src/tracker.js';
 import { FlockGrouper } from '../src/flocks.js';
 import { RiskEngine } from '../src/risk.js';
 import { HumDetector } from '../src/audio.js';
+import { gravityArc, spinCheck } from '../src/debris.js';
 import { mulberry32 } from '../src/synthetic.js';
 import { runScenario, evaluateConfig } from '../src/tune.js';
 import { PARAMS, PRESETS, describeParams, getParam } from '../src/params.js';
@@ -225,6 +226,65 @@ test('scenario empty sky: stays green, zero confirmed tracks', () => {
 test('scenario distant_flock: tiny birds still raise red as a flock', () => {
   const { row } = runScenario('distant_flock');
   ok(row.pass && row.max_flock >= 5, JSON.stringify(row));
+});
+// ---------- debris check ----------
+const arcTrail = (ay, len, secs = 1.2) => Array.from({ length: Math.round(secs * 30) }, (_, i) => {
+  const t = i / 30;
+  return [t, 40 + 70 * t, 200 - 300 * t + 0.5 * ay * t * t];
+});
+const sizeSamples = (trail, len) => ({ t: trail.map((p) => p[0]), major: trail.map(() => len) });
+test('debris: a gravity arc on a small object is debris; the same arc on a big object is not', () => {
+  const trail = arcTrail(420, 8);
+  const small = gravityArc(trail, sizeSamples(trail, 8), DEFAULTS.debris);
+  ok(small.arc && small.pull > 40, JSON.stringify(small));
+  const big = gravityArc(trail, sizeSamples(trail, 40), DEFAULTS.debris);
+  ok(!big.arc && /pull too weak/.test(big.reason), JSON.stringify(big));
+});
+test('debris: straight flight and upward curves are never an arc', () => {
+  const straight = Array.from({ length: 36 }, (_, i) => [i / 30, 40 + 50 * (i / 30), 100 + 8 * (i / 30)]);
+  ok(!gravityArc(straight, sizeSamples(straight, 8), DEFAULTS.debris).arc, 'straight line called an arc');
+  const up = arcTrail(-420, 8);
+  ok(!gravityArc(up, sizeSamples(up, 8), DEFAULTS.debris).arc, 'upward pull called gravity');
+});
+test('debris: a long axis that keeps turning one way is spinning; flapping back and forth is not', () => {
+  const t = Array.from({ length: 45 }, (_, i) => i / 30);
+  const wrap = (a) => Math.atan2(Math.sin(2 * a), Math.cos(2 * a)) / 2;
+  const spin = { t, major: t.map(() => 10), minor: t.map(() => 4), angle: t.map((x) => wrap(2 * Math.PI * 0.8 * x)) };
+  ok(spinCheck(spin, DEFAULTS.debris).spinning, JSON.stringify(spinCheck(spin, DEFAULTS.debris)));
+  const flap = { t, major: t.map(() => 10), minor: t.map(() => 4), angle: t.map((x) => 0.3 * Math.sin(2 * Math.PI * 4 * x)) };
+  ok(!spinCheck(flap, DEFAULTS.debris).spinning, JSON.stringify(spinCheck(flap, DEFAULTS.debris)));
+});
+for (const name of ['rock_throw', 'debris_shower', 'spinning_debris']) {
+  test(`scenario ${name}: never called a bird, never red`, () => {
+    for (const seed of [7, 11, 23]) {
+      const { row } = runScenario(name, { seed });
+      ok(row.pass && !row.classes.includes('bird'), `seed ${seed}: ${JSON.stringify(row)}`);
+      if (SCENARIOS[name].expectClass) ok(row.classes.includes(SCENARIOS[name].expectClass), `seed ${seed}: no ${SCENARIOS[name].expectClass}`);
+    }
+  });
+}
+test('scenario rock_throw: debris is explained and ignored by risk and the beacon', () => {
+  const sky = new SyntheticSky({ scenario: 'rock_throw', seed: 7 });
+  const engine = new DetectionEngine();
+  engine.setCorridor(sky.corridor);
+  let state, explained = false, why = '';
+  for (let i = 0; i < sky.durationSec * 30; i++) {
+    state = engine.process(sky.render(i / 30), i / 30);
+    if (state.risk.reasons.some((r) => /debris/.test(r))) explained = true;
+    const d = state.tracks.find((t) => t.classification === 'debris');
+    if (d) why = d.reason;
+  }
+  ok(explained, 'risk reasons never mentioned the debris');
+  ok(/gravity arc/.test(why), `track reason: ${why}`);
+  ok(state.stats.debris_ignored >= 1, `debris_ignored ${state.stats.debris_ignored}`);
+  ok(frameFromState({ risk: { level: 'yellow' }, primary: { classification: 'debris', size: 1 } }, { heading_deg: 90 }).kind === 'N', 'beacon targeted debris');
+});
+test('scenarios bird_descending and bird_circling: curving or sinking birds stay birds', () => {
+  for (const name of ['bird_descending', 'bird_circling']) {
+    const { row } = runScenario(name);
+    ok(row.pass && row.classes.includes('bird') && !row.classes.includes('debris'), `${name}: ${JSON.stringify(row)}`);
+    near(row.median_flap_hz, SCENARIOS[name].expectHz, 0.5, name);
+  }
 });
 test('contract: track_batch points have every field the backend needs', () => {
   const { batches } = runScenario('flock_corridor');

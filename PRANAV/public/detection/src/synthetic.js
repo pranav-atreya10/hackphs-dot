@@ -74,6 +74,52 @@ export const SCENARIOS = {
       for (let i = 0; i < 8; i++) add(bird(40 + (i % 4) * 11 + rng() * 3, 60 + Math.floor(i / 4) * 10 + rng() * 3, 14, 0.5, 5 + rng(), rng() * 6.28, 3));
     },
   },
+  // Debris scenes: a tumbling rock's outline pulses as it turns, which looks like a wingbeat.
+  // Unverified objects may raise yellow, but none of these may ever be called a bird or reach red.
+  rock_throw: {
+    forbidClass: 'bird', expectClass: 'debris',
+    describe: 'A rock thrown up across the sky: tumbles (outline pulses ~4 Hz) along a gravity arc',
+    durationSec: 4,
+    expected: 'yellow',
+    corridor: [[0.72, 0], [1, 0], [1, 1], [0.72, 1]],
+    // ~8 px long (a 12 cm rock seen from ~10 m), so gravity is ~420 px/s² at this scale.
+    build(add, rng) { add(rock(40, 236, 75, -400, 420, 2 + rng() * 0.3, 4, rng() * 6.28)); },
+  },
+  debris_shower: {
+    forbidClass: 'bird', expectClass: 'debris',
+    describe: 'Five pieces of gravel thrown together (would otherwise look like a flock of 5)',
+    durationSec: 4,
+    expected: 'yellow',
+    corridor: [[0.72, 0], [1, 0], [1, 1], [0.72, 1]],
+    build(add, rng) {
+      for (let i = 0; i < 5; i++) add(rock(30 + i * 9 + rng() * 4, 236 - rng() * 6, 55 + rng() * 25, -380 - rng() * 30, 420, 1.6 + rng() * 1.4, 2.5 + rng() * 1.3, rng() * 6.28));
+    },
+  },
+  spinning_debris: {
+    forbidClass: 'bird',
+    describe: 'A strip of debris blown sideways, spinning steadily (regular outline pulse, but the shape rotates)',
+    durationSec: 8,
+    expected: 'yellow',
+    corridor: [],
+    build(add, rng) { add(spinner(30, 90, 22, 3, 2.1 + rng() * 0.3, 0.9, 8)); },
+  },
+  // Guards: real birds whose paths curve or sink must stay birds.
+  bird_descending: {
+    expectClass: 'bird', expectHz: 3.5,
+    describe: 'A gull flapping ~3.5 Hz while gliding steadily downward',
+    durationSec: 10,
+    expected: 'yellow',
+    corridor: [],
+    build(add) { add(bird(30, 40, 18, 9, 3.5, 0, 7)); },
+  },
+  bird_circling: {
+    expectClass: 'bird', expectHz: 3,
+    describe: 'A gull flapping ~3 Hz while circling (its path curves the whole time)',
+    durationSec: 12,
+    expected: 'yellow',
+    corridor: [],
+    build(add) { add(circler(150, 110, 40, 7, 3, 7)); },
+  },
 };
 
 // ---------- object models (positions in px at 320x240; scaled to the output size) ----------
@@ -106,6 +152,56 @@ function drone(x0, y0) {
 
 function plane(x0, y0) {
   return { type: 'plane', at(t) { return { x: x0 + 42 * t, y: y0 + 2 * t, rx: 13, ry: 2.6, dark: 0.5 }; } };
+}
+
+// Thrown rock: constant sideways speed, gravity pulling down at g px/s², tumbling end over end.
+// Tumbling makes the outline pulse twice per turn, so its "beat" looks like a wingbeat.
+// len is the half-length in px; keep g physical for that size (g ≈ 9.8 m/s² × px per metre).
+function rock(x0, y0, vx, vy0, g, tumbleHz, len, phase) {
+  return {
+    type: 'rock',
+    at(t) {
+      const ph = Math.PI * tumbleHz * t + phase;
+      return {
+        x: x0 + vx * t,
+        y: y0 + vy0 * t + 0.5 * g * t * t,
+        rx: len * (0.45 + 0.55 * Math.abs(Math.cos(ph))),
+        ry: len * 0.45,
+        angle: phase + 2 * Math.PI * 0.6 * tumbleHz * t, // the shape also turns in the image plane
+        dark: 0.6,
+      };
+    },
+  };
+}
+
+// Wind-blown strip of debris: drifts at a steady speed but keeps rotating.
+function spinner(x0, y0, vx, vy, pulseHz, spinHz, len) {
+  return {
+    type: 'debris',
+    at(t) {
+      return {
+        x: x0 + vx * t,
+        y: y0 + vy * t,
+        rx: len * (0.5 + 0.5 * Math.abs(Math.cos(Math.PI * pulseHz * t))),
+        ry: len * 0.3,
+        angle: 2 * Math.PI * spinHz * t,
+        dark: 0.5,
+      };
+    },
+  };
+}
+
+// Bird circling at radius r px, one lap every periodSec, flapping at hz.
+function circler(cx, cy, r, periodSec, hz, span) {
+  const b = bird(0, 0, 0, 0, hz, 0, span);
+  return {
+    type: 'bird',
+    at(t) {
+      const s = b.at(t);
+      const a = (2 * Math.PI * t) / periodSec;
+      return { ...s, x: cx + r * Math.sin(a), y: cy - r * Math.cos(a) + s.y };
+    },
+  };
 }
 
 function bag(x0, y0, rng) {
@@ -187,7 +283,7 @@ export class SyntheticSky {
     for (const c of this.clouds) this.drawCloud(c.x + c.vx * t, c.y, c.r, c.amp);
     for (const o of this.objects) {
       const s = o.at(t);
-      this.drawEllipse(s.x * this.scale, s.y * this.scale, s.rx * this.scale, s.ry * this.scale, s.dark, s.bright);
+      this.drawEllipse(s.x * this.scale, s.y * this.scale, s.rx * this.scale, s.ry * this.scale, s.dark, s.bright, s.angle || 0);
     }
     return { data, width: w, height: h };
   }
@@ -208,15 +304,18 @@ export class SyntheticSky {
     }
   }
 
-  // Anti-aliased filled ellipse; darkens (or brightens) the sky under it.
-  drawEllipse(cx, cy, rx, ry, dark, bright) {
+  // Anti-aliased filled ellipse, rotated by `angle` radians; darkens (or brightens) the sky under it.
+  drawEllipse(cx, cy, rx, ry, dark, bright, angle = 0) {
     const { width: w, height: h, data } = this;
-    const x0 = Math.max(0, Math.floor(cx - rx - 1)), x1 = Math.min(w - 1, Math.ceil(cx + rx + 1));
-    const y0 = Math.max(0, Math.floor(cy - ry - 1)), y1 = Math.min(h - 1, Math.ceil(cy + ry + 1));
+    const c = Math.cos(angle), s = Math.sin(angle);
+    const ex = Math.hypot(rx * c, ry * s), ey = Math.hypot(rx * s, ry * c); // half-extents of the rotated box
+    const x0 = Math.max(0, Math.floor(cx - ex - 1)), x1 = Math.min(w - 1, Math.ceil(cx + ex + 1));
+    const y0 = Math.max(0, Math.floor(cy - ey - 1)), y1 = Math.min(h - 1, Math.ceil(cy + ey + 1));
     const rmin = Math.min(rx, ry);
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
-        const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+        const px = x + 0.5 - cx, py = y + 0.5 - cy;
+        const dx = (px * c + py * s) / rx, dy = (py * c - px * s) / ry;
         const edge = (Math.sqrt(dx * dx + dy * dy) - 1) * rmin;
         const cov = Math.max(0, Math.min(1, 0.5 - edge));
         if (!cov) continue;

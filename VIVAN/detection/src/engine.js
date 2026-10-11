@@ -1,7 +1,8 @@
 // DetectionEngine: the whole detection pipeline behind one object.
 //
 //   frame (RGBA pixels) ──► MotionDetector ──► BlobLabeler ──► Tracker
-//        ──► wingbeat analysis ──► classification (+ sound fusion, Gemini/COCO verdicts)
+//        ──► wingbeat analysis + debris check (gravity arc, spin)
+//        ──► classification (+ sound fusion, Gemini/COCO verdicts)
 //        ──► FlockGrouper ──► corridor ETA + bearings ──► RiskEngine
 //        ──► events / track_batch (contract format) + a state snapshot for the UI
 //
@@ -13,6 +14,7 @@ import { MotionDetector } from './motion.js';
 import { BlobLabeler } from './blobs.js';
 import { Tracker } from './tracker.js';
 import { analyzeWingbeat } from './wingbeat.js';
+import { gravityArc, spinCheck } from './debris.js';
 import { FlockGrouper } from './flocks.js';
 import { RiskEngine } from './risk.js';
 import { DroneAudioState } from './audio.js';
@@ -134,7 +136,7 @@ export class DetectionEngine {
     const t = this.lastT ?? 0;
     const out = [];
     for (const tr of this.tracker.tracks) {
-      if (!tr.confirmed || tr.cls === 'rejected' || this.verdicts.has(tr.id)) continue;
+      if (!tr.confirmed || tr.cls === 'rejected' || tr.cls === 'debris' || this.verdicts.has(tr.id)) continue;
       if (tr.cocoCheckedAt !== undefined && t - tr.cocoCheckedAt < c.cooldownSec) continue;
       const b = tr.blob;
       const w = this.motion.w, h = this.motion.h;
@@ -235,13 +237,16 @@ export class DetectionEngine {
     for (const tr of confirmed) {
       if (!tr.counted) { tr.counted = true; this.stats.tracksConfirmed++; }
       tr.frameCount++;
-      if (tr.frameCount % cfg.wingbeat.evalEvery === 0) this.updateFlap(tr, analyzeWingbeat(tr.samples, cfg.wingbeat));
+      if (tr.frameCount % cfg.wingbeat.evalEvery === 0) {
+        this.updateFlap(tr, analyzeWingbeat(tr.samples, cfg.wingbeat));
+        this.updateDebris(tr);
+      }
       this.classifyTrack(tr, audio);
     }
     mark('wingbeat');
 
-    // 5. Flocks (rejected tracks are left out)
-    const live = confirmed.filter((tr) => tr.cls !== 'rejected');
+    // 5. Flocks (rejected tracks and debris are left out)
+    const live = confirmed.filter((tr) => tr.cls !== 'rejected' && tr.cls !== 'debris');
     const flocks = this.grouper.group(live, w);
     for (const tr of confirmed) tr.flockId = null;
     for (const f of flocks) {
@@ -363,13 +368,47 @@ export class DetectionEngine {
     tr.profile = best;
   }
 
-  // Sets tr.cls / tr.conf / tr.why.
+  // Debris check (debris.js). Smoothed like the wingbeat verdict so one odd reading can't flip it:
+  // a verdict switches on above 0.5 and only switches off again below 0.25.
+  updateDebris(tr) {
+    const c = this.cfg.debris;
+    if (!c.enabled) { tr.isDebris = false; tr.tumbling = false; return; }
+    const arc = gravityArc(tr.trail, tr.samples, c);
+    const spin = spinCheck(tr.samples, c);
+    tr.debris = { arc, spin };
+    tr.arcScore = (tr.arcScore || 0) + c.smoothing * ((arc.arc ? 1 : 0) - (tr.arcScore || 0));
+    tr.spinScore = (tr.spinScore || 0) + c.smoothing * ((spin.spinning ? 1 : 0) - (tr.spinScore || 0));
+    tr.isDebris = tr.isDebris ? tr.arcScore > 0.25 : tr.arcScore > 0.5;
+    tr.tumbling = tr.tumbling ? tr.spinScore > 0.25 : tr.spinScore > 0.5;
+    if (arc.arc) tr.maxPull = Math.max(tr.maxPull || 0, arc.pull);
+    if (spin.spinning) tr.maxTurnDeg = Math.max(tr.maxTurnDeg || 0, spin.turnDeg);
+    if (tr.isDebris && !tr.debrisCounted) { tr.debrisCounted = true; this.stats.debris++; }
+  }
+
+  // Sets tr.cls / tr.conf / tr.why. Order of trust:
+  //   1. a Gemini / human verdict
+  //   2. physics: falls on a gravity arc => debris; spins end over end => not a wingbeat
+  //   3. steady size + drone sound => drone; wingbeat => bird; COCO-SSD second opinion
   classifyTrack(tr, audio) {
     const v = this.verdicts.get(tr.id);
     if (v && (v.verdict === 'rejected' || v.verdict === 'bird' || v.verdict === 'drone')) {
       tr.cls = v.verdict;
       tr.conf = 0.95;
       tr.why = `${v.source}${v.label ? `: ${v.label}` : ''}`;
+      return;
+    }
+    const dc = this.cfg.debris;
+    if (tr.isDebris) {
+      const pull = tr.maxPull || 0;
+      tr.cls = 'debris';
+      tr.conf = Math.min(0.95, 0.6 + 0.35 * Math.min(1, pull / dc.minPull - 1));
+      tr.why = `falls like a thrown object: gravity arc, pull ${Math.round(pull)}/s² (birds stay under ${dc.minPull})`;
+      return;
+    }
+    if (tr.tumbling) {
+      tr.cls = 'unknown';
+      tr.conf = 0.4;
+      tr.why = `spins end over end like debris (turned ${tr.maxTurnDeg || 0}°), so its size pulses are not a wingbeat`;
       return;
     }
     const cc = this.cfg.coco;
@@ -400,10 +439,15 @@ export class DetectionEngine {
   classifyFlock(f) {
     const ms = f.members;
     let cls = 'unknown';
+    // Only members the debris check has already cleared count toward "birds by numbers alone":
+    // a handful of thrown gravel also moves together, so wait until each path has been checked.
+    const checked = (m) => !this.cfg.debris.enabled ||
+      (m.debris && m.debris.arc.pull !== null && !m.debris.arc.arc && (m.arcScore || 0) < 0.25);
+    const flyers = ms.filter((m) => !m.tumbling && checked(m));
     if (ms.some((m) => m.cls === 'drone')) cls = 'drone';
-    else if (ms.some((m) => m.cls === 'bird') || ms.length >= this.cfg.flocks.inferBirdAtSize) cls = 'bird';
+    else if (ms.some((m) => m.cls === 'bird') || flyers.length >= this.cfg.flocks.inferBirdAtSize) cls = 'bird';
     if (cls === 'bird') {
-      for (const m of ms) {
+      for (const m of flyers) {
         if (m.cls === 'unknown') { m.cls = 'bird'; m.conf = 0.55; m.why = `flies with flock ${f.id}`; }
       }
     }
@@ -460,7 +504,7 @@ export class DetectionEngine {
       classification: tr.cls,
       confidence: r3(tr.conf),
       reason: tr.why,
-      profile: tr.profile || 'unsure',
+      profile: tr.tumbling ? 'tumbling' : tr.profile || 'unsure',
       flap_hz: tr.profile === 'flapping' ? r1(tr.flapHz) : null,
       flap_strength: a ? r3(a.strength) : null,
       size_cv: a ? r3(a.cv) : null,
@@ -492,6 +536,9 @@ export class DetectionEngine {
         by_signal: a ? a.bySignal || null : null, // rhythm found in each signal {hz, strength}
         vetoed: a ? a.vetoed || null : null,      // why a rhythm was ignored, if it was
         vel_se: Number.isFinite(tr.seX) ? r3(Math.hypot(tr.seX / w, tr.seY / h)) : null,
+        // Debris check: gravity_arc {arc, pull, accel, fit, bendPx, reason}, spin {spinning, turnDeg, sameWay, reason}
+        gravity_arc: tr.debris ? tr.debris.arc : null,
+        spin: tr.debris ? tr.debris.spin : null,
       },
     };
   }
@@ -513,6 +560,7 @@ export class DetectionEngine {
       coco_vague: s.cocoVague,               // answers like kite/frisbee that carry no evidence
       coco_agreement: s.cocoAgree + s.cocoDisagree ? r3(s.cocoAgree / (s.cocoAgree + s.cocoDisagree)) : null,
       ghosts_removed: s.ghosts,
+      debris_ignored: s.debris,              // tracks recognised as thrown/falling debris
       stage_ms: Object.fromEntries(Object.entries(s.stageMs).map(([k, v]) => [k, r3(v)])),
     };
   }
@@ -520,7 +568,7 @@ export class DetectionEngine {
   // Most important group: drones, then the soonest corridor ETA, then the biggest flock.
   pickPrimary(groups) {
     const score = (g) => {
-      if (g.classification === 'rejected') return -1;
+      if (g.classification === 'rejected' || g.classification === 'debris') return -1;
       let s = 0;
       if (g.classification === 'drone') s += 1e6;
       if (g.classification === 'bird') s += 1e4;
@@ -614,7 +662,7 @@ export class DetectionEngine {
 }
 
 function newStats() {
-  return { frames: 0, fps: 0, procMs: 0, stageMs: {}, ghosts: 0, tracksConfirmed: 0, confirmed: 0, rejected: 0, agree: 0, disagree: 0, cocoChecks: 0, cocoBirds: 0, cocoNothing: 0, cocoVague: 0, cocoAgree: 0, cocoDisagree: 0, events: 0 };
+  return { frames: 0, fps: 0, procMs: 0, stageMs: {}, ghosts: 0, debris: 0, tracksConfirmed: 0, confirmed: 0, rejected: 0, agree: 0, disagree: 0, cocoChecks: 0, cocoBirds: 0, cocoNothing: 0, cocoVague: 0, cocoAgree: 0, cocoDisagree: 0, events: 0 };
 }
 
 // ETA range: redo the ETA with the velocity nudged by ±sigma standard errors in x and y

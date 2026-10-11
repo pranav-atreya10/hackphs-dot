@@ -113,6 +113,20 @@ export const PARAMS = [
     raiseIf: 'Wingbeat stage is slow with many tracks (see stats.stage_ms.wingbeat).',
     lowerIf: 'Classification lags.' },
 
+  // ---- Debris check (thrown rocks, falling or spinning debris) ----
+  { path: 'debris.minPull', min: 10, max: 60, step: 1, stage: 'wingbeat', impact: 'high',
+    what: 'Downward pull (acceleration divided by the object\'s own length, per s²) above which it must be falling, not flying.',
+    raiseIf: 'Diving or sharply turning birds get labelled debris.',
+    lowerIf: 'Thrown rocks or dropped objects are still labelled birds.' },
+  { path: 'debris.maxFitRatio', min: 0.1, max: 0.6, step: 0.05, stage: 'wingbeat', impact: 'medium',
+    what: 'How cleanly the path must fit a gravity arc (share of a straight line\'s error left over).',
+    raiseIf: 'Real debris on a slightly wobbly path is missed.',
+    lowerIf: 'Birds with curving paths get labelled debris.' },
+  { path: 'debris.minTurnDeg', min: 90, max: 540, step: 30, stage: 'wingbeat', impact: 'medium',
+    what: 'How far the outline must rotate one way before the object counts as spinning.',
+    raiseIf: 'Banking or circling birds lose their wingbeat label.',
+    lowerIf: 'Tumbling debris still gets a wingbeat (bird) label.' },
+
   // ---- Flocks ----
   { path: 'flocks.radiusFrac', min: 0.03, max: 0.4, step: 0.01, stage: 'flocks', impact: 'high',
     what: 'Neighbour distance for flockmates (share of frame width).',

@@ -124,7 +124,7 @@ export class Tracker {
       blob: b,
       trail: [[t, b.x, b.y]],
       svx: 0, svy: 0, seX: Infinity, seY: Infinity, // smoothed (line-fit) velocity + its uncertainty
-      samples: { t: [t], mass: [b.mass], area: [b.area], major: [b.major] },
+      samples: { t: [t], mass: [b.mass], area: [b.area], major: [b.major], minor: [b.minor], angle: [b.angle] },
       frameCount: 0,
     };
     return tr;
@@ -159,7 +159,7 @@ export class Tracker {
     fitVelocity(tr, t, c);
 
     const s = tr.samples;
-    s.t.push(t); s.mass.push(b.mass); s.area.push(b.area); s.major.push(b.major);
+    s.t.push(t); s.mass.push(b.mass); s.area.push(b.area); s.major.push(b.major); s.minor.push(b.minor); s.angle.push(b.angle);
     let drop = 0;
     while (drop < s.t.length - 2 && t - s.t[drop] > c.sampleSec) drop++;
     if (drop) for (const k in s) s[k].splice(0, drop);
