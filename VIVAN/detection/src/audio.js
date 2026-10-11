@@ -41,9 +41,21 @@ export class DroneAudioState {
 // a steady buzz: a strong fundamental (roughly 80-600 Hz) with harmonics that
 // stays at the same pitch. Feed it AnalyserNode.getFloatFrequencyData() output
 // (dB per bin) a few times per second; it returns a 0..1 drone probability.
+//
+// A steady tone alone is not enough: planes, helicopters, engines, cows and washing
+// machines hum steadily too. So a reading only counts as "drone" if it also passes
+// three checks (chosen on training recordings, then confirmed on held-out ones):
+//   1. clear tone:   the strongest peak stands >= 30 dB above the background
+//   2. drone pitch:  that peak is >= 180 Hz (small props spin fast; rotors and engines hum lower)
+//   3. short ladder: at most 5 strong overtones (x2..x10); engines and rotors make long ladders
+// `last` explains the most recent reading, for display and debugging.
+export const HUM_DEFAULTS = { minPitchHz: 180, minProminenceDb: 30, maxOvertones: 5 };
+
 export class HumDetector {
-  constructor() {
+  constructor(opts = {}) {
+    this.opts = { ...HUM_DEFAULTS, ...opts };
     this.history = []; // recent fundamental estimates (Hz)
+    this.last = null;
   }
 
   update(spectrumDb, sampleRate) {
@@ -59,6 +71,7 @@ export class HumDetector {
 
     let bestScore = 0;
     let bestF = 0;
+    let bestK = 0;
     for (let k = lo; k <= hi; k++) {
       const v = spectrumDb[k];
       if (v < spectrumDb[k - 1] || v < spectrumDb[k + 1] || v - floor < 12) continue;
@@ -71,17 +84,33 @@ export class HumDetector {
         if (h - floor > 8) support++;
       }
       const score = (v - floor) * (1 + 0.5 * support);
-      if (score > bestScore) { bestScore = score; bestF = k * binHz; }
+      if (score > bestScore) { bestScore = score; bestF = k * binHz; bestK = k; }
     }
 
     this.history.push(bestF);
     if (this.history.length > 8) this.history.shift();
-    if (!bestF || this.history.length < 4) return 0;
+    if (!bestF || this.history.length < 4) { this.last = { p: 0, reason: bestF ? 'listening' : 'no clear tone' }; return 0; }
 
     // Pitch stability across the last readings.
     const recent = this.history.filter((f) => f > 0);
     const stable = recent.filter((f) => Math.abs(f - bestF) / bestF < 0.06).length / this.history.length;
     const loud = Math.min(1, bestScore / 40);
-    return +(stable * loud).toFixed(3);
+    const p = +(stable * loud).toFixed(3);
+
+    // The three drone checks (see the header comment).
+    const o = this.opts;
+    const prominence = spectrumDb[bestK] - floor;
+    let overtones = 0;
+    for (let m = 2; m <= 10; m++) {
+      const c = Math.round(bestK * m);
+      if (c + 1 >= n) break;
+      if (Math.max(spectrumDb[c - 1], spectrumDb[c], spectrumDb[c + 1]) - floor > 8) overtones++;
+    }
+    const reason = prominence < o.minProminenceDb ? 'tone too faint to trust'
+      : bestF < o.minPitchHz ? 'pitch too low for a drone (engine, rotor or plane)'
+      : overtones > o.maxOvertones ? 'long overtone ladder (engine or rotor)'
+      : null;
+    this.last = { p: reason ? 0 : p, f0: Math.round(bestF), prominence: Math.round(prominence), overtones, steady: +stable.toFixed(2), reason: reason || 'drone-like hum' };
+    return reason ? 0 : p;
   }
 }

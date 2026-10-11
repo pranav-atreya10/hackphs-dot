@@ -44,5 +44,33 @@ the size-relative pull keeps most real birds out, but it's a known edge case. De
 without spinning (a bag in the wind) is not covered by either test. All checks here are on synthetic
 scenes; real clips of thrown objects would be the next test.
 
+## Fewer false "drone heard" alarms from the browser mic
+
+**The problem.** Without a trained audio model, the website listens with `HumDetector`: "a strong, steady
+tone = drone". Planes, helicopters, car engines, cows and washing machines are steady tones too. On the
+held-out test sounds it raised "drone heard" on 62% of airplanes, 62% of engines, 46% of helicopters and 36%
+of ordinary outdoor recordings, and a sound on its own goes straight to red.
+
+**The fix: three extra checks per reading** (`detection/src/audio.js`). A reading counts as drone only if:
+1. **Clear tone:** the strongest peak is at least 30 dB above the background.
+2. **Drone pitch:** that peak is 180 Hz or higher (small props spin fast; rotors, engines and planes hum lower).
+3. **Short overtone ladder:** at most 5 strong overtones. Engines and rotors make long ladders.
+`hum.last` says why the last reading was accepted or rejected (e.g. "pitch too low for a drone").
+
+**How the numbers were chosen.** Following the benchmark rules: thresholds picked on training audio only
+(DADS training files 2, 5, 10 and ESC-50 folds 4–5), then checked once on the held-out test audio
+(DADS files 3 and 36, ESC-50 folds 1–3):
+
+| Held-out test audio | "drone heard" before | after |
+|---|---|---|
+| Drone recordings (400 clips) | 97.8% | 94.5% |
+| All non-drone sounds (1,400 clips) | 29% | 4% |
+| Airplane / engine / helicopter | 62% / 62% / 46% | 4% / 0% / 4% |
+| Ordinary outdoor recordings | 36% | 2% |
+
+**Limits.** Drone recall drops about 3 points. Door knocks, church bells and wind still trigger it 20–33% of
+the time. A very loud, close drone with many strong overtones could be rejected by check 3. The trained audio
+model (benchmarks v0) is far better than any hand-made rule; the browser should use it when it can.
+
 ## Optional trained bird verification
 Tower now checks sufficiently large, stable tracked crops with COCO-SSD, using locally served TensorFlow/model assets. It adds bird evidence without inventing a drone class and keeps the motion pipeline active when disabled or unavailable. Tests verify label fusion and reject stale/invalid labels. No frozen dataset, training weights or held-out test manifest was changed. Synthetic startup regressions are separate from the benchmark protocol and do not establish drone recall or false-alarm rate.
