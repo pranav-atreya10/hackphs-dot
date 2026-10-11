@@ -61,7 +61,7 @@ const anchor = '<section class="sec" id="stack">';
 if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
 // The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), and the top bar's
-// signed-in swap (public/js/nav-account.js: Settings in place of Sign in / Sign up).
+// signed-in swap (public/js/nav-account.js: a Dashboard button in place of Sign in / Sign up).
 const scripts = '<script src="/js/guide.js" defer></script>\n<script src="/js/nav-account.js" defer></script>\n';
 site = site.includes('</body>') ? site.replace('</body>', `${scripts}</body>`) : `${site}\n${scripts}`;
 // Logo in the bar and footer, sign in / sign up (account.html; the theme lives in settings.html), and Geist in place of the serif font link.

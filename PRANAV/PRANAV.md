@@ -281,3 +281,9 @@ It checks free disk space before starting and every second while rendering, and 
 **Getting there:**
 - After signing in or finishing sign-up, `account.html` sends you straight to Settings. The old "You're all set" card is gone.
 - On the landing page, `js/nav-account.js` checks Clerk's `__client_uat` cookie. If someone is signed in, the top bar shows **Settings** in place of Sign in / Sign up. It doesn't load Clerk, so the landing page stays fast. If the cookie is out of date, Settings just asks you to sign in.
+
+## Top bar: Dashboard button, smaller, with hover and press
+- When someone is signed in, the top-right button says **Dashboard** instead of Settings. It opens the tower page, or the camera page for camera-station accounts. The settings page and the tower/camera sign-in remember the role in this browser (`skysentry.role`).
+- The top-right button (Sign up / Dashboard) is smaller: 5px × 12px padding, 0.82rem text, 8px corners. A later `.btn-s` rule had been overriding its padding, so the rule is now `header.bar .bar-cta`.
+- The gap is fixed: the negative margin that tucks Sign up next to Sign in now only applies when Sign in is there, so Dashboard no longer crowds "FAQ".
+- **Hover and press:** every pill button (top bar and hero) lifts 1px with a soft shadow on hover and presses in (scaled to 96%) on click. The Sign in link dims when pressed. All of this is off for people who set "reduce motion".
