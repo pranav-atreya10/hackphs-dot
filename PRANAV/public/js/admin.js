@@ -1,6 +1,6 @@
 // Admin page (admin.html): list, create, re-code and delete airports via /api/admin/airports.
 // Only accounts whose verified email is in the server's ADMIN_EMAILS get past the gate (the server checks too).
-import { loadClerk } from '/js/auth.js';
+import { loadClerk, forgetAccount } from '/js/auth.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -91,7 +91,7 @@ async function main() {
   const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
   if (!cfg.publishableKey) return gate('<h2>Accounts aren’t on</h2><p>Sign-in isn’t set up on this server, so there are no admins. Airports come from <code>AIRPORT_CODES</code>.</p>');
   clerk = await loadClerk(cfg.publishableKey);
-  if (!clerk.user) return gate('<h2>Sign in</h2><p>Sign in with an admin account to manage airports.</p><p><a href="/account.html?mode=sign-in">Sign in</a></p>');
+  if (!clerk.user) { forgetAccount(); return gate('<h2>Sign in</h2><p>Sign in with an admin account to manage airports.</p><p><a href="/account.html?mode=sign-in">Sign in</a></p>'); }
   const me = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${await clerk.session.getToken()}` } }).then(r => r.json()).catch(() => ({}));
   if (!me.admin) return gate(`<h2>Admins only</h2><p>${esc(clerk.user.primaryEmailAddress?.emailAddress || 'This account')} isn’t an admin. Admins are set by email in the server’s <code>ADMIN_EMAILS</code> setting.</p>`);
   $('gate').hidden = true; $('reqPanel').hidden = false; $('addPanel').hidden = false; $('listPanel').hidden = false;
