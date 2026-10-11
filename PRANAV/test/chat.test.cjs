@@ -97,6 +97,13 @@ test('reasoning options are only sent to reasoning models', async () => {
   assert.equal(sent[1].reasoning, undefined); assert.equal(sent[1].include, undefined);
 });
 
+test('the guide asks gpt-5.x models for no reasoning, since they reject minimal', async () => {
+  const { sent, fetchImpl } = openai(text('ok'), text('ok'));
+  await createChat({ settings, fetchImpl }).guide(ask('Hi'));
+  await createChat({ settings: { ...settings, OPENAI_GUIDE_MODEL: 'gpt-5.4-nano' }, fetchImpl }).guide(ask('Hi'));
+  assert.deepEqual(sent[0].reasoning, { effort: 'minimal' }); assert.deepEqual(sent[1].reasoning, { effort: 'none' });
+});
+
 test('request limit allows max per window per visitor', () => {
   let t = 0;
   const allow = createRequestLimit({ max: 2, windowMs: 1000, now: () => t });
