@@ -32,7 +32,7 @@ async function main() {
 
   const headers = async () => ({ authorization: `Bearer ${await clerk.session.getToken()}` });
   const me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
-  if (!me.role || !me.airport) await finishSetup({ mount, headers });
+  if (!me.admin && (!me.role || !me.airport)) await finishSetup({ mount, headers });   // admins don't need an airport
 
   location.replace('/settings.html');
 }
