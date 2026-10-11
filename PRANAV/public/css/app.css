@@ -107,6 +107,7 @@ button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);bord
 .auth-card .mark{width:30px;height:36px}
 .auth-card h2{margin:0;font:600 1.4rem var(--sans)} .auth-card p{margin:0;color:var(--mute)}
 .auth-card form{display:grid;gap:12px} .auth-err{color:var(--stop);min-height:1.2em}
+.auth-card .auth-help{font-size:.88rem} .auth-card .auth-help a{color:var(--ink)} .auth-card .auth-help .linkbtn{padding:0;font-size:inherit;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
 label input,label select{width:100%;min-width:0;max-width:100%}
 select{text-overflow:ellipsis}
 details.fold summary{cursor:pointer;font:600 1rem var(--sans);list-style:none;display:flex;justify-content:space-between;gap:12px}

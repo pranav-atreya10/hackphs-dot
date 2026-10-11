@@ -339,3 +339,6 @@ It checks free disk space before starting and every second while rendering, and 
 - Everyone gets a **Delete my account** button (with a confirmation). It uses Clerk's account deletion, which needs "allow users to delete their accounts" left on in the Clerk dashboard (it's on by default).
 
 **Checked:** 5 new unit tests for `airports.js` (create, join, new code, delete, env airports locked, MongoDB down); the full suite is 79/79. On a local server, `/api/admin/airports` refuses requests that aren't signed in (401), and admin.html shows only the sign-in prompt when signed out. The signed-in admin flow needs the real Clerk secret key, so test it on the live site after deploy.
+
+## "Finish setting up" no longer traps you
+The join-code screen had no way out and no hint where codes come from. Now it says "No code? Your SkySentry admin creates airports and their join codes." Admins instead get a link to the admin page. Under that are **Home · Settings · Sign out** links. Admins who sign up through `account.html` skip the join code and go straight to Settings, since they don't need an airport. Tests: 79/79.
