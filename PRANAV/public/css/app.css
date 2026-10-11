@@ -47,3 +47,6 @@ label input,label select{width:100%;min-width:0;max-width:100%}
 select{text-overflow:ellipsis}
 @media (max-width:760px){.top nav{display:none}.top h1{display:none}#who{display:none}.top-in{padding:0 12px;gap:10px}}
 @media (max-width:420px){#signout{display:none}#cams{display:none}}
+details.fold summary{cursor:pointer;font:500 1.05rem var(--serif);list-style:none;display:flex;justify-content:space-between;gap:12px}
+details.fold summary::after{content:"+";color:var(--clay);font:400 1.3rem var(--sans);line-height:1} details.fold[open] summary::after{content:"\2212"}
+details.fold summary::-webkit-details-marker{display:none}

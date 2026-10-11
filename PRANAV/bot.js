@@ -51,6 +51,8 @@ function crop(frame, box) {
 function compact(st) {
   return {
     t: st.t, risk: st.risk.level, reasons: st.risk.reasons,
+    // Why the bot may be waiting: still learning the background, or the camera is moving.
+    learning: !st.motion.ready, shake: !!st.motion.shake,
     primary: st.primary && { size: st.primary.size, classification: st.primary.classification, eta_seconds: st.primary.eta_seconds, bearing_deg: st.primary.bearing_deg, flap_hz: st.primary.flap_hz, heading: st.primary.heading?.name, kind: st.primary.kind },
     tracks: st.tracks.map((t) => ({ id: t.id, bbox: t.bbox, classification: t.classification, flap_hz: t.flap_hz, eta_seconds: t.eta_seconds, is_flock: t.is_flock, trail: t.trail.slice(-12) })),
     flocks: st.flocks.map((f) => ({ id: f.id, bbox: f.bbox, size: f.size, eta_seconds: f.eta_seconds })),

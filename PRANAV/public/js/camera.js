@@ -56,6 +56,13 @@ function applyCamera() {
   if (PRESETS[$('tuning').value]) engine.setConfig(PRESETS[$('tuning').value]);
 }
 
+const status = text => { $('statusLine').textContent = text; };
+function waitingMessage(st) {
+  if (st?.shake) return 'Hold the camera still: it’s moving, so the bot is paused';
+  if (st?.learning) return 'Learning the sky… keep the camera still for a few seconds';
+  return null;
+}
+
 function log(html) {
   const li = document.createElement('li'); li.innerHTML = `${new Date().toLocaleTimeString()} ${html}`;
   $('log').prepend(li); while ($('log').children.length > 40) $('log').lastChild.remove();
@@ -68,11 +75,11 @@ async function connect() {
   $('signout').onclick = () => auth.signOut();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
-  socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); });
+  socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running) status('Connected. Press Start.'); });
   // In stream mode the server's bot sends back what it sees, so the phone shows the same boxes as the tower.
   socket.on('bot:state', ({ state }) => { if (mode() === 'stream' && running) { botState = fromCompact(state); draw(botState); showState(botState); } });
   socket.on('bot:status', s => { if (mode() === 'stream') $('aiStatus').textContent = s.mode === 'server' ? 'The server bot is analysing this feed.' : `Server bot unavailable (${s.reason}); a tower screen is analysing the feed instead.`; });
-  socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; });
+  socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; status('Lost the server, reconnecting automatically…'); });
   socket.on('connect_error', err => {
     $('conn').textContent = err.message === 'unauthorized' ? 'Key or sign-in rejected' : 'Server offline'; $('conn').dataset.ok = '0';
     if (err.message === 'unauthorized' && auth.mode === 'key') log('The camera key was rejected. Use <b>Sign out</b> to enter it again.');
@@ -147,7 +154,11 @@ function showState(st) {
   for (const el of [$('risk'), $('banner')]) el.dataset.risk = lvl;
   $('riskLvl').textContent = lvl.toUpperCase();
   const what = !p ? 'Clear sky' : p.kind === 'audio' ? 'Drone heard, not seen' : `${p.size > 1 ? `Flock of ${p.size} ${p.classification}s` : p.classification}${p.heading ? ` · heading ${p.heading.name}` : ''}`;
-  $('riskWhat').textContent = what; $('bannerText').textContent = what;
+  $('riskWhat').textContent = what;
+  const wait = waitingMessage(st.motion ? { shake: st.motion.shake, learning: !st.motion.ready } : st);
+  $('bannerText').textContent = wait || what;
+  if (wait) $('banner').dataset.risk = 'wait';
+  if (running) status(`${mode() === 'stream' ? `Streaming · ${framesSent} frames sent · bot on the server` : 'Detecting on this device'} · ${st.tracks.length} object${st.tracks.length === 1 ? '' : 's'} in view`);
   $('riskWhy').textContent = (st.risk.reasons || []).join(' · ') || '—';
   $('sObjects').textContent = st.tracks.length;
   $('sEta').textContent = p && p.eta_seconds != null ? `${Math.round(p.eta_seconds)} s` : '—';
@@ -208,6 +219,7 @@ async function start() {
     $('empty').hidden = true; fitOverlay();
     if (mode() === 'local' && $('coco').getAttribute('aria-pressed') === 'true') await startCoco();
     t0 = performance.now(); running = true; $('start').textContent = 'Stop';
+    status(socket?.connected ? 'Starting… keep the camera still for a few seconds' : 'Started, but not connected to the server yet. It will send as soon as it connects.');
     try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
     log(`started · ${source === 'synthetic' ? $('scenario').value.replace(/_/g, ' ') : source}`);
     rafId = requestAnimationFrame(loop);
@@ -235,14 +247,14 @@ function streamFrame(t) {
 // The server sends a compact state; reshape it to what draw() and showState() expect.
 function fromCompact(c) {
   return { risk: { level: c.risk, reasons: c.reasons || [] }, primary: c.primary && { ...c.primary, heading: c.primary.heading ? { name: c.primary.heading } : null },
-    tracks: c.tracks, flocks: c.flocks, stats: { fps: c.fps } };
+    tracks: c.tracks, flocks: c.flocks, stats: { fps: c.fps }, shake: c.shake, learning: c.learning };
 }
 
 function stop() {
   running = false; cancelAnimationFrame(rafId); coco?.stop();
   video.srcObject?.getTracks().forEach(tr => tr.stop());
   wakeLock?.release().catch(() => {}); wakeLock = null;
-  $('start').textContent = 'Start'; log('stopped');
+  $('start').textContent = 'Start'; log('stopped'); status('Stopped.'); $('banner').dataset.risk = 'green'; $('bannerText').textContent = 'Ready';
 }
 $('start').addEventListener('click', () => (running ? stop() : start()));
 addEventListener('resize', fitOverlay);
