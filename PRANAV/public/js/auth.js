@@ -83,6 +83,11 @@ export function showAccount(account) {
   if (sub) sub.textContent = a ? `${a.sub ? `${a.sub} · ` : ''}Settings` : 'Sign in or sign up';
   document.documentElement.dataset.account = a?.role || '';
 }
+// Signed out: forget the remembered account so the tab and links don't show the last person's.
+export function forgetAccount() {
+  for (const k of ['skysentry.account', 'skysentry.role']) try { localStorage.removeItem(k); } catch {}
+  showAccount(); showRoleLinks(null);
+}
 // Ask an admin to switch this account to the other type. Resolves with the saved request.
 export async function requestSwitch(headers, to, note = '') {
   const r = await fetch('/api/role-requests', { method: 'POST', headers: { ...(await headers()), 'content-type': 'application/json' }, body: JSON.stringify({ to, note }) });
@@ -181,7 +186,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
         <div class="auth-actions"><a class="btn-link" href="/${own}.html">Open the ${own}</a><button class="ghost" id="ask" type="button">Request a switch to ${wanted}</button></div>
         <p class="auth-help" id="askStatus" role="status"></p>
         <p class="auth-help"><a href="/settings.html">Account settings</a> · <button class="linkbtn" id="out" type="button">Sign out</button></p>`);
-      card.querySelector('#out').onclick = () => clerk.signOut().then(() => location.assign('/'));
+      card.querySelector('#out').onclick = () => clerk.signOut().then(forgetAccount).then(() => location.assign('/'));
       const ask = card.querySelector('#ask'), status = card.querySelector('#askStatus');
       const waiting = () => { ask.disabled = true; status.textContent = `Request sent: switch to ${wanted}. An admin will review it. Once it’s approved, reload this page.`; };
       fetch('/api/role-requests/mine', { headers: await headers() }).then(r => r.json()).then(({ request }) => { if (request?.status === 'pending' && request.to === role) waiting(); }).catch(() => {});
@@ -211,7 +216,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       changeAirport: adminAirport ? () => { store.set(ADMIN_CAMERA_AIRPORT, ''); location.reload(); } : null,
       headers: adminAirport ? async () => ({ ...(await headers()), 'x-airport': adminAirport }) : headers,
       manageAccount: () => clerk.openUserProfile(),
-      signOut: () => clerk.signOut().then(() => location.reload())
+      signOut: () => clerk.signOut().then(forgetAccount).then(() => location.reload())
     };
   }
 

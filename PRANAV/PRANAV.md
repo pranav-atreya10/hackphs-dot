@@ -403,3 +403,10 @@ Everyone else still has exactly one account type (no switching).
 - 4 new unit tests for `role-requests.js` (approve keeps the airport, deny, can't decide twice, bad requests, cancel, MongoDB down); the full suite is 83/83.
 - Headless Chrome: the account tab shows the right type on camera (camera key), tower (open) and Demos, and the camera, tower, Demos, settings, admin and account pages have no script errors.
 - Not testable locally: the signed-in screens (request, wrong page, admin approve), which need the live Clerk secret key. Check them after deploy.
+
+## Sidebar on the Admin and Settings pages
+`admin.html` and `settings.html` now use the same sidebar as Tower and Camera: Home, Tower, Camera, Demos and Admin (admins only), with the Account tab at the bottom left. You can always get back to the dashboard. The current page is highlighted: **Admin** on the admin page, the **Account tab** on Settings. The sidebar's theme button and tower-only parts (status, airport picker, alert sound) are left out, because Settings has Appearance. On phones the sidebar folds into the menu button, like the other pages.
+
+**Fix:** signed out, the Account tab used to keep showing the last account used in this browser (e.g. "Admin"). Now signing out, deleting the account, or opening Settings or Admin signed out clears it (`forgetAccount()` in `js/auth.js`): the tab says "Not signed in" and the Admin tab hides.
+
+**Checked:** headless Chrome. On Admin the sidebar shows Home/Tower/Camera/Demos/Admin with Admin highlighted; signed out, both pages show "Not signed in" and no Admin tab, with no script errors. Tests: 83/83.

@@ -1,6 +1,6 @@
 // Account settings (settings.html): profile, airport access, security, sign out, and the light/dark theme.
 // The theme works for everyone (saved in this browser by js/theme.js); the account part needs Clerk sign-in.
-import { loadClerk, clerkAppearance, ROLE_LABEL, showAccount, requestSwitch } from '/js/auth.js';
+import { loadClerk, clerkAppearance, ROLE_LABEL, showAccount, requestSwitch, forgetAccount } from '/js/auth.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -23,6 +23,7 @@ async function main() {
   }
   const clerk = await loadClerk(cfg.publishableKey);
   if (!clerk.user) {
+    forgetAccount();
     show(`<p>Sign in to see your account settings.</p>
       <div class="actions"><a href="/account.html?mode=sign-in">Sign in</a><a class="ghost" href="/account.html">Sign up</a></div>`);
     return;
@@ -54,10 +55,10 @@ async function main() {
     <div class="rows"><div><span>Delete account</span><button class="danger-btn" id="delete" type="button">Delete my account</button></div></div>`);
   $('manage').onclick = () => clerk.openUserProfile({ appearance: clerkAppearance() });
   if (me.role && me.airport) switchSection(clerk, me);
-  $('out').onclick = () => clerk.signOut().then(() => location.assign('/'));
+  $('out').onclick = () => clerk.signOut().then(forgetAccount).then(() => location.assign('/'));
   $('delete').onclick = async () => {
     if (!confirm('Delete your SkySentry account? This can’t be undone.')) return;
-    try { await user.delete(); await clerk.signOut().catch(() => {}); location.assign('/'); }
+    try { await user.delete(); await clerk.signOut().catch(() => {}); forgetAccount(); location.assign('/'); }
     catch (err) { show(`<p class="danger">${esc(err.errors?.[0]?.longMessage || err.message || 'Could not delete the account.')}</p><div class="actions"><a href="/settings.html">Back</a></div>`); }
   };
 }
