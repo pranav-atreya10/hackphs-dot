@@ -21,6 +21,10 @@ const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected
 let engine = null, sky = null, coco = null, running = false, rafId = 0, t0 = 0, sent = 0, wakeLock = null;
 let corridor = JSON.parse(store.get('skysentry.corridor', 'null')) || WEBCAM_CORRIDOR;
 let drawing = null, socket = null, auth = null, botState = null, streaming = false, inFlight = false, lastSent = 0, framesSent = 0;
+// Stream mode: if the server bot sends nothing back for this long (it hands over when the server is too slow),
+// this device runs the detector itself so the screen still shows boxes and risk. Alerts still come from the server.
+const BOT_STALE_MS = 3000;
+let lastBotAt = 0, botReason = null;
 const frameCanvas = document.createElement('canvas'), frameCtx = frameCanvas.getContext('2d');
 const STREAM_W = 640, STREAM_FPS = 15;
 
@@ -95,8 +99,8 @@ async function connect() {
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running) status('Connected. Press Start.'); });
   // In stream mode the server's bot sends back what it sees, so the phone shows the same boxes as the tower.
-  socket.on('bot:state', ({ state }) => { if (mode() === 'stream' && running) { botState = fromCompact(state); draw(botState); showState(botState); } });
-  socket.on('bot:status', s => { if (mode() === 'stream') $('aiStatus').textContent = s.mode === 'server' ? 'The server bot is analysing this feed.' : `Server bot unavailable (${s.reason}); a tower screen is analysing the feed instead.`; });
+  socket.on('bot:state', ({ state }) => { if (mode() === 'stream' && running) { lastBotAt = performance.now(); botState = fromCompact(state); draw(botState); showState(botState); } });
+  socket.on('bot:status', s => { botReason = s.mode === 'server' ? null : s.reason; if (mode() === 'stream') $('aiStatus').textContent = s.mode === 'server' ? 'The server bot is analysing this feed.' : `Server bot unavailable (${s.reason}); a tower screen is analysing the feed instead.`; });
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; status('Lost the server, reconnecting automatically…'); });
   socket.on('connect_error', err => {
     $('conn').textContent = err.message === 'unauthorized' ? 'Key or sign-in rejected' : 'Server offline'; $('conn').dataset.ok = '0';
@@ -175,7 +179,7 @@ function draw(state) {
   }
 }
 
-function showState(st) {
+function showState(st, onDevice = false) {
   const lvl = st.risk.level, p = st.primary;
   for (const el of [$('risk'), $('banner')]) el.dataset.risk = lvl;
   $('riskLvl').textContent = lvl.toUpperCase();
@@ -184,7 +188,10 @@ function showState(st) {
   const wait = waitingMessage(st.motion ? { shake: st.motion.shake, learning: !st.motion.ready } : st);
   $('bannerText').textContent = wait || what;
   if (wait) $('banner').dataset.risk = 'wait';
-  if (running) status(`${mode() === 'stream' ? `Streaming · ${framesSent} frames sent · bot on the server` : 'Detecting on this device'} · ${st.tracks.length} object${st.tracks.length === 1 ? '' : 's'} in view`);
+  const where = mode() !== 'stream' ? 'Detecting on this device'
+    : onDevice ? `Streaming · ${framesSent} frames sent · server bot not responding${botReason ? ` (${botReason})` : ''}, so this device is checking`
+    : `Streaming · ${framesSent} frames sent · bot on the server`;
+  if (running) status(`${where} · ${st.tracks.length} object${st.tracks.length === 1 ? '' : 's'} in view`);
   $('riskWhy').textContent = (st.risk.reasons || []).join(' · ') || '—';
   $('sObjects').textContent = st.tracks.length;
   $('sEta').textContent = p && p.eta_seconds != null ? `${Math.round(p.eta_seconds)} s` : '—';
@@ -205,8 +212,11 @@ function loop() {
   } else if (video.readyState >= 2) {
     smallCtx.drawImage(video, 0, 0, small.width, small.height);
   } else { rafId = requestAnimationFrame(loop); return; }
-  if (mode() === 'stream') { streamFrame(t); if (!botState) draw(null); }
-  else { const st = engine.process(smallCtx.getImageData(0, 0, small.width, small.height), t); draw(st); showState(st); }
+  const now = performance.now();
+  if (mode() === 'stream') streamFrame(t);
+  if (mode() === 'stream' && now - lastBotAt < BOT_STALE_MS) { /* the bot:state handler draws */ }
+  else if (mode() === 'stream' && now - t0 < BOT_STALE_MS) draw(null);   // give the server bot a moment first
+  else { const st = engine.process(smallCtx.getImageData(0, 0, small.width, small.height), t); draw(st); showState(st, mode() === 'stream'); }
   rafId = requestAnimationFrame(loop);
 }
 
@@ -217,7 +227,7 @@ async function start() {
     engine = new DetectionEngine();
     applyCamera();
     if (mode() === 'local') engine.on('event', sendEvent);
-    botState = null; framesSent = 0; inFlight = false;
+    botState = null; framesSent = 0; inFlight = false; lastBotAt = 0; botReason = null;
     video.hidden = source === 'synthetic'; srcCanvas.hidden = source !== 'synthetic';
     if (source === 'synthetic') {
       srcCanvas.width = 1280; srcCanvas.height = 960;

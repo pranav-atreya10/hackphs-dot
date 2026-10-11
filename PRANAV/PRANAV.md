@@ -298,3 +298,12 @@ It checks free disk space before starting and every second while rendering, and 
 - Stop goes back to a clean black view with "Stopped. Press Start to go again." No frozen frame or corridor is left behind.
 
 **Checked:** headless Chrome pressed Start and Stop on the synthetic sky in stream mode, with screenshots at each step. Tests: 74/74.
+
+## Camera no longer gets stuck on "Waiting for the server bot…"
+**What was wrong:** in stream mode, the camera only shows boxes and risk that the server's bot sends back. The bot steps aside when the server is too slow (over 60 ms per frame on average) or hits an error. After that it sends nothing back, and only an open tower screen analyses the feed. So with no tower open, the camera sat on "Waiting for the server bot…" with no boxes. Before the last fix, the pill said "Ready" in the same situation, which hid the problem.
+
+**Fix (js/camera.js):** if the server bot hasn't sent anything for 3 seconds, the camera runs the same detector on the device. Boxes, the corridor and the risk pill all work, and the status line says "server bot not responding, so this device is checking" (with the reason when the server gives one). As soon as the bot sends results again, the camera switches back to them.
+
+**Still true:** alerts (tower alarm, voice, reports) come from the server bot or a tower's fallback. The on-device check is display only, so the same alert is never sent twice. If the live server keeps handing over, check DigitalOcean's runtime logs for `server bot for … handed over to towers:`. The usual fix is a bigger instance.
+
+**Checked:** headless Chrome on a local server with `SERVER_BOT=off` shows boxes and a red risk after 3 s. With the bot on, the server's results are used as before. Tests: 74/74.
