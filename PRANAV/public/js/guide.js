@@ -4,6 +4,10 @@
   const host = document.createElement('div');
   host.id = 'skysentry-guide';
   const root = host.attachShadow({ mode: 'open' });
+  // Keys typed in the chat stay in the chat. The landing film listens on the page for Space (play/pause) and the
+  // arrow keys (scenes); from outside a shadow root a key press looks like it came from this host, not the text
+  // box, so the film used to swallow every space you typed.
+  for (const type of ['keydown', 'keyup', 'keypress']) host.addEventListener(type, e => e.stopPropagation());
   root.innerHTML = `
 <style>
   :host{--paper:#f4f4f5;--card:#fff;--ink:#0a0a0a;--on-ink:#fff;--mute:#6b7280;--line:#e5e7eb;
