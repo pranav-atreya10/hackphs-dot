@@ -89,16 +89,13 @@ async function connect() {
     status(message === 'Camera key needed' ? 'Enter the camera key above, then press Connect.' : 'Sign in above to connect this camera.');
   } });
   $('conn').textContent = 'Connecting…';
-  $('who').textContent = auth.label;
   $('signout').disabled = false;
   $('signout').textContent = auth.mode === 'key' ? 'Change camera key' : 'Sign out';
   $('signout').onclick = () => auth.signOut();
-  $('accountSecurity').hidden = !auth.manageAccount;
   if (auth.changeAirport) {   // admins running a camera: switch which airport it reports to
     const b = Object.assign(document.createElement('button'), { type: 'button', className: 'linkbtn', textContent: 'Change airport' });
     b.onclick = auth.changeAirport; $('signout').before(b);
   }
-  $('accountSecurity').onclick = () => auth.manageAccount?.();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running) status('Connected. Press Start.'); });

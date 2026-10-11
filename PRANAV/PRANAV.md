@@ -385,3 +385,21 @@ It checks free disk space before starting and every second while rendering, and 
 Everyone else still has exactly one account type (no switching).
 
 **Checked:** headless Chrome. The Demos sidebar shows Home/Tower/Camera/Demos/Admin for admins, Home/Tower/Demos for tower accounts and Home/Camera/Demos for camera accounts. Tests: 79/79. The signed-in admin camera flow needs the live Clerk secret key, so check it on the deployed site.
+
+## Account type shown everywhere, an Account tab, and switch requests
+**Account tab (bottom left):** on the Tower, Camera and Demos pages, the sidebar footer is a clickable **Account** tab. It shows the account type in bold (Camera station, Tower dashboard, Admin, Camera station (key), Tower (key) or Open dashboard) and, under it, the airport. It opens Settings. The Demos page has no sign-in, so it shows the last account used in this browser.
+
+**Settings:** an **Account type** badge at the top of the Account panel ("Camera station", "Tower dashboard", "Admin", or "Admin · Tower dashboard" for an admin who also joined an airport).
+
+**Switching account type (asking an admin):**
+- *User:* Settings → "Switch account type": an optional note, then **Request switch**. It then shows "Waiting for an admin" with **Cancel request**. A declined or approved request is mentioned the next time.
+- *Wrong page:* opening a page your account can't use (e.g. a camera account on the tower) says "This page is for tower dashboard accounts" and shows your type. It offers **Open the camera**, **Request a switch to Tower dashboard**, Account settings and Sign out.
+- *Admin:* the **Admin** sidebar tab shows a red count of waiting requests. `admin.html` has a **Switch requests** list at the top with each person's name and email, airport, from → to, note and age, and **Approve** / **Deny** buttons. Approving changes their role right away and keeps their airport.
+- *Server:* `role-requests.js` stores one request per user in MongoDB (`role_requests`). Routes: `POST /api/role-requests`, `GET` and `DELETE /api/role-requests/mine`, `GET /api/admin/role-requests`, and `POST /api/admin/role-requests/:id/approve|deny`. Approving writes the new role to Clerk and clears the access cache.
+
+**Removed:** the sidebar "Account security" button. Settings → Profile and security does the same.
+
+**Checked:**
+- 4 new unit tests for `role-requests.js` (approve keeps the airport, deny, can't decide twice, bad requests, cancel, MongoDB down); the full suite is 83/83.
+- Headless Chrome: the account tab shows the right type on camera (camera key), tower (open) and Demos, and the camera, tower, Demos, settings, admin and account pages have no script errors.
+- Not testable locally: the signed-in screens (request, wrong page, admin approve), which need the live Clerk secret key. Check them after deploy.

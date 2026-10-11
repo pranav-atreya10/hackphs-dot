@@ -35,6 +35,14 @@
   td.acts{text-align:right;white-space:nowrap} td.acts button{padding:5px 10px;font-size:.84rem;margin-left:4px}
   button.danger{background:var(--card);color:var(--stop);border-color:var(--line)} button.danger:hover{opacity:1;background:var(--hover)}
   @media (max-width:640px){table,tbody,tr,td{display:block} thead{display:none} tr{border-bottom:1px solid var(--line);padding:8px 0} td{border:0;padding:4px 0} td.acts{text-align:left}}
+  .count{display:inline-block;min-width:22px;padding:0 7px;border-radius:99px;background:var(--stop);color:#fff;font:600 .78rem/22px var(--sans);text-align:center;vertical-align:2px}
+  .count:empty{display:none}
+  .reqs{list-style:none;margin:0;padding:0;display:grid}
+  .reqs li{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--line)}
+  .reqs li > div:first-child{display:grid;gap:3px;min-width:0} .reqs b{font-weight:600} .reqs span{color:var(--mute);font-size:.88rem} .reqs q{color:var(--ink);font-size:.9rem}
+  .reqs .acts{display:flex;gap:6px;flex:none} .reqs .acts button{padding:6px 12px}
+  .reqs .empty{color:var(--mute);border:0}
+  @media (max-width:600px){.reqs li{flex-direction:column;align-items:stretch}}
   .new{animation:flashrow 1.6s ease-out} @keyframes flashrow{from{background:color-mix(in srgb,var(--go) 22%,transparent)}}
   @media (prefers-reduced-motion:reduce){.new{animation:none}}
 </style>
@@ -48,6 +56,12 @@
   <h1>Admin</h1>
   <p>Create airports and the join codes their staff use when they sign up.</p>
   <div id="gate" class="panel" aria-live="polite"><p>Loading…</p></div>
+  <section class="panel" id="reqPanel" hidden>
+    <h2>Switch requests <span class="count" id="reqCount"></span></h2>
+    <p>People asking to change between camera station and tower dashboard. Approving switches their account right away; they keep their airport.</p>
+    <ul class="reqs" id="reqs"></ul>
+    <p class="err" id="reqErr" role="alert"></p>
+  </section>
   <section class="panel" id="addPanel" hidden>
     <h2>Add an airport</h2>
     <form class="add" id="add">

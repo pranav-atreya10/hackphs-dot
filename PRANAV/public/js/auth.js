@@ -71,6 +71,26 @@ export function showRoleLinks(role) {
   for (const el of document.querySelectorAll('[data-admin-only]')) el.hidden = role !== 'admin';
 }
 
+// The account tab at the bottom of the sidebar: what kind of account this is, and where Settings are.
+// Remembered so pages without sign-in (Demos) can show it too.
+export const ROLE_LABEL = { camera: 'Camera station', dashboard: 'Tower dashboard', admin: 'Admin' };
+export function showAccount(account) {
+  if (account) store.set('skysentry.account', JSON.stringify(account));
+  let a = account;
+  if (!a) try { a = JSON.parse(store.get('skysentry.account') || 'null'); } catch { a = null; }
+  const who = document.getElementById('who'), sub = document.getElementById('whoSub');
+  if (who) who.textContent = a?.type || 'Not signed in';
+  if (sub) sub.textContent = a ? `${a.sub ? `${a.sub} · ` : ''}Settings` : 'Sign in or sign up';
+  document.documentElement.dataset.account = a?.role || '';
+}
+// Ask an admin to switch this account to the other type. Resolves with the saved request.
+export async function requestSwitch(headers, to, note = '') {
+  const r = await fetch('/api/role-requests', { method: 'POST', headers: { ...(await headers()), 'content-type': 'application/json' }, body: JSON.stringify({ to, note }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Could not send the request.');
+  return data.request;
+}
+
 // Admins can run a camera for any airport (handy for demos). They pick it once; it's remembered in this browser.
 const ADMIN_CAMERA_AIRPORT = 'skysentry.adminCameraAirport';
 async function pickCameraAirport({ mount, headers }) {
@@ -94,7 +114,7 @@ async function pickCameraAirport({ mount, headers }) {
   });
 }
 
-if (typeof document !== 'undefined' && document.documentElement) showRoleLinks(store.get('skysentry.role'));   // before sign-in finishes, so nothing flashes
+if (typeof document !== 'undefined' && document.documentElement) { showRoleLinks(store.get('skysentry.role')); showAccount(); }   // before sign-in finishes, so nothing flashes
 
 export function panel(mount, html) {
   mount.hidden = false;
@@ -154,14 +174,36 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const adminAirport = asAdmin && role === 'camera' ? await pickCameraAirport({ mount, headers }) : null;
     if (!asAdmin && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
     if (!asAdmin && me.role !== role) {
-      panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
-        .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
+      const mine = ROLE_LABEL[me.role], wanted = ROLE_LABEL[role], own = me.role === 'camera' ? 'camera' : 'tower';
+      showAccount({ role: me.role, type: mine, sub: me.airport });
+      const card = panel(mount, `<h2>This page is for ${wanted.toLowerCase()} accounts</h2>
+        <p>You’re signed in as a <b class="type-badge">${mine}</b> at ${me.airport}. Open your own page, or ask an admin to switch this account.</p>
+        <div class="auth-actions"><a class="btn-link" href="/${own}.html">Open the ${own}</a><button class="ghost" id="ask" type="button">Request a switch to ${wanted}</button></div>
+        <p class="auth-help" id="askStatus" role="status"></p>
+        <p class="auth-help"><a href="/settings.html">Account settings</a> · <button class="linkbtn" id="out" type="button">Sign out</button></p>`);
+      card.querySelector('#out').onclick = () => clerk.signOut().then(() => location.assign('/'));
+      const ask = card.querySelector('#ask'), status = card.querySelector('#askStatus');
+      const waiting = () => { ask.disabled = true; status.textContent = `Request sent: switch to ${wanted}. An admin will review it. Once it’s approved, reload this page.`; };
+      fetch('/api/role-requests/mine', { headers: await headers() }).then(r => r.json()).then(({ request }) => { if (request?.status === 'pending' && request.to === role) waiting(); }).catch(() => {});
+      ask.onclick = async () => {
+        ask.disabled = true;
+        try { await requestSwitch(headers, role); waiting(); } catch (err) { status.textContent = err.message; ask.disabled = false; }
+      };
       throw new Error('wrong role');
     }
     store.set('skysentry.role', me.admin ? 'admin' : me.role);   // the landing page's Dashboard button and showRoleLinks read this
     showRoleLinks(me.admin ? 'admin' : me.role);
     mount.hidden = true;
     const airport = asAdmin ? adminAirport : me.airport;
+    showAccount(asAdmin ? { role: 'admin', type: 'Admin', sub: airport || 'All airports' } : { role: me.role, type: ROLE_LABEL[me.role], sub: me.airport });
+    if (me.admin) {   // pending switch requests, as a count on the Admin tab
+      fetch('/api/admin/role-requests', { headers: await headers() }).then(r => r.json()).then(({ requests = [] }) => {
+        for (const a of document.querySelectorAll('a[href="/admin.html"]')) {
+          a.querySelector('.count')?.remove();
+          if (requests.length) a.append(Object.assign(document.createElement('span'), { className: 'count', textContent: requests.length, title: `${requests.length} switch request${requests.length > 1 ? 's' : ''}` }));
+        }
+      }).catch(() => {});
+    }
     return {
       mode: 'clerk', role: me.admin ? 'admin' : me.role, airport,
       label: asAdmin ? `Admin · ${airport || 'all airports'}` : `${me.airport} · signed in`,
@@ -194,6 +236,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       store.set('skysentry.cameraKey', key); store.set('skysentry.airport', airport);
     }
     mount.hidden = true; showRoleLinks('camera');
+    showAccount({ role: 'camera', type: 'Camera station', sub: `${airport || 'no airport'} · camera key` });
     return {
       mode: 'key', role: 'camera', airport: airport || null, label: airport ? `${airport} · camera key` : 'camera key',
       socketAuth: async extra => ({ key, airport: airport || undefined, ...extra }),
@@ -213,6 +256,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
   }
   if (key) store.set('skysentry.towerKey', key);
   mount.hidden = true; showRoleLinks(null);
+  showAccount({ role: 'dashboard', type: key ? 'Tower (key)' : 'Open dashboard', sub: 'All airports' });
   return {
     mode: 'open', role: null, airport: null, label: key ? 'tower key' : 'open dashboard',
     socketAuth: async extra => ({ key: key || undefined, ...extra }),
