@@ -2,7 +2,7 @@
 //   /account.html                 -> Clerk sign-up
 //   /account.html?mode=sign-in    -> Clerk sign-in
 // After sign-up, the same "finish setting up" step as the camera/tower pages (role + airport join code),
-// then a small account card with links into the tower or camera page.
+// then on to the account settings page (settings.html).
 import { loadClerk, clerkAppearance, panel, finishSetup } from '/js/auth.js';
 
 const mount = document.getElementById('auth');
@@ -31,21 +31,10 @@ async function main() {
   }
 
   const headers = async () => ({ authorization: `Bearer ${await clerk.session.getToken()}` });
-  let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
-  if (!me.role || !me.airport) me = await finishSetup({ mount, headers });
+  const me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
+  if (!me.role || !me.airport) await finishSetup({ mount, headers });
 
-  const email = clerk.user.primaryEmailAddress?.emailAddress || clerk.user.username || 'Signed in';
-  const tower = me.role === 'dashboard';
-  const card = panel(mount, `<h2>You’re all set</h2>
-    <div class="acct">
-      <div><span>Account</span><b>${esc(email)}</b></div>
-      <div><span>Role</span><b>${tower ? 'Tower dashboard' : 'Camera station'}</b></div>
-      <div><span>Airport</span><b>${esc(me.airport)}</b></div>
-    </div>
-    <div class="actions"><a href="${tower ? '/tower.html' : '/camera.html'}">${tower ? 'Open the tower' : 'Start the camera'}</a>
-      <button class="ghost" id="manage" type="button">Manage account</button><button class="ghost" id="out" type="button">Sign out</button></div>`);
-  card.querySelector('#manage').onclick = () => clerk.openUserProfile({ appearance: clerkAppearance() });
-  card.querySelector('#out').onclick = () => clerk.signOut().then(() => location.assign('/'));
+  location.replace('/settings.html');
 }
 
 main().catch(err => panel(mount, `<h2>Something went wrong</h2><p>${esc(err.message || err)}</p>

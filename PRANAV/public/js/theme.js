@@ -1,5 +1,5 @@
 // Light / dark / system theme. Loaded (not deferred) in <head> so the page never flashes the wrong theme.
-// Buttons marked [data-theme-toggle] cycle System → Light → Dark; [data-side-toggle] opens the mobile sidebar.
+// Saved from the settings page; on the dashboards, buttons marked [data-theme-toggle] also cycle System → Light → Dark; [data-side-toggle] opens the mobile sidebar.
 // Fires a "themechange" event on <html> so canvas-drawn things (charts) can recolour.
 (() => {
   const KEY = 'skysentryTheme', root = document.documentElement, dark = matchMedia('(prefers-color-scheme: dark)');
@@ -17,15 +17,15 @@
     root.dispatchEvent(new CustomEvent('themechange', { detail: { dark: isDark() } }));
   }
   let current = read();   // kept in memory too, so the toggle still works when storage is blocked
-  window.skysentryTheme = { isDark };
+  // The settings page (settings.html) reads and sets the mode directly.
+  const set = mode => { if (!label[mode]) return; current = mode; try { localStorage.setItem(KEY, mode); } catch {} apply(mode); };
+  window.skysentryTheme = { isDark, mode: () => current, set };
   apply(current);
   dark.addEventListener('change', () => { if (current === 'system') apply('system'); });
   document.addEventListener('DOMContentLoaded', () => {
     apply(current);
     document.querySelectorAll('[data-theme-toggle]').forEach(b => b.addEventListener('click', () => {
-      current = { system: 'light', light: 'dark', dark: 'system' }[current];
-      try { localStorage.setItem(KEY, current); } catch {}
-      apply(current);
+      set({ system: 'light', light: 'dark', dark: 'system' }[current]);
     }));
     document.querySelectorAll('[data-side-toggle]').forEach(b => b.addEventListener('click', () => {
       const side = document.getElementById(b.getAttribute('aria-controls'));
