@@ -18,6 +18,7 @@
   --go:#22c55e;--warn:#eab308;--stop:#ef4444;--blue:#60a5fa;--flash:#3a1414;--shadow:none;color-scheme:dark}
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--ink);text-underline-offset:3px}
 h1,h2,h3{letter-spacing:-.02em}

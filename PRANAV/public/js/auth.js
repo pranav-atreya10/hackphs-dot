@@ -61,6 +61,17 @@ export function clerkAppearance() {
   return { variables: { colorPrimary: v('--accent'), colorPrimaryForeground: v('--on-accent'), colorBackground: v('--card'), colorForeground: v('--ink'),
     colorMutedForeground: v('--mute'), colorInput: v('--card'), colorInputForeground: v('--ink'), colorBorder: v('--line'), fontFamily: v('--sans'), borderRadius: '8px' } };
 }
+// Each account type sees only its own side: camera accounts get no tower links, tower accounts no camera links.
+// Admins, tower-key and open dashboards see both. Runs on load from the role this browser last signed in with,
+// then again with the real one from signIn().
+export function showRoleLinks(role) {
+  const hide = { camera: '/tower.html', dashboard: '/camera.html' }[role];
+  document.documentElement.dataset.role = role || '';
+  for (const a of document.querySelectorAll('a[href^="/tower.html"], a[href^="/camera.html"]')) a.hidden = Boolean(hide) && a.getAttribute('href').startsWith(hide);
+}
+
+if (typeof document !== 'undefined' && document.documentElement) showRoleLinks(store.get('skysentry.role'));   // before sign-in finishes, so nothing flashes
+
 export function panel(mount, html) {
   mount.hidden = false;
   mount.innerHTML = `<div class="auth-card">${MARK}${html}</div>`;
@@ -121,10 +132,11 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
       throw new Error('wrong role');
     }
-    store.set('skysentry.role', adminTower ? 'dashboard' : me.role);   // the landing page's Dashboard button reads this
+    store.set('skysentry.role', adminTower ? 'admin' : me.role);   // the landing page's Dashboard button and showRoleLinks read this
+    showRoleLinks(adminTower || me.admin ? 'admin' : me.role);
     mount.hidden = true;
     return {
-      mode: 'clerk', airport: adminTower ? null : me.airport, label: adminTower ? 'Admin · all airports' : `${me.airport} · signed in`,
+      mode: 'clerk', role: adminTower || me.admin ? 'admin' : me.role, airport: adminTower ? null : me.airport, label: adminTower ? 'Admin · all airports' : `${me.airport} · signed in`,
       socketAuth: async extra => ({ token: await token(), ...extra }),
       headers,
       manageAccount: () => clerk.openUserProfile(),
@@ -152,9 +164,9 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
       }));
       store.set('skysentry.cameraKey', key); store.set('skysentry.airport', airport);
     }
-    mount.hidden = true;
+    mount.hidden = true; showRoleLinks('camera');
     return {
-      mode: 'key', airport: airport || null, label: airport ? `${airport} · camera key` : 'camera key',
+      mode: 'key', role: 'camera', airport: airport || null, label: airport ? `${airport} · camera key` : 'camera key',
       socketAuth: async extra => ({ key, airport: airport || undefined, ...extra }),
       headers: async () => ({ 'x-api-key': key, ...(airport ? { 'x-airport': airport } : {}) }),
       signOut: () => { store.set('skysentry.cameraKey', ''); location.reload(); }
@@ -171,9 +183,9 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     });
   }
   if (key) store.set('skysentry.towerKey', key);
-  mount.hidden = true;
+  mount.hidden = true; showRoleLinks(null);
   return {
-    mode: 'open', airport: null, label: key ? 'tower key' : 'open dashboard',
+    mode: 'open', role: null, airport: null, label: key ? 'tower key' : 'open dashboard',
     socketAuth: async extra => ({ key: key || undefined, ...extra }),
     headers: async () => (key ? { 'x-api-key': key } : {}),
     signOut: () => { store.set('skysentry.towerKey', ''); location.reload(); }

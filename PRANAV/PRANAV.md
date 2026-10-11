@@ -358,3 +358,17 @@ It checks free disk space before starting and every second while rendering, and 
 - The map has no airport coordinates, so it starts at Princeton and centers on the picked airport's first camera once it reports.
 
 **Checked:** headless Chrome on a local server with KPCT, KTTN and KEWR. With "All airports" the feed showed both a KPCT and a KTTN alert; with KTTN only the KTTN one; typing `kewr` switched to KEWR. Tests: 79/79.
+
+## Each account type only sees its own side
+**Camera accounts** (and camera-key devices) no longer see anything that leads to the tower: no **Tower** link in the sidebar of any page. **Tower accounts** no longer see the camera side: no **Camera** sidebar link, no "Add a phone camera" QR card on the tower, and no "Use this demo" buttons on the Demos page (those open the camera). **Admins, tower-key and open dashboards** still see both.
+
+**How:**
+- `showRoleLinks(role)` in `js/auth.js` hides every link to the other role's page.
+- It runs as soon as a page loads, using the role this browser last signed in with, so nothing flashes. It runs again after sign-in with the real role.
+- `signIn()` now returns `role` (`camera`, `dashboard`, `admin` or `null`).
+- A global `[hidden]{display:none!important}` in `css/app.css` stops rules like `.side-nav a{display:flex}` from overriding `hidden`. The same bug caused the stuck camera hint and the admin panels.
+- The camera's demo hint no longer says "open Tower".
+
+**Switching account types:** not allowed. An account's type and airport are set once, with the join code. To use the other side, sign in with a different account.
+
+**Checked:** headless Chrome. A camera-key session showed Home/Camera/Demos. An open dashboard showed all links plus the QR card. A tower account on Demos showed Home/Tower/Demos and 0 of 6 demo buttons; a camera account showed 6 of 6. Tests: 79/79.

@@ -277,6 +277,7 @@ async function setupAirports() {
 /* ---------- socket ---------- */
 async function connect() {
   auth = await signIn({ role: 'dashboard', mount: $('auth') });
+  $('addCamera').hidden = auth.role === 'dashboard';   // tower accounts don't set up cameras; admins and keys still can
   $('who').textContent = auth.label;
   $('accountSecurity').hidden = !auth.manageAccount;
   $('accountSecurity').onclick = () => auth.manageAccount?.();

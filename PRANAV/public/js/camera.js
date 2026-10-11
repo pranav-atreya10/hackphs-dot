@@ -49,7 +49,7 @@ fetch('/clips/clips.json').then(r => r.json()).then(list => {
   const requested = new URLSearchParams(location.search).get('demo');
   if (requested && list.some(c => c.file === requested)) {
     $('demoClip').value = requested; $('source').value = 'demo'; showSourceFields();
-    $('empty').textContent = 'Recorded demo selected. Press Start, then open Tower to see the model.';
+    $('empty').textContent = 'Recorded demo selected. Press Start to run the detector on it.';
   }
 }).catch(() => { $('source').querySelector('option[value="demo"]').disabled = true; });
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
