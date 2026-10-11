@@ -18,6 +18,12 @@ body{-webkit-font-smoothing:antialiased}
 ::selection{background:color-mix(in srgb,var(--ink-s) 16%,transparent)}
 
 /* top bar */
+/* the film's own .bar{display:flex} also matched this header and shrink-wrapped its row off the content column;
+   block layout + no body margin puts the logo on the same left edge as the hero text */
+html body{margin:0}
+header.bar{display:block;width:auto}
+header.bar .bar-in{box-sizing:content-box;gap:32px}
+.bar-cta{padding:7px 14px;font-size:.88rem;margin-left:4px;white-space:nowrap}
 header.bar{background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px)}
 .brand{font:600 1.15rem/1 var(--sans);letter-spacing:-.02em;gap:9px}
 .brand .mark{width:20px;height:24px;fill:currentColor;flex:none}
@@ -27,7 +33,7 @@ header.bar{background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-f
 .theme-btn:hover{background:var(--hover);color:var(--ink-s)}
 .theme-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .theme-btn:focus-visible{outline:2px solid var(--ink-s);outline-offset:2px}
-@media (max-width:820px){.bar-in .tag{margin-left:auto}}
+@media (max-width:820px){.bar-cta{margin-left:auto} header.bar .bar-in{gap:10px}}
 
 /* hero */
 .eyebrow-s{font:500 .8rem var(--sans);letter-spacing:0;color:var(--mute-s)}
@@ -82,6 +88,30 @@ a.step3:hover{border-color:var(--line-2);box-shadow:0 8px 28px -14px rgba(0,0,0,
 .load-title .mark{width:.72em;height:.86em;fill:currentColor}
 #film .load-sub{color:var(--mute-s)}
 #film .load-track{background:linear-gradient(90deg,transparent,var(--ink-s),transparent);background-size:200%}
+
+/* ---------- breathing room: fewer things per screen, more space between them ---------- */
+.hero{padding-block:104px 72px;gap:72px}
+.hero p{margin-top:24px}
+.cta{margin-top:36px}
+.sheet div{padding:16px 0}
+.film-note{margin-top:14px}
+.sec{padding-block:148px 0}
+.sec-head{gap:14px;margin-bottom:56px}
+.steps3{gap:24px}
+.step3{padding:30px;gap:14px}
+.step3 p{line-height:1.65}
+.step3 code{padding:0;border:0;background:none;font-size:.72rem;letter-spacing:.01em}
+.facts{gap:56px;padding-top:36px}
+.fact{gap:12px}
+.risk-row{padding-block:26px}
+.split2{gap:88px}
+.journey li{padding-bottom:34px;padding-left:40px}
+.stack{gap:0 56px}
+.stack div{padding-block:24px}
+.limits{padding:28px 30px}
+.faq summary{padding-block:26px}
+.foot{margin-top:148px;padding-block:32px 8px}
+@media (max-width:860px){.hero{padding-block:64px 40px;gap:40px}.sec{padding-block:104px 0}.sec-head{margin-bottom:40px}.split2{gap:48px}.foot{margin-top:104px}}
 
 /* ---------- motion ----------
    Hero plays once on load. Everything below is scroll-driven CSS (animation-timeline): no JS, nothing can get stuck

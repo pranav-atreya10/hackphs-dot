@@ -202,3 +202,29 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - I scoped the top-bar rules to `header.bar` because the film also uses a `.bar` class for its progress segments.
 
 **Checked:** headless-Chrome captures at the top of the page and scrolled to three depths, plus Tower after load. The 69-test suite passes. This is CSS only; no detection code was touched.
+
+## Landing polish, alt text and sitemap
+**Logo alignment:** the film's stylesheet has a global `.bar{display:flex}` that also hit the landing header. It shrink-wrapped the header row and centered it, so the logo started 118px to the right of the hero text. The header is now block layout, and the body's default 8px margin is gone. The logo, hero text, sections and the right edge all share one column.
+
+**Less crowded:**
+- The nav has 4 links (Film, How it works, Demos, FAQ) plus one "Open the tower" button. It replaces 7 links and the hackPHS chip.
+- The hero has 2 buttons instead of 3.
+- The "Live system" cards moved from right after the film to just before "Built with". Two 3-card rows no longer sit back to back.
+- The tech labels in the cards are plain small text instead of boxed chips.
+- Sections are about 50% further apart, with more padding inside cards, rows and the timeline.
+- The film's own 3D scene is unchanged; these are `sync-web.mjs` and `css/site.css` changes.
+
+**Alt text / accessibility:**
+- Each Tower live feed is one labeled image ("Live video from camera …").
+- The QR code has alt text.
+- Demo videos are labeled with their title and what to expect.
+- The camera view is labeled.
+- Decorative icons are hidden from screen readers because the text beside them already says the same thing.
+- Every page has a meta description.
+
+**Sitemap:** `GET /sitemap.xml` and `GET /robots.txt` (`sitemap.js`, wired in `server.js`).
+- The URLs must be absolute, so they use `SITE_URL` when set; otherwise they use the domain the request came in on, honoring DigitalOcean's https header.
+- A forged Host header gets a 400.
+- robots.txt keeps crawlers out of `/api/`.
+- 5 new tests; the full suite is 74/74.
+- Optional: set `SITE_URL=https://your-domain` once there's a custom domain.
