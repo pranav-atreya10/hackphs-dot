@@ -54,6 +54,8 @@ If anything here conflicts with a request, stop and ask the detection lead (Viva
   bird-only audio.
 - ESC-50 must be the complete, CRC-verified archive (all 40 clips per category). A partially
   downloaded copy is never frozen.
+- **ESC-50 folds 1–3 are test-only** (the stress mixes use them). Any noise augmentation in training
+  (e.g. v3) may use **only folds 4–5**, so no test noise clip is ever seen in training.
 - **Images:** tagged by **target size** (box area / image area: small < 1%, medium 1–10%,
   large > 10%) and by **condition** (clear sky, cloudy, backlit/sunny, cluttered background).
   Tags are stored in the manifest, not inferred at run time.
