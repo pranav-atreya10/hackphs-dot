@@ -41,13 +41,29 @@ def save_manifest(man, note):
     print(f"wrote {MANIFEST.relative_to(ROOT)} ({note})")
 
 
-def refuse_if_frozen(man, tier, group):
-    if man["tiers"].get(tier, {}).get(group):
-        raise SystemExit(f"{tier}/{group} is already frozen. Changing it needs Vivan's approval + a CHANGELOG entry.")
+def refuse_if_frozen(man, tier, group, refreeze_reason=None):
+    old = man["tiers"].get(tier, {}).get(group)
+    if not old:
+        return
+    if not refreeze_reason:
+        raise SystemExit(f"{tier}/{group} is already frozen. Changing it needs Vivan's approval + a CHANGELOG entry "
+                         "(then pass --refreeze-reason).")
+    arch = MANIFEST.parent / "test_sets_archive"
+    arch.mkdir(exist_ok=True)
+    stamp = now_utc().replace(":", "")
+    (arch / f"{tier}_{group}_{stamp}.json").write_text(json.dumps(old, indent=1))
+    man["history"].append({"utc": now_utc(), "note": f"RE-FROZE {tier}/{group} (old version archived as "
+                           f"test_sets_archive/{tier}_{group}_{stamp}.json): {refreeze_reason}"})
+    from bench.common import CHANGELOG
+    with open(CHANGELOG, "a") as f:
+        if CHANGELOG.stat().st_size == 0 if CHANGELOG.exists() else True:
+            f.write("# Detection changelog\n\nOne entry per version: hypothesis, decision, reason. Reverted versions stay.\n")
+        f.write(f"\n## Test-set change: {tier}/{group} re-frozen ({now_utc()})\n\n{refreeze_reason}\n"
+                f"Old version archived: `benchmarks/test_sets_archive/{tier}_{group}_{stamp}.json`.\n")
 
 
 def rel(p):
-    return str(Path(p).relative_to(ROOT))
+    return str(Path(p).resolve().relative_to(ROOT))
 
 
 # ---------------------------------------------------------------- visual
@@ -75,7 +91,7 @@ def size_tag(area):
     return "small" if area < 0.01 else "medium" if area <= 0.10 else "large"
 
 
-def read_yolo_labels(path, class_map):
+def read_yolo_labels(path, class_map, prefix_cls=None, dedupe_iou=None):
     boxes = []
     if not path.exists():
         return boxes
@@ -86,6 +102,7 @@ def read_yolo_labels(path, class_map):
         c = int(float(parts[0]))
         if c not in class_map:
             continue
+        ours = prefix_cls if prefix_cls is not None else class_map[c]
         nums = list(map(float, parts[1:]))
         if len(nums) == 4:                         # cx cy w h
             cx, cy, w, h = nums
@@ -94,13 +111,43 @@ def read_yolo_labels(path, class_map):
             xs, ys = nums[0::2], nums[1::2]
             x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
         x1, y1, x2, y2 = (float(np.clip(v, 0, 1)) for v in (x1, y1, x2, y2))
-        boxes.append({"cls": class_map[c], "x1": x1, "y1": y1, "x2": x2, "y2": y2, "size_tag": size_tag((x2 - x1) * (y2 - y1))})
+        box = {"cls": ours, "x1": x1, "y1": y1, "x2": x2, "y2": y2, "size_tag": size_tag((x2 - x1) * (y2 - y1))}
+        if dedupe_iou and any(b["cls"] == ours and box_iou(b, box) >= dedupe_iou for b in boxes):
+            continue  # the same object annotated twice (e.g. once per class id)
+        boxes.append(box)
     return boxes
 
 
-def freeze_visual(test_dir, class_map):
+def box_iou(a, b):
+    ix = max(0.0, min(a["x2"], b["x2"]) - max(a["x1"], b["x1"]))
+    iy = max(0.0, min(a["y2"], b["y2"]) - max(a["y1"], b["y1"]))
+    inter = ix * iy
+    union = (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]) + (b["x2"] - b["x1"]) * (b["y2"] - b["y1"]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def near_duplicate_groups(paths, max_hamming=6):
+    """Chain images whose perceptual hashes are within max_hamming bits (consecutive video frames)."""
+    from leakage_check import phash_array, popcount64
+    h = phash_array(paths)
+    parent = list(range(len(h)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i in range(len(h)):
+        for j in np.where(popcount64(h ^ h[i]) <= max_hamming)[0]:
+            if j > i:
+                parent[find(i)] = find(int(j))
+    roots = {}
+    return [roots.setdefault(find(i), len(roots)) for i in range(len(h))]
+
+
+def freeze_visual(test_dir, class_map, label_by_prefix=False, refreeze_reason=None):
     man = load_manifest()
-    refuse_if_frozen(man, "dataset", "visual")
+    refuse_if_frozen(man, "dataset", "visual", refreeze_reason)
     imgs = sorted(p for p in Path(test_dir, "images").iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
     items, missing_labels = [], 0
     for p in imgs:
@@ -108,15 +155,24 @@ def freeze_visual(test_dir, class_map):
         if not lab.exists():
             missing_labels += 1
         tag, stats = condition_tag(p)
+        prefix_cls = {"B": 0, "D": 1}.get(p.name[:1]) if label_by_prefix else None
         items.append({"item_id": p.stem, "path": rel(p), "sha256": sha256_file(p),
                       "label_path": rel(lab) if lab.exists() else None, "label_sha256": sha256_file(lab) if lab.exists() else None,
-                      "boxes": read_yolo_labels(lab, class_map), "condition_tag": tag, "condition_stats": stats})
+                      "boxes": read_yolo_labels(lab, class_map, prefix_cls, dedupe_iou=0.5 if label_by_prefix else None),
+                      "condition_tag": tag, "condition_stats": stats})
+    print("grouping near-duplicate frames (pHash)...", flush=True)
+    for it, g in zip(items, near_duplicate_groups(imgs)):
+        it["group"] = g
     man["tiers"].setdefault("dataset", {})["visual"] = {
         "source": "Mendeley Data 6ghdz52pd7 v5 Dataset.zip, test split", "class_map": {str(k): v for k, v in class_map.items()},
         "condition_rules": {"cluttered_edge_density_gt": EDGE_CLUTTERED, "backlit_glare_fraction_gt": GLARE_BACKLIT,
                             "cloudy_mean_saturation_lt": SAT_CLOUDY, "else": "clear"},
         "size_rules": "box area / image area: small < 1%, medium 1-10%, large > 10%",
-        "images_without_label_file": missing_labels, "items": items}
+        "images_without_label_file": missing_labels,
+        "labels": ("class from file name (B...=bird, D...=drone); duplicate same-object boxes (IoU>=0.5) merged. "
+                   "Published Mendeley v5 labels put both classes in one id.") if label_by_prefix else "as published",
+        "groups": "near-duplicate frames chained at pHash Hamming <= 6; bootstrap CIs resample groups",
+        "n_groups": len({it["group"] for it in items}), "items": items}
     tags = {}
     for it in items:
         tags[it["condition_tag"]] = tags.get(it["condition_tag"], 0) + 1
@@ -228,11 +284,13 @@ def main():
     ap.add_argument("--test-dir", help="visual: folder with images/ and labels/ of the test split")
     ap.add_argument("--class-map", default="", help="visual: source class id -> ours, e.g. '0:0,1:1' (0 bird, 1 drone)")
     ap.add_argument("--shards", default="3,36")
+    ap.add_argument("--label-by-prefix", action="store_true")
+    ap.add_argument("--refreeze-reason", default=None, help="only with Vivan's approval: archives the old freeze")
     ap.add_argument("--esc50", default=str(DATA / "ESC-50-master"))
     a = ap.parse_args()
     if a.part == "visual":
         cmap = {int(k): int(v) for k, v in (x.split(":") for x in a.class_map.split(","))}
-        freeze_visual(a.test_dir, cmap)
+        freeze_visual(a.test_dir, cmap, a.label_by_prefix, a.refreeze_reason)
     elif a.part == "audio":
         freeze_audio([int(s) for s in a.shards.split(",")])
     else:

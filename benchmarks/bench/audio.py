@@ -153,6 +153,10 @@ def compute_metrics(pred, thr, k_default=1, n_boot=1000):
     from .stats import bootstrap, ratio_ci, metric
 
     m, extra = {}, {}
+
+    def grp(df):
+        """Clips cut from one recording share a group id; CIs resample whole groups."""
+        return df["group"].to_numpy() if "group" in df and df["group"].notna().all() else None
     by_item = {iid: g.prob.to_numpy() for iid, g in pred.groupby("item_id", sort=False)}
     items = pred.drop_duplicates("item_id").set_index("item_id")
 
@@ -163,23 +167,24 @@ def compute_metrics(pred, thr, k_default=1, n_boot=1000):
         s = np.array([by_item[i].max() for i in dads.index])
         det = np.array([clip_detected(by_item[i], thr, k_default) for i in dads.index])
         pos = y == 1
-        m["recall"] = metric(*ratio_ci(det & pos, pos, n_boot=n_boot))
-        m["precision"] = metric(*ratio_ci(det & pos, det, n_boot=n_boot))
+        G = grp(dads)
+        m["recall"] = metric(*ratio_ci(det & pos, pos, n_boot=n_boot, groups=G))
+        m["precision"] = metric(*ratio_ci(det & pos, det, n_boot=n_boot, groups=G))
 
         def f1(idx):
             tp = (det[idx] & pos[idx]).sum()
             p = tp / max(det[idx].sum(), 1)
             r = tp / max(pos[idx].sum(), 1)
             return 2 * p * r / (p + r) if p + r else 0.0
-        m["f1"] = metric(*bootstrap(f1, len(y), n_boot=n_boot))
+        m["f1"] = metric(*bootstrap(f1, len(y), n_boot=n_boot, groups=G))
 
         def auc(fn):
             def g(idx):
                 yy = y[idx]
                 return fn(yy, s[idx]) if 0 < yy.sum() < len(yy) else np.nan
             return g
-        m["roc_auc"] = metric(*bootstrap(auc(roc_auc_score), len(y), n_boot=n_boot))
-        m["pr_auc"] = metric(*bootstrap(auc(average_precision_score), len(y), n_boot=n_boot))
+        m["roc_auc"] = metric(*bootstrap(auc(roc_auc_score), len(y), n_boot=n_boot, groups=G))
+        m["pr_auc"] = metric(*bootstrap(auc(average_precision_score), len(y), n_boot=n_boot, groups=G))
         extra["sweep"] = []
         for t in np.round(np.arange(0.05, 0.96, 0.05), 2):
             d = s >= t
@@ -199,7 +204,7 @@ def compute_metrics(pred, thr, k_default=1, n_boot=1000):
         for k in (1, 2, 3):
             for (nt, snr), g in stress.groupby(["noise_type", "snr_db"]):
                 det = np.array([clip_detected(by_item[i], thr, k) for i in g.index])
-                m[f"stress_recall_k{k}_{nt}_{int(snr):+d}dB"] = metric(*ratio_ci(det, np.ones(len(det)), n_boot=n_boot))
+                m[f"stress_recall_k{k}_{nt}_{int(snr):+d}dB"] = metric(*ratio_ci(det, np.ones(len(det)), n_boot=n_boot, groups=grp(g)))
         snr_rows = []
         for nt in sorted(stress.noise_type.unique()):
             for snr in sorted(stress.snr_db.unique(), reverse=True):
@@ -214,10 +219,10 @@ def compute_metrics(pred, thr, k_default=1, n_boot=1000):
         hours = amb.seconds.to_numpy() / 3600
         for k in (1, 2, 3):
             ev = np.array([detect_events(by_item[i], thr, k) for i in amb.index])
-            m[f"fa_per_hour_k{k}"] = metric(*ratio_ci(ev, hours, n_boot=n_boot))
+            m[f"fa_per_hour_k{k}"] = metric(*ratio_ci(ev, hours, n_boot=n_boot, groups=grp(amb)))
             for tier_name, g in amb.groupby("source"):
                 evs = np.array([detect_events(by_item[i], thr, k) for i in g.index])
-                m[f"fa_per_hour_k{k}_{tier_name}"] = metric(*ratio_ci(evs, g.seconds.to_numpy() / 3600, n_boot=n_boot))
+                m[f"fa_per_hour_k{k}_{tier_name}"] = metric(*ratio_ci(evs, g.seconds.to_numpy() / 3600, n_boot=n_boot, groups=grp(g)))
         m["fa_per_hour"] = m[f"fa_per_hour_k{k_default}"]
         m["ambient_hours"] = {"value": float(hours.sum()), "lo": float(hours.sum()), "hi": float(hours.sum())}
     return m, extra

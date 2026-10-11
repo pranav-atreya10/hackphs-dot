@@ -1,7 +1,8 @@
 """Bootstrap confidence intervals and the significance rule (protocol section 5).
 
-Resampling unit = the test ITEM (image, clip, recording), never individual boxes or windows,
-so correlated predictions from one item aren't counted as independent evidence.
+Resampling unit = an INDEPENDENT test unit, never individual boxes or windows. When items carry a
+group id (e.g. near-identical consecutive frames of one video, or clips cut from one recording),
+whole groups are resampled, so correlated items count as one piece of evidence.
 """
 
 import numpy as np
@@ -10,16 +11,31 @@ N_BOOT = 1000
 SEED = 20261010
 
 
-def bootstrap(stat_fn, n_items, n_boot=N_BOOT, seed=SEED, alpha=0.05):
+def _members(groups, n_items):
+    if groups is None:
+        return None
+    groups = np.asarray(groups)
+    assert len(groups) == n_items, "one group id per item"
+    _, inv = np.unique(groups, return_inverse=True)
+    return [np.where(inv == g)[0] for g in range(inv.max() + 1)]
+
+
+def bootstrap(stat_fn, n_items, n_boot=N_BOOT, seed=SEED, alpha=0.05, groups=None):
     """stat_fn(idx) -> float, where idx is an array of item indices (with repeats).
+    groups: optional group id per item; whole groups are resampled together.
     Returns (point, lo, hi) using the percentile method."""
     point = float(stat_fn(np.arange(n_items)))
     if n_items == 0:
         return point, float("nan"), float("nan")
     rng = np.random.default_rng(seed)
+    members = _members(groups, n_items)
     vals = np.empty(n_boot)
     for b in range(n_boot):
-        vals[b] = stat_fn(rng.integers(0, n_items, n_items))
+        if members is None:
+            idx = rng.integers(0, n_items, n_items)
+        else:
+            idx = np.concatenate([members[g] for g in rng.integers(0, len(members), len(members))])
+        vals[b] = stat_fn(idx)
     vals = vals[~np.isnan(vals)]
     if len(vals) == 0:
         return point, float("nan"), float("nan")
@@ -28,7 +44,8 @@ def bootstrap(stat_fn, n_items, n_boot=N_BOOT, seed=SEED, alpha=0.05):
 
 
 def ratio_ci(numer, denom, **kw):
-    """CI for sum(numer)/sum(denom) with per-item numerators/denominators (e.g. recall per image)."""
+    """CI for sum(numer)/sum(denom) with per-item numerators/denominators (e.g. recall per image).
+    kw may include groups= (one group id per item)."""
     numer = np.asarray(numer, float)
     denom = np.asarray(denom, float)
 

@@ -30,7 +30,7 @@ def find_split(src, names):
     return None
 
 
-def build_view(src, out, src_names, drop_unlabeled):
+def build_view(src, out, src_names, drop_unlabeled, label_by_prefix=False):
     out.mkdir(parents=True, exist_ok=True)
     remap = {}
     for i, n in enumerate(src_names):
@@ -57,10 +57,14 @@ def build_view(src, out, src_names, drop_unlabeled):
                 continue
             lines = []
             if lab.exists():
+                # Mendeley v5 labels put birds and drones in ONE class; the file name carries the truth
+                # (B... = bird image, D... = drone image). With label_by_prefix every box takes the file's class.
+                prefix_cls = {"B": OURS["bird"], "D": OURS["drone"]}.get(img.name[:1]) if label_by_prefix else None
                 for line in lab.read_text().splitlines():
                     parts = line.split()
                     if len(parts) >= 5 and int(float(parts[0])) in remap:
-                        lines.append(" ".join([str(remap[int(float(parts[0]))])] + parts[1:]))
+                        c = prefix_cls if prefix_cls is not None else remap[int(float(parts[0]))]
+                        lines.append(" ".join([str(c)] + parts[1:]))
             dst = out / split / "images" / img.name
             if not dst.exists():
                 dst.symlink_to(img.resolve())
@@ -83,6 +87,7 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--keep-unlabeled", action="store_true")
+    ap.add_argument("--label-by-prefix", action="store_true", help="class from file name: B...=bird, D...=drone (Mendeley v5 fix)")
     ap.add_argument("--extra-args", default="{}", help="JSON of extra ultralytics train args (e.g. augmentation for v4)")
     a = ap.parse_args()
 
@@ -94,7 +99,7 @@ def main():
     view = DATA / "yolo_train" / a.name
     if view.exists():
         shutil.rmtree(view)
-    stats, remap = build_view(a.src, view, names, not a.keep_unlabeled)
+    stats, remap = build_view(a.src, view, names, not a.keep_unlabeled, a.label_by_prefix)
 
     t0 = time.time()
     model = YOLO(str(ROOT / a.base))

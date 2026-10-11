@@ -141,6 +141,9 @@ def compute_metrics(pred, items, op_conf, n_boot=1000):
     """pred: DataFrame of gt + det rows (modality == 'visual'); items: DataFrame of test items
     (item_id, size/condition tags per GT are in pred). op_conf: operating-point confidence threshold."""
     item_ids = items.item_id.tolist()
+    # Near-identical frames of one video share a group id; CIs resample whole groups.
+    groups = items["group"].to_numpy() if "group" in items else None
+    kw = {"n_boot": n_boot, "groups": groups}
     per = []
     for iid in item_ids:
         rows = pred[pred.item_id == iid]
@@ -159,8 +162,8 @@ def compute_metrics(pred, items, op_conf, n_boot=1000):
                 aps.append(average_precision(sc, tp[:, ti], ngt))
         return np.nanmean(aps) if not np.all(np.isnan(aps)) else np.nan
 
-    m["mAP50"] = metric(*bootstrap(lambda idx: map_fn(idx, [0]), n, n_boot=n_boot))
-    m["mAP50_95"] = metric(*bootstrap(lambda idx: map_fn(idx, range(len(IOU_THRS))), n, n_boot=n_boot))
+    m["mAP50"] = metric(*bootstrap(lambda idx: map_fn(idx, [0]), n, **kw))
+    m["mAP50_95"] = metric(*bootstrap(lambda idx: map_fn(idx, range(len(IOU_THRS))), n, **kw))
 
     # Per-class precision / recall / F1 at the operating point
     for c, name in CLASSES.items():
@@ -168,36 +171,37 @@ def compute_metrics(pred, items, op_conf, n_boot=1000):
         det_i = np.array([(p[c]["scores"] >= op_conf).sum() for p in per])
         gt_i = np.array([len(p[c]["gt_best"]) for p in per])
         hit_i = np.array([(p[c]["gt_best"] >= op_conf).sum() for p in per])
-        m[f"{name}_precision"] = metric(*ratio_ci(tp_i, det_i, n_boot=n_boot))
-        m[f"{name}_recall"] = metric(*ratio_ci(hit_i, gt_i, n_boot=n_boot))
+        m[f"{name}_precision"] = metric(*ratio_ci(tp_i, det_i, **kw))
+        m[f"{name}_recall"] = metric(*ratio_ci(hit_i, gt_i, **kw))
 
         def f1(idx, tp_i=tp_i, det_i=det_i, gt_i=gt_i, hit_i=hit_i):
             p = tp_i[idx].sum() / max(det_i[idx].sum(), 1)
             r = hit_i[idx].sum() / max(gt_i[idx].sum(), 1)
             return 2 * p * r / (p + r) if p + r > 0 else 0.0
-        m[f"{name}_f1"] = metric(*bootstrap(f1, n, n_boot=n_boot))
+        m[f"{name}_f1"] = metric(*bootstrap(f1, n, **kw))
 
     # Bird boxes claimed by a drone detection
     bad = np.array([(p["bird_as_drone"] >= op_conf).sum() for p in per])
     birds = np.array([len(p["bird_as_drone"]) for p in per])
-    m["bird_as_drone_rate"] = metric(*ratio_ci(bad, birds, n_boot=n_boot))
+    m["bird_as_drone_rate"] = metric(*ratio_ci(bad, birds, **kw))
     bad = np.array([(p["drone_as_bird"] >= op_conf).sum() for p in per])
     drones = np.array([len(p["drone_as_bird"]) for p in per])
-    m["drone_as_bird_rate"] = metric(*ratio_ci(bad, drones, n_boot=n_boot))
+    m["drone_as_bird_rate"] = metric(*ratio_ci(bad, drones, **kw))
 
     # False alarms: drone detections on images with no drone in them
     no_drone = np.array([len(p[1]["gt_best"]) == 0 for p in per])
     fa_dets = np.array([(p[1]["scores"] >= op_conf).sum() for p in per])
     fa_img = np.array([p["max_drone_score"] >= op_conf for p in per])
-    m["fa_rate"] = metric(*ratio_ci(fa_img[no_drone], np.ones(no_drone.sum()), n_boot=n_boot))
+    sub = lambda mask: {"n_boot": n_boot, "groups": None if groups is None else groups[mask]}
+    m["fa_rate"] = metric(*ratio_ci(fa_img[no_drone], np.ones(no_drone.sum()), **sub(no_drone)))
     bird_only = np.array([len(p[1]["gt_best"]) == 0 and len(p[0]["gt_best"]) > 0 for p in per])
-    m["fa_per_bird_image"] = metric(*ratio_ci(fa_dets[bird_only], np.ones(bird_only.sum()), n_boot=n_boot))
+    m["fa_per_bird_image"] = metric(*ratio_ci(fa_dets[bird_only], np.ones(bird_only.sum()), **sub(bird_only)))
 
     # Localization: mean IoU of correct detections (IoU >= 0.5) at the operating point
     ious = [np.concatenate([p[c]["det_iou"][(p[c]["scores"] >= op_conf) & p[c]["tp"][:, 0]] for c in CLASSES]) for p in per]
     sums = np.array([x.sum() for x in ious])
     cnts = np.array([len(x) for x in ious])
-    m["mean_iou_tp"] = metric(*ratio_ci(sums, cnts, n_boot=n_boot))
+    m["mean_iou_tp"] = metric(*ratio_ci(sums, cnts, **kw))
 
     # Recall broken down by target size and condition (tags live on GT rows)
     gts = pred[(pred.kind == "gt")]
@@ -212,7 +216,7 @@ def compute_metrics(pred, items, op_conf, n_boot=1000):
                     tot.append(mask.sum())
                     hit.append((p[c]["gt_best"][mask] >= op_conf).sum() if mask.any() else 0)
                 if sum(tot):
-                    breakdown[f"{name}_recall_{tag_col.split('_')[0]}_{tag}"] = metric(*ratio_ci(hit, tot, n_boot=n_boot))
+                    breakdown[f"{name}_recall_{tag_col.split('_')[0]}_{tag}"] = metric(*ratio_ci(hit, tot, **kw))
     m.update(breakdown)
 
     # Threshold sweep (point estimates; the operating point is marked on the chart)

@@ -60,7 +60,8 @@ def visual_items(man, final=False):
             continue
         for it in g["items"]:
             items.append({"item_id": it["item_id"], "path": str(ROOT / it["path"]), "tier": tier,
-                          "condition_tag": it.get("condition_tag"), "split": it.get("split")})
+                          "condition_tag": it.get("condition_tag"), "split": it.get("split"),
+                          "group": f"{tier}:{it.get('group', it['item_id'])}"})
             for b in it.get("boxes", []):
                 gts.append({"item_id": it["item_id"], "kind": "gt", "cls": b["cls"], "score": float("nan"),
                             "x1": b["x1"], "y1": b["y1"], "x2": b["x2"], "y2": b["y2"],
