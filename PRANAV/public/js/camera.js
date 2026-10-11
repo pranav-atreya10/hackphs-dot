@@ -81,10 +81,21 @@ function log(html) {
   $('log').prepend(li); while ($('log').children.length > 40) $('log').lastChild.remove();
 }
 
+/* ---------- QR code: open this page on a phone ---------- */
+// Laptops show a QR code so a phone can become the camera; phones already are one. The QR never carries a camera key.
+if (/Android|iPhone|iPad/i.test(navigator.userAgent)) $('phoneQr').hidden = true;
+else {
+  const camUrl = `${location.origin}/camera.html`;
+  $('camUrl').textContent = camUrl;
+  try { const qr = qrcode(0, 'M'); qr.addData(camUrl); qr.make(); $('qr').innerHTML = qr.createImgTag(4, 0, 'QR code that opens the SkySentry camera page on a phone'); }
+  catch { $('phoneQr').hidden = true; }
+  if (location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) $('camUrl').textContent += ' (phones need https for the camera; use the deployed site)';
+}
+
 /* ---------- connection to the server ---------- */
 async function connect() {
   $('signout').disabled = true;
-  auth = await signIn({ role: 'camera', mount: $('auth'), onStatus: message => {
+  auth = await signIn({ role: 'camera', mount: $('auth'), demo: new URLSearchParams(location.search).has('demo'), onStatus: message => {
     $('conn').textContent = message;
     status(message === 'Camera key needed' ? 'Enter the camera key above, then press Connect.' : 'Sign in above to connect this camera.');
   } });

@@ -28,6 +28,9 @@
   .status{margin:0;text-align:center;color:var(--mute);font:500 .9rem var(--sans)}
   details.fold[open]{gap:12px}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} .phone h2{margin:0 0 4px}
+  #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line)} #qr img{width:100%;height:100%;image-rendering:pixelated}
+  @media (max-width:520px){.phone{grid-template-columns:1fr}}
 </style>
 </head>
 <body class="app">
@@ -59,6 +62,10 @@
   </div>
   <div class="controls"><button id="start" type="button">Start</button><button class="ghost" id="upload" type="button">Upload a video</button><input id="uploadFile" type="file" accept="video/*" hidden></div>
   <p class="status" id="statusLine" aria-live="polite">Not streaming yet.</p>
+  <section class="card phone" id="phoneQr">
+    <div id="qr"></div>
+    <div><h2>Use a phone as this camera</h2><p class="hint">Scan with your phone’s camera to open this page there, sign in, point it at the sky by the runway and press Start. <span class="mono" id="camUrl"></span></p></div>
+  </section>
 
   <details class="card fold" id="settings">
     <summary>Settings</summary>
@@ -96,6 +103,7 @@
 </main>
 </div>
 <script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script type="module" src="/js/camera.js"></script>
 </body>
 </html>

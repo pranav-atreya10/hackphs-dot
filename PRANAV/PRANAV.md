@@ -410,3 +410,10 @@ Everyone else still has exactly one account type (no switching).
 **Fix:** signed out, the Account tab used to keep showing the last account used in this browser (e.g. "Admin"). Now signing out, deleting the account, or opening Settings or Admin signed out clears it (`forgetAccount()` in `js/auth.js`): the tab says "Not signed in" and the Admin tab hides.
 
 **Checked:** headless Chrome. On Admin the sidebar shows Home/Tower/Camera/Demos/Admin with Admin highlighted; signed out, both pages show "Not signed in" and no Admin tab, with no script errors. Tests: 83/83.
+
+## Camera page QR code, and demos for every account
+**QR code:** on a laptop, the camera page shows a "Use a phone as this camera" card with a QR code for `/camera.html`. Scan it with a phone, sign in, point it at the sky and press Start. Phones don't show the card (they already are the camera). The QR never contains a camera key.
+
+**Demos for every account:** tower accounts can now run demos. On the Demos page, "Use this demo" shows for every account (`data-any-role` exempts it from `showRoleLinks`). It opens the camera page in demo mode (`?demo=`), where a tower account is let in and its alerts go to its own airport's tower. The "Use my camera" button still hides for tower accounts, and the camera page without `?demo` still sends them to the switch-request screen. Server: `cameraAirport()` accepts tower accounts for their own airport.
+
+**Checked:** headless Chrome. The camera page shows the QR card with no script errors. The Demos page as a tower account shows 6 of 6 demo buttons and no "Use my camera". Tests: 83/83. The signed-in tower-account demo needs the live Clerk key, so check it after deploy.
