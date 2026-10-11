@@ -243,3 +243,26 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - Note: the production Clerk key only works on the DigitalOcean domain. On localhost the page shows "Could not load the sign-in service". That's expected.
 
 **Where the changes live:** the landing page is generated, so the nav and hero edits are in `scripts/sync-web.mjs`, followed by `npm run sync-web`. Atharv's `site.html` is untouched. The link styling is in `css/site.css`. `test/auth-ui.test.cjs` now strips every `export` from `auth.js` before loading it, because `auth.js` exports more functions. 74/74 tests pass.
+
+## Film → MP4 for YouTube
+`npm run record-film` renders the 100-second 3D film (`/film.html`) into a 1080p, 30fps H.264 MP4. It also writes a matching `.srt` subtitle file. Both go to `~/Downloads/SkySentry-film.mp4` by default.
+
+**How it works:** the film is live 3D, so screen-recording would drop frames. Instead, `scripts/record-film.mjs` does this:
+- It drives the installed Chrome headlessly over the DevTools protocol, using Node's built-in WebSocket.
+- It replaces the page's `performance.now` and `requestAnimationFrame` with a fake clock and steps it exactly 1/30 s per frame. Every frame is perfect, however slow the machine is.
+- It shows only the stage, full-frame, with the captions burned in as subtitles.
+- It streams JPEG frames into `scripts/mp4-encoder.swift`, a tiny macOS AVFoundation encoder that is compiled once and cached.
+
+No ffmpeg or other downloads are needed.
+
+**Options:**
+- `--url` (default `http://localhost:8080/film.html`; the server must be running)
+- `--out`, `--fps`, `--width`/`--height`, `--bitrate` (default 12 Mbps)
+- `--no-captions` for a clean version
+- `--faststart` for web-streaming layout; it needs twice the disk space and YouTube doesn't need it
+
+It checks free disk space before starting and every second while rendering, and stops cleanly rather than filling the disk.
+
+**On YouTube:** upload the MP4. Then go to Subtitles → Add language → Upload file → With timing, and pick the `.srt` for proper CC.
+
+**Checked:** a full render produced a 102 s (100 s + 2 s hold), 1920×1080, 30fps H.264 file of about 150 MB with 23 timed captions. Frames from the opening, the alert journey and the close are correct and sharp.
