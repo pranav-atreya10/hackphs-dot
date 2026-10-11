@@ -111,6 +111,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
       throw new Error('wrong role');
     }
+    store.set('skysentry.role', me.role);   // the landing page's Dashboard button reads this
     mount.hidden = true;
     return {
       mode: 'clerk', airport: me.airport, label: `${me.airport} · signed in`,

@@ -32,6 +32,7 @@ async function main() {
   const me = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${await clerk.session.getToken()}` } })
     .then(r => r.json()).catch(() => ({}));
   const tower = me.role === 'dashboard';
+  try { if (me.role) localStorage.setItem('skysentry.role', me.role); } catch {}   // the landing page's Dashboard button reads this
   const access = me.role && me.airport
     ? `<div><span>Role</span><b>${tower ? 'Tower dashboard' : 'Camera station'}</b></div><div><span>Airport</span><b>${esc(me.airport)}</b></div>`
     : '<div><span>Airport access</span><b>Not set up yet</b></div>';
