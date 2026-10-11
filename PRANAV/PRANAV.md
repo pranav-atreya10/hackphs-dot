@@ -420,3 +420,8 @@ Everyone else still has exactly one account type (no switching).
 
 ## Fix: blank "Use this demo" buttons
 In the "demos for every account" change I put a `// comment` partway through a line of `demo.js`. JavaScript treats everything after `//` as comment, so it commented out the rest of the line: each button's link and its "Use this demo →" text. The buttons showed as empty white bars and went nowhere. The comment now sits on its own line. I also scanned every file I'd edited for the same mistake and found no others. **Checked:** the button reads "Use this demo →" and links to `/camera.html?demo=gulls-sky.mp4`. Tests: 83/83.
+
+## Tower: current risk in the sidebar
+The tower sidebar's Status section now starts with the current risk, e.g. **RED · Flock of 6 birds · toward runway**, so it's visible while scrolling. It has a green, yellow or red dot. At red the line gets a red tint and a pulsing dot (no pulse with reduce motion). Clicking it jumps to the big risk card. It comes from `refreshRisk()` in `js/tower.js`, so it always matches the risk card (the highest risk from any camera in the last 10 seconds).
+
+**Checked:** headless Chrome on a local server: green, then a yellow alert, then a red alert; the sidebar line matched the risk card each time. Tests: 83/83.

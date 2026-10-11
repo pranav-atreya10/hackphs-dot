@@ -63,6 +63,14 @@ function refreshRisk() {
   const lvl = top?.risk || 'green';
   $('risk').dataset.risk = lvl; $('riskLvl').textContent = lvl.toUpperCase();
   $('riskWhat').textContent = describe(top);
+  // the same status, always visible in the sidebar
+  const side = $('sideRisk'), what = describe(top);
+  if (side.dataset.risk !== lvl || side.dataset.what !== what) {
+    side.dataset.risk = lvl; side.dataset.what = what;
+    const line = document.createElement('span');
+    line.append(Object.assign(document.createElement('b'), { textContent: lvl.toUpperCase() }), ` · ${what}`);
+    side.replaceChildren(line);
+  }
   $('riskWhy').textContent = top ? `${top.cameraId} · ${time(top.receivedAt)}${top.eta_seconds != null ? ` · ${Math.round(top.eta_seconds)} s to corridor` : ''}${top.reasons?.length ? ' · ' + top.reasons.join(', ') : ''}` : 'No recent camera events';
 }
 setInterval(refreshRisk, 1000);

@@ -44,6 +44,11 @@ body.app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh
 .side .pill::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--line-2)}
 .side .pill[data-ok="1"]::before{background:var(--go)} .side .pill[data-ok="0"]::before{background:var(--stop)}
 .side .pill[data-ok]{color:var(--ink)}
+/* tower: current risk at the top of the sidebar status */
+.side .side-risk{text-decoration:none;margin-bottom:2px;border:1px solid var(--line);background:var(--card)} .side .side-risk:hover{background:var(--hover)}
+.side .side-risk b{font-weight:700;letter-spacing:.02em}
+.side .side-risk[data-risk="green"]::before{background:var(--go)} .side .side-risk[data-risk="yellow"]::before{background:var(--warn)}
+.side .side-risk[data-risk="red"]::before{background:var(--stop)} .side .side-risk[data-risk="red"]{border-color:var(--stop);background:color-mix(in srgb,var(--stop) 14%,var(--card))}
 .side-foot{margin-top:auto;display:grid;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
 .side-foot .who{display:flex;align-items:center;gap:9px;padding:4px 6px;font:500 .9rem var(--sans);min-width:0}
 .side-foot .who #who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -148,6 +153,7 @@ details.fold summary::-webkit-details-marker{display:none}
   details.fold[open] > :not(summary){animation:rise .35s cubic-bezier(.2,.7,.2,1) both}
   details.fold summary::after{transition:transform .2s} details.fold[open] summary::after{transform:rotate(180deg)}
   .side .pill[data-ok="1"]::before{animation:live 2s ease-out infinite}
+  .side .side-risk[data-risk="red"]::before{animation:live 1s ease-out infinite}
   .side[data-open] > :not(.side-head){animation:rise .25s ease-out both}
   .auth-card{animation:pop .35s cubic-bezier(.2,.7,.2,1) both}
   .clip{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
