@@ -36,7 +36,11 @@ for (const id of ['cameraId', 'heading', 'fov', 'lat', 'lon']) {
   $(id).addEventListener('change', () => { store.set('skysentry.' + id, $(id).value); applyCamera(); sendConfig(); });
 }
 const requestedCameraId = new URLSearchParams(location.search).get('cameraId');
-if (requestedCameraId) $('cameraId').value = requestedCameraId.slice(0, 60);
+// Each device gets its own camera ID (kept in this browser), so two cameras never share one feed on the tower.
+// "runway-east" used to be everyone's default, so a browser still holding it gets a fresh one too.
+const savedId = store.get('skysentry.cameraId', '');
+$('cameraId').value = requestedCameraId?.slice(0, 60) || (savedId && savedId !== 'runway-east' ? savedId : `cam-${Math.random().toString(36).slice(2, 6)}`);
+store.set('skysentry.cameraId', $('cameraId').value);
 const mode = () => $('mode').value;
 $('mode').value = store.get('skysentry.mode', 'stream');
 $('mode').addEventListener('change', () => store.set('skysentry.mode', mode()));
@@ -54,8 +58,8 @@ fetch('/clips/clips.json').then(r => r.json()).then(list => {
 }).catch(() => { $('source').querySelector('option[value="demo"]').disabled = true; });
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
 $('source').addEventListener('change', showSourceFields);
-// Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
-$('source').value = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'webcam' : 'synthetic';
+// Every device starts on its own camera. The synthetic sky and demo clips stay in Settings / the Demos page.
+$('source').value = 'webcam';
 const requestedScenario = new URLSearchParams(location.search).get('scenario');
 if (SCENARIOS[requestedScenario]) { $('source').value = 'synthetic'; $('scenario').value = requestedScenario; }
 showSourceFields();
@@ -109,6 +113,8 @@ async function connect() {
   }
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
+  // The server renames this camera if another device is already streaming under the same ID.
+  socket.on('camera:id', id => { if (id && id !== $('cameraId').value) { log(`another camera already uses that ID, so this one is <b>${String(id).replace(/[<>&]/g, '')}</b>`); $('cameraId').value = id; store.set('skysentry.cameraId', id); } });
   socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running) status('Connected. Press Start.'); });
   // In stream mode the server's bot sends back what it sees, so the phone shows the same boxes as the tower.
   socket.on('bot:state', ({ state }) => { if (mode() === 'stream' && running) { lastBotAt = performance.now(); botState = fromCompact(state); draw(botState); showState(botState); } });
@@ -223,14 +229,24 @@ function loop() {
     smallCtx.drawImage(srcCanvas, 0, 0, small.width, small.height);
   } else if (video.readyState >= 2) {
     smallCtx.drawImage(video, 0, 0, small.width, small.height);
-  } else { rafId = requestAnimationFrame(loop); return; }
+  } else { next(); return; }
   const now = performance.now();
   if (mode() === 'stream') streamFrame(t);
   if (mode() === 'stream' && now - lastBotAt < BOT_STALE_MS) { /* the bot:state handler draws */ }
   else if (mode() === 'stream' && now - t0 < BOT_STALE_MS) draw(null);   // give the server bot a moment first
   else { const st = engine.process(smallCtx.getImageData(0, 0, small.width, small.height), t); draw(st); showState(st, mode() === 'stream'); }
-  rafId = requestAnimationFrame(loop);
+  next();
 }
+// Visible tab: animation frames. Hidden tab (e.g. you switched to the tower): the worker's ticks drive loop() at
+// ~15 fps, since browsers pause requestAnimationFrame in background tabs and the stream would stop.
+const ticker = new Worker('/js/tick-worker.js');
+ticker.onmessage = () => { if (running && document.hidden) loop(); };
+function next() { if (!document.hidden) rafId = requestAnimationFrame(loop); }
+function followVisibility() {
+  ticker.postMessage(running && document.hidden ? 66 : 0);
+  if (running && !document.hidden) { cancelAnimationFrame(rafId); rafId = requestAnimationFrame(loop); }
+}
+document.addEventListener('visibilitychange', followVisibility);
 
 async function start() {
   $('start').disabled = true;
@@ -270,10 +286,18 @@ async function start() {
     if (mode() === 'stream') { $('banner').dataset.risk = 'wait'; $('bannerText').textContent = 'Waiting for the server bot…'; }
     status(socket?.connected ? 'Starting… keep the camera still for a few seconds' : 'Started, but not connected to the server yet. It will send as soon as it connects.');
     log(`started · ${source === 'synthetic' ? $('scenario').value.replace(/_/g, ' ') : source}`);
-    rafId = requestAnimationFrame(loop);
+    rafId = requestAnimationFrame(loop); followVisibility();
     // Optional screen-awake permission must never hold up video or model startup.
     try { navigator.wakeLock?.request('screen').then(lock => { if (running) wakeLock = lock; else lock.release().catch(() => {}); }).catch(() => {}); } catch {}
-  } catch (err) { log(`could not start: ${err.message}`); }
+  } catch (err) {
+    log(`could not start: ${err.message}`);
+    if ($('source').value === 'webcam' && /NotAllowed|NotFound|NotReadable|Overconstrained|Security/.test(err.name)) {
+      const why = err.name === 'NotAllowedError' || err.name === 'SecurityError' ? 'Camera access was blocked. Allow it in the browser’s address bar and press Start again'
+        : err.name === 'NotFoundError' ? 'This device has no camera' : 'The camera is busy in another app or tab';
+      $('empty').textContent = `${why}, or use Upload a video.`; $('empty').hidden = false;
+      status(`${why}.`);
+    }
+  }
   $('start').disabled = false;
 }
 
@@ -302,7 +326,7 @@ function fromCompact(c) {
 }
 
 function stop() {
-  running = false; cancelAnimationFrame(rafId); coco?.stop();
+  running = false; cancelAnimationFrame(rafId); ticker.postMessage(0); coco?.stop();
   video.srcObject?.getTracks().forEach(tr => tr.stop());
   video.pause();
   wakeLock?.release().catch(() => {}); wakeLock = null;

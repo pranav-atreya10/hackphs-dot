@@ -78,7 +78,7 @@
       <select id="mode"><option value="stream">Stream to the website (recommended)</option><option value="local">Detect on this phone (weak connection)</option></select></label>
     <label for="tuning">Detection tuning
       <select id="tuning"><option value="phone_15fps">Phone streaming (~15 fps)</option><option value="laptop_30fps">Laptop or clip (~30 fps)</option><option value="distant_birds">Distant birds (few pixels wide)</option><option value="noisy_camera">Grainy or low light</option></select></label>
-    <label for="cameraId">Camera ID<input id="cameraId" value="runway-east"></label>
+    <label for="cameraId">Camera ID<input id="cameraId" value="" placeholder="cam-…" maxlength="60"></label>
     <div class="two">
       <label for="heading">Faces (compass °)<input id="heading" type="number" min="0" max="359" value="90"></label>
       <label for="fov">Lens width (°)<input id="fov" type="number" min="20" max="140" value="65"></label>
