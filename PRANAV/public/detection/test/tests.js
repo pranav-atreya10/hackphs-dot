@@ -286,6 +286,24 @@ test('scenarios bird_descending and bird_circling: curving or sinking birds stay
     near(row.median_flap_hz, SCENARIOS[name].expectHz, 0.5, name);
   }
 });
+test('hum detector: low engine/rotor pitch and long overtone ladders are not drones', () => {
+  const sr = 48000, n = 2048, binHz = sr / 2 / n;
+  const rng = mulberry32(5);
+  const spectrum = (f0, harmonics) => {
+    const s = new Float32Array(n);
+    for (let k = 0; k < n; k++) s[k] = -90 + rng() * 6;
+    for (let m = 1; m <= harmonics; m++) { const k = Math.round((f0 * m) / binHz); if (k + 1 < n) { s[k] = -45; s[k - 1] = -55; s[k + 1] = -55; } }
+    return s;
+  };
+  const run = (f0, h) => { const d = new HumDetector(); let p = 0; for (let i = 0; i < 8; i++) p = d.update(spectrum(f0, h), sr); return { p, why: d.last.reason }; };
+  const drone = run(260, 3);
+  ok(drone.p > 0.8, `drone-like 260 Hz: ${JSON.stringify(drone)}`);
+  const engine = run(120, 3);
+  ok(engine.p === 0 && /pitch too low/.test(engine.why), `120 Hz engine: ${JSON.stringify(engine)}`);
+  const ladder = run(260, 10);
+  ok(ladder.p === 0 && /overtone ladder/.test(ladder.why), `260 Hz with 9 overtones: ${JSON.stringify(ladder)}`);
+});
+
 test('contract: track_batch points have every field the backend needs', () => {
   const { batches } = runScenario('flock_corridor');
   ok(batches.length >= 8, `${batches.length} batches`);
