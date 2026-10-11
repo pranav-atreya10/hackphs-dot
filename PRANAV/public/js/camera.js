@@ -60,6 +60,17 @@ const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !=
 $('source').addEventListener('change', showSourceFields);
 // Every device starts on its own camera. The synthetic sky and demo clips stay in Settings / the Demos page.
 $('source').value = 'webcam';
+// Devices with no camera at all (or no camera API, e.g. plain-HTTP pages on a LAN address) start on a demo clip.
+(async () => {
+  let hasCamera = !!navigator.mediaDevices?.getUserMedia;
+  try { if (hasCamera && navigator.mediaDevices.enumerateDevices) hasCamera = (await navigator.mediaDevices.enumerateDevices()).some(d => d.kind === 'videoinput'); } catch {}
+  if (hasCamera || new URLSearchParams(location.search).get('demo')) return;
+  const ready = () => $('demoClip').options.length > 0;
+  for (let i = 0; i < 20 && !ready(); i++) await new Promise(r => setTimeout(r, 150));
+  if (!ready() || $('source').value !== 'webcam') return;
+  $('source').value = 'demo'; showSourceFields();
+  $('empty').textContent = 'No camera found on this device, so a recorded demo clip is selected. Press Start to stream it to the tower.';
+})();
 const requestedScenario = new URLSearchParams(location.search).get('scenario');
 if (SCENARIOS[requestedScenario]) { $('source').value = 'synthetic'; $('scenario').value = requestedScenario; }
 showSourceFields();
@@ -298,6 +309,15 @@ async function start() {
         : err.name === 'NotFoundError' ? 'This device has no camera' : 'The camera is busy in another app or tab';
       $('empty').textContent = `${why}, or use Upload a video.`; $('empty').hidden = false;
       status(`${why}.`);
+      // No usable camera: fall back to a recorded demo clip automatically, so the pipeline still runs.
+      if ($('demoClip').options.length && !start.fellBack) {
+        start.fellBack = true;
+        $('source').value = 'demo'; showSourceFields();
+        log(`${why}. Switched to the demo clip “${$('demoClip').selectedOptions[0]?.textContent.split(' · ')[0] || $('demoClip').value}”.`);
+        $('start').disabled = false;
+        status(`${why}. Playing a recorded demo clip instead (shown to the tower as this camera).`);
+        return start();
+      }
     } else {
       // Every other failure (unplayable clip, missing file, model error) is shown, not just logged.
       const why = /no supported source|NotSupported|decode/i.test(`${err.name} ${err.message}`) ? 'This browser cannot play that video format. Try Chrome, or upload an MP4 or WebM' : err.message;
