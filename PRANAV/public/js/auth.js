@@ -69,14 +69,19 @@ export function panel(mount, html) {
 
 // One-time step after a Clerk sign-up: pick "camera" or "dashboard" and enter the airport's join code.
 // Resolves with { role, airport } once the server has saved them.
-export function finishSetup({ mount, role = 'dashboard', headers }) {
+export function finishSetup({ mount, role = 'dashboard', headers, admin = false }) {
   return new Promise(resolve => {
     const card = panel(mount, `<h2>Finish setting up</h2>
       <p>Choose what this account does and enter your airport’s join code.</p>
       <form id="join"><label for="role">This account is a
         <select id="role"><option value="dashboard">Tower dashboard</option><option value="camera">Camera station</option></select></label>
         <label for="code">Airport join code<input id="code" autocomplete="off" required></label>
-        <button>Continue</button><p class="auth-err" id="joinErr"></p></form>`);
+        <button>Continue</button><p class="auth-err" id="joinErr"></p></form>
+      <p class="auth-help">${admin
+        ? 'You’re an admin: get or create a join code on the <a href="/admin.html">admin page</a>.'
+        : 'No code? Your SkySentry admin creates airports and their join codes. Ask them for yours.'}</p>
+      <p class="auth-help"><a href="/">Home</a> · <a href="/settings.html">Settings</a> · <button class="linkbtn" id="setupOut" type="button">Sign out</button></p>`);
+    card.querySelector('#setupOut').onclick = () => (window.Clerk?.signOut() ?? Promise.resolve()).then(() => location.assign('/'));
     card.querySelector('#role').value = role;
     card.querySelector('#join').addEventListener('submit', async e => {
       e.preventDefault();
@@ -110,7 +115,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
 
     // Admins open the tower for every airport without joining one.
     const adminTower = me.admin && role === 'dashboard' && !(me.role === 'dashboard' && me.airport);
-    if (!adminTower && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers })) };
+    if (!adminTower && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
     if (!adminTower && me.role !== role) {
       panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
