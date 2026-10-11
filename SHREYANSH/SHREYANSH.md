@@ -57,3 +57,8 @@ the frozen test sets. The judge is built to say "uncertain" rather than be confi
 Each camera tile has a **Demo / Live** button (remembered per camera). Live is the default: real video when it
 arrives, demo footage automatically while there is none. Demo always shows the recorded clip in that tile;
 the server bot still analyses the real camera, so real alerts are unaffected.
+
+## Demo footage now drives the risk card and beacon (labelled DEMO)
+When no real camera has a recent event, the tower's risk card, sidebar status and beacon follow the demo footage
+(1-4 objects yellow, 5+ red, the site's rule), shown as "DEMO · …" with "Recorded demo footage · not a real alert".
+Demo footage still never creates alerts, sounds, incident reports or database rows; real camera events always win.

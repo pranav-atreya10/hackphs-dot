@@ -14,7 +14,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 const DEMO_AFTER_MS = 4000;
 const DEMO_CLIPS = ['gulls-sky', 'starling-murmuration', 'geese-beach', 'padilla-birds', 'drone-hover'];
 
-export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove, demo = true }) {
+export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove, onDemoState, demo = true }) {
   const tiles = new Map();
   let demoCount = 0, emptyDemo = null;
 
@@ -90,6 +90,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
       draw(t, state); label(t);
       Object.assign(demoFeed, { fallbackState: state, frameT: v.currentTime + d.loops * 1000, lastFrameAt: Date.now() });
       onFeed?.(demoFeed);
+      onDemoState?.({ cameraId: t.cameraId, state });   // demo risk for the tower display (never an alert)
     };
     d.loops = 0; v.addEventListener('seeked', () => { d.loops++; });   // keep engine time increasing across loops
     v.play().catch(() => { v.controls = false; });
