@@ -15,7 +15,7 @@ let auth = null, socket = null, soundOn = false, audioCtx = null;
 /* ---------- phone camera QR ---------- */
 const camUrl = `${location.origin}/camera.html`;
 $('camUrl').textContent = camUrl;
-try { const qr = qrcode(0, 'M'); qr.addData(camUrl); qr.make(); $('qr').innerHTML = qr.createImgTag(4, 0); } catch { $('qr').hidden = true; }
+try { const qr = qrcode(0, 'M'); qr.addData(camUrl); qr.make(); $('qr').innerHTML = qr.createImgTag(4, 0, 'QR code that opens the SkySentry camera page on a phone'); } catch { $('qr').hidden = true; }
 if (location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) $('camUrl').textContent += ' (phones need https for the camera; use the deployed site)';
 
 /* ---------- sound: alarm, then ElevenLabs audio from the server or the browser's voice ---------- */

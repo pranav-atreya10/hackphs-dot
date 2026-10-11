@@ -15,11 +15,13 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
   function tile(cameraId) {
     if (tiles.has(cameraId)) return tiles.get(cameraId);
     const el = document.createElement('div'); el.className = 'tile';
-    el.innerHTML = `<div class="wrap"><canvas></canvas><canvas></canvas></div><span class="tag"></span><span class="bot">waiting…</span>
+    el.innerHTML = `<div class="wrap"><canvas aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></div><span class="tag"></span><span class="bot">waiting…</span>
       <div class="tools" role="toolbar" aria-label="Feed view">
         <button type="button" data-z="-" aria-label="Zoom out">−</button><span class="zl">1×</span><button type="button" data-z="+" aria-label="Zoom in">+</button>
         <button type="button" data-z="0" aria-label="Reset zoom">Fit</button><button type="button" data-fs aria-label="Full screen">Full screen</button></div>`;
     el.querySelector('.tag').textContent = cameraId;
+    el.querySelector('.wrap').setAttribute('role', 'img');
+    el.querySelector('.wrap').setAttribute('aria-label', `Live video from camera ${cameraId}, with the detector's boxes drawn over birds and drones`);
     container.appendChild(el); hint.hidden = true;
     const [video, overlay] = el.querySelectorAll('canvas');
     const small = document.createElement('canvas');

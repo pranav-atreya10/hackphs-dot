@@ -17,6 +17,7 @@ const ai = require("./ai");
 const { createChat, createRequestLimit } = require("./ai-voice/chat");
 const { localHourLabel } = require("./ai-voice/describe");
 const { CameraBot, BOT_ENABLED } = require("./bot");
+const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
 
 // DigitalOcean App Platform injects PORT; default to 8080 (its default http_port).
 const PORT = process.env.PORT || 8080;
@@ -258,6 +259,22 @@ app.use("/api", (req, res, next) => {
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// Search engines: sitemap.xml and robots.txt with absolute URLs for whatever domain is serving the site.
+const SITE_BUILT = new Date().toISOString().slice(0, 10);
+function originFor(req) {
+  return siteOrigin({ siteUrl: process.env.SITE_URL, host: req.get("host"), forwardedProto: req.get("x-forwarded-proto"), protocol: req.protocol });
+}
+app.get("/sitemap.xml", (req, res) => {
+  const origin = originFor(req);
+  if (!origin) return res.sendStatus(400);
+  res.type("application/xml").set("Cache-Control", "public, max-age=3600").send(sitemapXml(origin, SITE_BUILT));
+});
+app.get("/robots.txt", (req, res) => {
+  const origin = originFor(req);
+  if (!origin) return res.sendStatus(400);
+  res.type("text/plain").set("Cache-Control", "public, max-age=3600").send(robotsTxt(origin));
+});
 
 // The publishable key is public by design; pages fetch it here so it lives in one .env.
 app.get("/api/auth/config", (req, res) => {
