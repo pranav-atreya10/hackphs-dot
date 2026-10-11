@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script src="/js/theme.js"></script>
 </head>
 <body>
 <title>SkySentry</title>
@@ -212,7 +218,6 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
 @media(max-width:640px){.wrap{padding-top:15px}.detail-badge{font-size:.9cqw}.caption{font-size:.95rem}.top span{font-size:.6rem}}
 </style>
 
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: one 1080px column on warm paper; serif headlines, quiet sans text, the film framed as the centrepiece. Single committed light look. */
 :root{
@@ -339,13 +344,14 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 .foot{margin-top:96px;padding-top:26px;border-top:1px solid var(--line-s);display:flex;flex-wrap:wrap;gap:14px 32px;justify-content:space-between;font:400 .88rem/1.6 var(--sans);color:var(--mute-s)}
 .foot b{font:500 1.2rem var(--serif);color:var(--ink-s)}
 </style>
+<link rel="stylesheet" href="/css/site.css">
 
 <header class="bar"><div class="bar-in">
-  <a class="brand" href="#top"><i></i>SkySentry</a>
+  <a class="brand" href="#top"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
   <nav class="nav" aria-label="Sections">
     <a href="#film">Film</a><a href="#how">How it works</a><a href="#live">Live system</a><a href="/camera.html">Camera</a><a href="/tower.html">Tower</a><a href="/demo.html">Demos</a><a href="#faq">FAQ</a>
   </nav>
-  <span class="tag">hackPHS 2026</span>
+  <span class="tag">hackPHS 2026</span><button class="theme-btn" type="button" data-theme-toggle aria-label="Theme"></button>
 </div></header>
 
 <main class="site" id="top">
@@ -371,7 +377,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
   <div class="stage" id="stage">
     <canvas id="gl" aria-label="3D airfield animation"></canvas>
     <div class="vignette"></div>
-    <div id="assetLoader"><span class="load-title">SKYSENTRY</span><span class="load-sub">PREPARING THE AIRFIELD</span><span class="load-track"></span><span class="load-note">Aircraft · materials · daylight</span></div>
+    <div id="assetLoader"><span class="load-title"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</span><span class="load-sub">PREPARING THE AIRFIELD</span><span class="load-track"></span><span class="load-note">Aircraft · materials · daylight</span></div>
     <div class="detail-badge">CINEMATIC EDITION <span>·</span> SIMULATED SCENARIO</div>
     <div class="slate" id="slate">01 / 08 · The airfield</div>
 
@@ -555,19 +561,19 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <p>Open the tower on one screen and a camera on another. Detections travel through this server to every tower at the same airport in under a second.</p></div>
     <div class="steps3">
       <a class="step3" href="/camera.html" style="text-decoration:none">
-        <svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2"><rect x="4" y="10" width="22" height="16" rx="3"/><path d="M26 15l6-4v14l-6-4"/></svg>
+        <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="22" height="16" rx="3"/><path d="M26 15l6-4v14l-6-4"/></svg>
         <h3>Camera station</h3>
         <p>Point a phone or laptop at the sky. Vivan’s engine finds birds by motion, counts wingbeats, groups flocks and works out how many seconds until they reach the runway.</p>
         <code>Webcam · video clip · synthetic sky</code>
       </a>
       <a class="step3" href="/tower.html" style="text-decoration:none">
-        <svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linejoin="round"><path d="M11 9h14l-2 7H13Z"/><path d="M15 16v15h6V16M10 31h16"/></svg>
+        <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M11 9h14l-2 7H13Z"/><path d="M15 16v15h6V16M10 31h16"/></svg>
         <h3>Tower dashboard</h3>
         <p>Live risk, spoken alerts, an airport map with each threat’s bearing, hourly charts, AI incident reports and the Arduino beacon.</p>
         <code>Socket.IO · Tiger Data · MongoDB · Gemini</code>
       </a>
       <a class="step3" href="/detection/test/" style="text-decoration:none">
-        <svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linecap="round"><path d="M6 19l7 7L30 9"/></svg>
+        <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 19l7 7L30 9"/></svg>
         <h3>Engine tests</h3>
         <p>Run the detection engine’s test suite and scenario accuracy table in your browser: flocks, lone birds, drones, plastic bags and planes.</p>
         <code>Synthetic scenarios · accuracy table</code>
@@ -658,7 +664,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
   </section>
 
   <footer class="foot">
-    <div><b>SkySentry</b><br>Built in 24 hours at hackPHS 2026 · Theme: Into the skies</div>
+    <div><b><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</b><br>Built in 24 hours at hackPHS 2026 · Theme: Into the skies</div>
     <div>Prototype demonstration. Film scenery is illustrative and readings are simulated.<br>3D assets: Poly Haven and Innerscene (CC0), Three.js (MIT). Full credits are under the film.</div>
   </footer>
 </main>
@@ -1174,5 +1180,6 @@ import { enhanceWorld } from './details.js';
 </script>
 
 <script src="/js/guide.js" defer></script>
+
 </body>
 </html>

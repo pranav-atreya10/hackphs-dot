@@ -4,63 +4,87 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SkySentry Tower</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script src="/js/theme.js"></script>
 <link rel="stylesheet" href="/css/app.css">
 <style>
   main.grid{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
+  .more{background:var(--paper-2);box-shadow:none}
   .duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-  .more{grid-column:1/-1} .more-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start}
-  .more-grid > .card{background:var(--paper)}
+  .more{grid-column:1/-1} .more-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
+  .more-grid > .card{background:var(--card)}
   @media (max-width:700px){.duo{grid-template-columns:1fr}}
-  #map{height:320px;border-radius:10px;border:1px solid var(--line)}
-  #alertText{margin:0;font:400 1.3rem/1.35 var(--serif);min-height:1.4em}
-  .risk[data-risk="red"]{animation:flash 1s infinite alternate} @keyframes flash{to{background:#f7e3dc}}
+  #map{height:320px;border-radius:8px;border:1px solid var(--line);isolation:isolate}   /* keeps Leaflet's z-indexes under the sign-in overlay */
+  :root[data-theme="dark"] #map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}}
+  #map .leaflet-bar{border-color:var(--line);box-shadow:none} #map .leaflet-bar a{background:var(--card);color:var(--ink);border-color:var(--line)} #map .leaflet-bar a:hover{background:var(--hover)}
+  #map .leaflet-control-attribution{background:color-mix(in srgb,var(--card) 85%,transparent);color:var(--mute)} #map .leaflet-control-attribution a{color:var(--mute)}
+  #alertText{margin:0;font:500 1.2rem/1.4 var(--sans);letter-spacing:-.01em;min-height:1.4em}
+  .risk[data-risk="red"]{animation:flash 1s infinite alternate} @keyframes flash{to{background:var(--flash)}}
   @media (prefers-reduced-motion:reduce){.risk[data-risk="red"]{animation:none}}
   .feed li{display:grid;grid-template-columns:5.2rem 4.6rem 1fr;gap:8px;border-top:1px solid var(--line);padding-top:5px}
   .incidents{list-style:none;margin:0;padding:0;display:grid;max-height:280px;overflow:auto}
   .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
-  .incidents button:hover b,.incidents button:focus-visible b{color:var(--clay)} .incidents b{font:500 1rem var(--serif)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
+  .incidents button:hover b,.incidents button:focus-visible b{text-decoration:underline;text-underline-offset:3px} .incidents b{font:500 .95rem var(--sans)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
   #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
   #beaconView{padding:8px 0}
-  form.ask{display:flex;gap:8px} form.ask input{flex:1;min-width:0}
+  form.ask{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 14px;background:var(--card);box-shadow:0 4px 20px -10px rgb(0 0 0/.15)}
+  form.ask:focus-within{border-color:var(--line-2)}
+  form.ask input{flex:1;min-width:0;border:0;padding:6px 0;background:transparent;outline:none}
+  form.ask button{flex:none;width:34px;height:34px;padding:0;border-radius:50%;display:grid;place-items:center}
+  form.ask button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .chat{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:300px;overflow:auto;align-content:start}
   .chat:empty{display:none}
-  .chat li{max-width:88%;padding:8px 12px;border-radius:12px;font:400 .98rem/1.45 var(--serif)}
-  .chat li.user{justify-self:end;background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:.9rem}
+  .chat li{max-width:88%;padding:8px 12px;border-radius:12px;font:400 .93rem/1.5 var(--sans)}
+  .chat li.user{justify-self:end;background:var(--accent);color:var(--on-accent)}
   .chat li.bot{justify-self:start;background:var(--paper-2)}
   .chat li.bot[aria-busy="true"]{color:var(--mute)}
   .chat .meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-  .chat .chip{font:500 .7rem var(--mono);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:2px 8px;background:var(--card)}
-  .chat button.chip{cursor:pointer;color:var(--clay)} .chat button.chip:hover{border-color:var(--clay);background:var(--card)}
+  .chat .chip{font:500 .7rem var(--mono);color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:2px 8px;background:var(--card)}
+  .chat button.chip{cursor:pointer;color:var(--ink)} .chat button.chip:hover{opacity:1;background:var(--hover)}
   .ask-head{display:flex;justify-content:space-between;align-items:center}
-  .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px}
+  .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line)}
   #qr canvas,#qr img{width:100%!important;height:100%!important}
   canvas#chart{max-height:220px}
-  #feeds{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-  .tile{position:relative;background:#0e1620;border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+  #feeds{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+  .tile{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3}
   .tile .wrap{position:absolute;inset:0;transform-origin:0 0}
   .tile canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
   .tile.zoomed{cursor:grab} .tile.zoomed:active{cursor:grabbing}
   .tile:fullscreen{aspect-ratio:auto;border-radius:0;width:100vw;height:100vh}
-  .tile .tools{position:absolute;right:10px;top:10px;display:flex;gap:4px;align-items:center;background:rgba(14,22,32,.75);padding:4px;border-radius:99px}
+  .tile .tools{position:absolute;right:10px;top:10px;display:flex;gap:4px;align-items:center;background:rgba(0,0,0,.66);padding:4px;border-radius:99px}
   .tile .tools button{all:unset;cursor:pointer;color:#fff;font:600 .78rem var(--sans);padding:3px 9px;border-radius:99px;min-width:14px;text-align:center}
   .tile .tools button:hover,.tile .tools button:focus-visible{background:rgba(255,255,255,.18)}
-  .tile .tools .zl{color:#c9d4dd;font:500 .72rem var(--mono);min-width:2.4em;text-align:center}
+  .tile .tools .zl{color:#d4d4d8;font:500 .72rem var(--mono);min-width:2.4em;text-align:center}
   #feeds:has(.tile:only-child){grid-template-columns:1fr}
-  .tile .tag{position:absolute;left:10px;top:10px;font:600 .78rem var(--sans);color:#fff;background:rgba(14,22,32,.75);padding:4px 10px;border-radius:99px}
-  .tile .bot{position:absolute;right:10px;bottom:10px;font:500 .72rem var(--mono);color:#e8eef1;background:rgba(14,22,32,.75);padding:3px 8px;border-radius:6px}
+  .tile .tag{position:absolute;left:10px;top:10px;font:600 .78rem var(--sans);color:#fff;background:rgba(0,0,0,.66);padding:4px 10px;border-radius:99px}
+  .tile .bot{position:absolute;right:10px;bottom:10px;font:500 .72rem var(--mono);color:#e4e4e7;background:rgba(0,0,0,.66);padding:3px 8px;border-radius:6px}
   @media (max-width:1000px){main.grid{grid-template-columns:1fr}#detail{grid-template-columns:1fr}}
 </style>
 </head>
-<body>
-<header class="top"><div class="top-in">
-  <a class="brand" href="/"><i></i>SkySentry</a><h1>Tower</h1>
-  <nav><a href="/">Home</a><a href="/camera.html">Camera</a><a href="/tower.html" aria-current="page">Tower</a><a href="/demo.html">Demos</a></nav>
-  <span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No cameras</span><span class="pill" id="who">…</span>
-  <button class="linkbtn" id="accountSecurity" type="button" hidden>Account security</button>
-  <button class="ghost" id="sound" type="button">Turn on alert sound</button>
-</div></header>
+<body class="app">
+<aside class="side" id="side">
+  <div class="side-head">
+    <a class="brand" href="/"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Theme"></button>
+    <button class="icon-btn side-toggle" type="button" data-side-toggle aria-controls="side" aria-expanded="false" aria-label="Menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+  <nav class="side-nav" aria-label="App"><a href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</a><a href="/tower.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l-1.5 6h-7z"/><path d="M9.5 10v11h5V10M6 21h12"/></svg>Tower</a><a href="/camera.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="14" height="12" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3"/></svg>Camera</a><a href="/demo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>Demos</a></nav>
+  <p class="side-label">Status</p>
+  <div class="side-status"><span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No cameras</span></div>
+  <div class="side-foot">
+    <button class="ghost" id="sound" type="button">Turn on alert sound</button>
+    <div class="who"><span class="avatar"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg></span><span id="who">…</span></div>
+    <div class="row"><button class="linkbtn" id="accountSecurity" type="button" hidden>Account security</button></div>
+  </div>
+</aside>
+<div class="page">
+<header class="page-head"><h1>Tower</h1><p>Live risk, camera feeds and alerts for the runway.</p></header>
 <div id="auth" hidden></div>
 
 <main class="grid">
@@ -94,13 +118,14 @@
       <section class="card"><h2>Detections by hour</h2><canvas id="chart" aria-label="Detections by hour, last 24 hours"></canvas><p class="hint" id="chartNote"></p></section>
       <section class="card"><div class="ask-head"><h2>Ask SkySentry</h2><button class="linkbtn" id="askClear" type="button" hidden>New chat</button></div>
       <ul class="chat" id="chat" aria-live="polite"></ul>
-      <form class="ask" id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question" maxlength="1000" autocomplete="off"><button>Ask</button></form>
+      <form class="ask" id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question" maxlength="1000" autocomplete="off"><button aria-label="Ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form>
       <p class="hint" id="answer">Ask about today's birds and drones, recent incidents, or what the cameras see right now. Advisory only.</p>
     </section>
       <section class="card"><h2>Live events</h2><ul class="log feed" id="feed"></ul></section>
     </div>
   </details>
 </main>
+</div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
