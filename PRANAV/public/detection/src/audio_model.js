@@ -172,7 +172,8 @@ export function referenceSignal(name, sr = 16000) {
   const y = new Float32Array(sr);
   if (name === 'lcg_noise') {
     let s = 12345;
-    for (let i = 0; i < sr; i++) { s = (1103515245 * s + 12345) % 2147483648; y[i] = (s / 2147483648 - 0.5) * 0.2; }
+    // Exact 32-bit integer maths (a plain multiply would overflow JavaScript's 53-bit precision).
+    for (let i = 0; i < sr; i++) { s = (Math.imul(1103515245, s) + 12345) & 0x7fffffff; y[i] = (s / 2147483648 - 0.5) * 0.2; }
     return y;
   }
   for (let i = 0; i < sr; i++) {
