@@ -31,8 +31,10 @@ export function chooseBirdCandidate(feeds, checked, now = Date.now()) {
 }
 
 export class VisualBirdVerifier {
-  constructor({ socket, button, status, loadAdapter = () => import('../detection/adapters/coco.js') }) {
-    Object.assign(this, { socket, button, status, loadAdapter });
+  constructor({ socket, button, status, loadAdapter = () => import('../detection/adapters/coco.js'), judge = null }) {
+    // judge(dataUrl, context) -> Gemini verdict; asked only when the on-device model is unsure.
+    Object.assign(this, { socket, button, status, loadAdapter, judge });
+    this.judgeOff = !judge; this.judged = 0;
     this.feeds = new Map(); this.checked = new Map(); this.enabled = false;
     this.generation = 0; this.timer = null; this.verifier = null; this.loading = null;
     this.busy = false;
@@ -120,20 +122,34 @@ export class VisualBirdVerifier {
     this.busy = true;
     this.setStatus(`Checking ${c.t.cameraId} · object ${c.tr.id}…`, 'checking');
     try {
-      const r = await this.verifier.classifyBox(c.t.video, bbox);
+      let r = await this.verifier.classifyBox(c.t.video, bbox);
       this.verifier.adapt(r.ms);
-      if (!this.enabled || generation !== this.generation || c.t.offline || Date.now() - now > MAX_FRAME_AGE) return;
-      if (fallback !== (c.t.mode === 'tower' || !!c.t.fallbackActive)) return;
+      // Second opinion: COCO-SSD is weak on small, distant birds. If it is unsure (no label, a non-bird
+      // label, or a low bird score), send the same 300 px crop to the strict Gemini bird judge.
+      if (!this.judgeOff && !(r.label === 'bird' && r.score >= 0.6)) {
+        try {
+          const v = await this.judge(this.verifier.canvas.toDataURL('image/jpeg', 0.85), `on-device model said ${r.label || 'nothing'} ${Math.round((r.score || 0) * 100)}%`);
+          if (v?.source === 'fallback' && /not configured/i.test(v.evidence || '')) this.judgeOff = true;   // no key: stop asking
+          else if (v && v.verdict !== 'uncertain') { this.judged++; r = { ...r, label: v.isBird ? 'bird' : /plane|jet|heli|aircraft/i.test(v.object || '') ? 'airplane' : 'kite', score: v.confidence, judge: 'gemini', object: v.object }; }
+        } catch { /* rate-limited or offline: keep the on-device answer */ }
+      }
+      if (!this.enabled || generation !== this.generation) return;
+      // Always show the answer, so a slow machine still visibly works; only the label is withheld when stale.
+      const answer = r.label ? `${r.judge ? (r.label === 'bird' ? 'bird' : `not a bird (${r.object || r.label})`) : r.label} ${Math.round(r.score * 100)}%` : 'no clear label';
+      const result = `Latest: ${answer}${r.judge ? ' (Gemini judge)' : ''} · ${r.ms} ms.`;
       const state = fallback ? c.t.fallbackState : c.t.botState;
-      if (!state?.tracks?.some(tr => tr.id === c.tr.id)) return;
+      if (c.t.offline || Date.now() - now > MAX_FRAME_AGE || fallback !== (c.t.mode === 'tower' || !!c.t.fallbackActive) ||
+          !state?.tracks?.some(tr => tr.id === c.tr.id)) {
+        this.setStatus(`Bird check active · ${this.checks} checks. ${result} The object moved on before the answer, so the label was not applied.`, 'active');
+        return;
+      }
       this.checks++;
       this.birds += r.label === 'bird' && r.score >= .4 ? 1 : 0;
-      const answer = r.label ? `${r.label} ${Math.round(r.score * 100)}%` : 'no clear label';
-      this.lastResult = `Latest: ${answer} · ${r.ms} ms.`;
+      this.lastResult = result;
       this.setStatus(`Bird check active · ${this.checks} checks. ${this.lastResult}`, 'active');
       if (fallback) {
-        c.t.engine?.applyLabel(c.tr.id, r.label, r.score, 'coco');
-      } else if (this.socket.connected) {
+        c.t.engine?.applyLabel(c.tr.id, r.label, r.score, r.judge === 'gemini' ? 'gemini' : 'coco');
+      } else if (this.socket.connected && !r.judge) {   // the server bot only trusts on-device COCO labels; Gemini verdicts stay on screen
         this.socket.timeout(2500).emit('tower:label', {
           cameraId: c.t.cameraId, trackId: c.tr.id, label: r.label, score: r.score,
           bbox, frameT, source: 'coco',

@@ -3,12 +3,12 @@
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <script src="/js/theme.js"></script>
 </head><body>
 <title>SkySentry in Motion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Layout: a 16:9 WebGL airfield stage (3D, camera moves per shot) with HTML HUD layers on top; captions + transport below. Single committed look: dark projector surround, daylight stage. */
 :root{
@@ -414,11 +414,11 @@ import { enhanceWorld } from './details.js';
   const T = THREE, has3D = typeof T !== "undefined";
   let renderer, scene, camera, sun, W = {}, detailReady = Promise.resolve();
   if (has3D) {
-    renderer = new T.WebGLRenderer({canvas:$("gl"), antialias:true});
+    renderer = new T.WebGLRenderer({canvas:$("gl"), antialias:false, powerPreference:"high-performance"}); // SMAA in the composer does the anti-aliasing; MSAA here was wasted work
     renderer.setPixelRatio(Math.min(1.15, window.devicePixelRatio || 1));
     renderer.info.autoReset=false;
     renderer.outputColorSpace = T.SRGBColorSpace; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFShadowMap;
     scene = new T.Scene();
     scene.fog = new T.FogExp2(0xcbdbe1, .00036);
     camera = new T.PerspectiveCamera(42, 16/9, 0.5, 6000);
@@ -439,7 +439,7 @@ import { enhanceWorld } from './details.js';
     // lights
     scene.add(new T.HemisphereLight(0xdceaff, 0x726f45, .85));
     sun = new T.DirectionalLight(0xffe4b8, 2.5);
-    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+    sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, {left:-240, right:240, top:240, bottom:-240, near:1, far:1400});
     sun.shadow.bias = -0.00015; sun.shadow.normalBias = .07; sun.shadow.radius = 3;
     scene.add(sun, sun.target);
@@ -811,7 +811,7 @@ import { enhanceWorld } from './details.js';
   }
   function loop(now) {
     if(playing)perfFrames++;
-    if(now-perfStamp>1200){stage.dataset.fps=String(Math.round(perfFrames*1000/(now-perfStamp)));stage.dataset.drawCalls=String(renderer?.info.render.calls||0);stage.dataset.triangles=String(renderer?.info.render.triangles||0);perfFrames=0;perfStamp=now;}
+    if(now-perfStamp>1200){const fpsNow=Math.round(perfFrames*1000/(now-perfStamp));if(playing&&ready&&renderer&&fpsNow<40&&renderer.shadowMap.autoUpdate){renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;setInterval(()=>{renderer.shadowMap.needsUpdate=true;},200);}stage.dataset.fps=String(fpsNow);stage.dataset.drawCalls=String(renderer?.info.render.calls||0);stage.dataset.triangles=String(renderer?.info.render.triangles||0);perfFrames=0;perfStamp=now;}
     const dt = Math.max(0, Math.min(.25, (now - last)/1000)); last = now;
     if (playing) {
       t += dt; gt += dt;

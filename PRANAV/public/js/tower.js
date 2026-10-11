@@ -1,6 +1,6 @@
 // Tower dashboard: listens on this server's /tower namespace (Pranav's relay) for Vivan's contract events,
 // shows risk, map pins from each camera's bearing, the hourly chart and incident reports, plays alerts,
-// and drives the Arduino beacon through Vivan's BeaconLink (or the on-screen VirtualBeacon).
+// and drives the software beacon (Vivan's VirtualBeacon protocol, rendered on screen; no hardware needed).
 import { signIn } from '/js/auth.js';
 import { BeaconLink, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
 import { startFeeds } from '/js/feeds.js';
@@ -119,22 +119,25 @@ function feed(ev) {
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
 }
 
-/* ---------- beacon: Vivan's protocol to the Arduino, mirrored on screen ---------- */
+/* ---------- beacon: Vivan's protocol, rendered in software (no Arduino) ---------- */
 const virtual = new VirtualBeacon($('beaconView'));
-const beacon = new BeaconLink();
-const serialWrite = beacon.writeLine;
-beacon.writeLine = async line => { virtual.feed(line); await serialWrite(line); };
+const beacon = new BeaconLink();   // never connected to serial; it only encodes and paces the protocol lines
+beacon.writeLine = async line => { virtual.feed(line); };
 let lastBeaconEv = null;
 setInterval(() => { if (lastBeaconEv && Date.now() - lastBeaconEv.receivedAt > 10000) beacon.push({ level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }); else beacon.tick(); }, 500);
 virtual.feed(encodeBeacon(0, { level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }));
+// Software-only beacon: the same G/Y/R protocol the old Arduino used, drawn on screen. The button puts it
+// full screen so a spare monitor in the tower works as the warning light.
 $('beaconBtn').addEventListener('click', async () => {
-  if (beacon.stats.connected) { await beacon.disconnect(); $('beaconBtn').textContent = 'Connect Arduino beacon'; $('beaconStatus').textContent = 'Disconnected. On-screen beacon still running.'; return; }
-  if (!BeaconLink.supported()) { $('beaconStatus').textContent = 'The Arduino link needs desktop Chrome or Edge.'; return; }
+  const view = $('beaconView');
   try {
-    await beacon.connect();
-    $('beaconBtn').textContent = 'Disconnect beacon';
-    $('beaconStatus').textContent = beacon.stats.ready ? `Connected: ${beacon.stats.device}` : 'Connected, but the beacon did not say READY. Check the sketch is uploaded.';
-  } catch (err) { $('beaconStatus').textContent = `Could not connect: ${err.message}`; }
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (view.requestFullscreen) await view.requestFullscreen();
+    else $('beaconStatus').textContent = 'Full screen is not available in this browser; the beacon keeps running here.';
+  } catch (err) { $('beaconStatus').textContent = `Full screen was blocked (${err.message}); the beacon keeps running here.`; }
+});
+document.addEventListener('fullscreenchange', () => {
+  $('beaconBtn').textContent = document.fullscreenElement === $('beaconView') ? 'Exit full screen' : 'Full-screen beacon';
 });
 
 /* ---------- incidents ---------- */
@@ -302,7 +305,11 @@ async function connect() {
     // The server emits the immediate red alert separately; announce it once by incident ID.
   });
   socket.on('incident', upsertIncident);
-  const visualBirds = new VisualBirdVerifier({ socket, button: $('birdCheck'), status: $('birdCheckStatus') });
+  const visualBirds = new VisualBirdVerifier({ socket, button: $('birdCheck'), status: $('birdCheckStatus'),
+    judge: (image, context) => api('/api/verify-bird', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image, context }) }) });
+  // Warm the browser cache with the bird model while the tower is idle, so "Enable" is near-instant later.
+  const warm = () => ['/ai-models/tf.min.js', '/ai-models/coco-ssd.min.js', '/ai-models/coco/model.json'].forEach(href => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = href; document.head.append(l); });
+  ('requestIdleCallback' in window) ? requestIdleCallback(warm, { timeout: 4000 }) : setTimeout(warm, 3000);
   startFeeds(socket, { container: $('feeds'), hint: $('feedsHint'), onFeed: t => visualBirds.onFeed(t) });
   socket.on('alert', announcements.receive);
   socket.on('alert_update', announcements.update);

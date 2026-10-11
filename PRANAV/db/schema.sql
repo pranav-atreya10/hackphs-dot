@@ -29,3 +29,14 @@ SELECT add_continuous_aggregate_policy('detections_hourly',
   end_offset        => INTERVAL '1 minute',
   schedule_interval => INTERVAL '1 minute',
   if_not_exists     => TRUE);
+
+-- One row per Gemini bird-judge verdict (POST /api/verify-bird and incident analysis), for accuracy-over-time charts.
+CREATE TABLE IF NOT EXISTS bird_checks (
+  time       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  airport    TEXT,
+  verdict    TEXT,  -- 'bird', 'not_bird' or 'uncertain'
+  confidence REAL,
+  source     TEXT   -- 'gemini' or 'fallback'
+);
+
+SELECT create_hypertable('bird_checks', by_range('time'), if_not_exists => TRUE);

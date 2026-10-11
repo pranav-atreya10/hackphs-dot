@@ -266,7 +266,8 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   // Focus subject per shot; null keeps everything sharp.
   const focusOn = {s1: () => W.plane.position, s3: t => t > 5.5 ? W.anchors.phone : null, s5: () => W.anchors.phone, s8: t => t > 4.4 ? W.plane.position : null};
   const apertures = {s1:.00007, s3:.00016, s5:.00022, s8:.00006};
-  let slowFrames = 0, frames = 0, lastT = performance.now(), quality = 0;
+  let slowFrames = 0, frames = 0, lastT = performance.now(), quality = 0, windowStart = performance.now();
+  const qualityRatio = () => quality === 0 ? pr : quality === -1 ? Math.min(pr, .9) : quality === -2 ? .75 : .6;
 
   W.cinemaUpdate = (id, t, gt) => {
     windU.value = gt;
@@ -289,9 +290,11 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
       composer.render();
       // Adaptive quality: reduce resolution, then costly screen effects on slow machines.
       const now = performance.now(), dt = now - lastT; lastT = now; frames++;
-      if (dt > 45) slowFrames++;
-      if (frames > 45) { if (slowFrames > 20 && quality > -2) { quality--; composer.setPixelRatio(quality === -1 ? 1 : .85); if(quality === -2){bloom.enabled=false;smaa.enabled=false;} } frames = slowFrames = 0; }
+      // Steps down faster (anything under ~36 fps counts as slow) and one level further than before.
+      if (dt > 28) slowFrames++;
+      // Judge every ~1.2 s of wall time (not every N frames), so a slow machine adapts within seconds.
+      if (now - windowStart > 1200 && frames >= 4) { windowStart = now; if (slowFrames > frames * 0.4 && quality > -3) { quality--; composer.setPixelRatio(qualityRatio()); if(quality <= -2){bloom.enabled=false;smaa.enabled=false;} } frames = slowFrames = 0; }
     },
-    resize(w, h) { composer.setPixelRatio(Math.min(quality < 0 ? (quality === -1 ? 1 : .85) : pr, Math.sqrt(1400000 / Math.max(1, w*h)))); composer.setSize(w, h); }
+    resize(w, h) { composer.setPixelRatio(Math.min(qualityRatio(), Math.sqrt(1400000 / Math.max(1, w*h)))); composer.setSize(w, h); }
   };
 }
