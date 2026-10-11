@@ -154,6 +154,11 @@ function draw(state) {
     ov.beginPath(); poly.forEach((p, i) => ov[i ? 'lineTo' : 'moveTo'](...P(p))); if (!drawing) ov.closePath();
     ov.fillStyle = 'rgba(194,100,63,.16)'; if (!drawing) ov.fill();
     ov.setLineDash([8, 6]); ov.strokeStyle = 'rgba(242,140,90,.9)'; ov.lineWidth = 2; ov.stroke(); ov.setLineDash([]);
+    if (!drawing) {   // name the shaded area so nobody has to guess what it is
+      const [lx, ly] = P([Math.min(...poly.map(p => p[0])), Math.min(...poly.map(p => p[1]))]);
+      const size = Math.round(11 * (overlay.width / 700 + .6));
+      ov.font = `600 ${size}px system-ui`; ov.fillStyle = 'rgba(242,140,90,.95)'; ov.fillText('Runway corridor', lx + 8, ly + 8 + size);
+    }
   }
   if (!state) return;
   ov.font = `600 ${Math.round(12 * (overlay.width / 700 + .6))}px system-ui`; ov.lineWidth = 2;
@@ -240,6 +245,7 @@ async function start() {
     $('empty').hidden = true; fitOverlay();
     if (mode() === 'local' && $('coco').getAttribute('aria-pressed') === 'true') void startCoco().catch(err => { $('aiStatus').textContent = `Bird check unavailable: ${err.message}`; });
     t0 = performance.now(); running = true; $('start').textContent = 'Stop';
+    if (mode() === 'stream') { $('banner').dataset.risk = 'wait'; $('bannerText').textContent = 'Waiting for the server bot…'; }
     status(socket?.connected ? 'Starting… keep the camera still for a few seconds' : 'Started, but not connected to the server yet. It will send as soon as it connects.');
     log(`started · ${source === 'synthetic' ? $('scenario').value.replace(/_/g, ' ') : source}`);
     rafId = requestAnimationFrame(loop);
@@ -278,6 +284,9 @@ function stop() {
   video.srcObject?.getTracks().forEach(tr => tr.stop());
   video.pause();
   wakeLock?.release().catch(() => {}); wakeLock = null;
+  // Back to the idle look: no frozen frame or corridor left behind, and the hint shows again.
+  ov.clearRect(0, 0, overlay.width, overlay.height); srcCtx.clearRect(0, 0, srcCanvas.width, srcCanvas.height); video.hidden = true; srcCanvas.hidden = true;
+  $('empty').textContent = 'Stopped. Press Start to go again.'; $('empty').hidden = false;
   $('start').textContent = 'Start'; log('stopped'); status('Stopped.'); $('banner').dataset.risk = 'green'; $('bannerText').textContent = 'Ready';
 }
 $('start').addEventListener('click', () => (running ? stop() : start()));

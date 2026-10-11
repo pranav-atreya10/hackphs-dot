@@ -22,6 +22,7 @@
   .banner i{flex:none;width:11px;height:11px;border-radius:50%;background:var(--go)}
   .banner[data-risk="yellow"] i{background:var(--warn)} .banner[data-risk="red"] i{background:var(--stop)} .banner[data-risk="wait"] i{background:#a1a1aa}
   #empty{position:absolute;inset:0;display:grid;place-items:center;color:#a1a1aa;text-align:center;padding:30px}
+  #empty[hidden]{display:none}   /* display:grid above would otherwise beat the hidden attribute and leave the hint over the video */
   .controls #start{width:100%;font-size:1.05rem;font-weight:600;padding:14px;border-radius:10px}
   .status{margin:0;text-align:center;color:var(--mute);font:500 .9rem var(--sans)}
   details.fold[open]{gap:12px}
