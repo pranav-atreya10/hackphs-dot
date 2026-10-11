@@ -60,6 +60,9 @@ const live = readFileSync(fileURLToPath(new URL('./live-section.html', import.me
 const anchor = '<section class="sec" id="stack">';
 if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
+// Promo clips (public/promo/, made from the team's GIFs) right after "How it works".
+const promo = readFileSync(fileURLToPath(new URL('./promo-section.html', import.meta.url)), 'utf8');
+site = must(site, '<section class="sec" id="risk">', promo + '\n  <section class="sec" id="risk">', 'site.html #risk section');
 // The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), and the top bar's
 // signed-in swap (public/js/nav-account.js: a Dashboard button in place of Sign in / Sign up).
 const scripts = '<script src="/js/guide.js" defer></script>\n<script src="/js/nav-account.js" defer></script>\n';

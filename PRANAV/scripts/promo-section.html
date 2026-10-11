@@ -1,0 +1,41 @@
+  <section class="sec" id="promo">
+    <div class="sec-head"><span class="eyebrow-s">In action</span><h2>From the runway edge to the tower</h2>
+      <p>A phone mounted at the runway watches the sky, and the tower hears about it in under a second.</p></div>
+    <div class="promo-grid">
+      <figure class="promo-card">
+        <video muted loop playsinline preload="none" poster="/promo/cheap-hardware.jpg" aria-label="A rugged phone strapped to a pole at the runway edge at dusk, with a drone and a flock of birds overhead. Text: Turn $200 hardware into AI radar.">
+          <source src="/promo/cheap-hardware.mp4" type="video/mp4">
+        </video>
+      </figure>
+      <figure class="promo-card">
+        <video muted loop playsinline preload="none" poster="/promo/tower-alerts.jpg" aria-label="A phone clamped to a railing overlooking a runway, boxing a flock of birds and an unknown drone on screen. Text: Sub-second tower alerts.">
+          <source src="/promo/tower-alerts.mp4" type="video/mp4">
+        </video>
+      </figure>
+      <figure class="promo-card">
+        <video muted loop playsinline preload="none" poster="/promo/airfield-defense.jpg" aria-label="A tablet on a control tower console showing a radar-style map of threats around the airfield at night. Text: Complete airfield defense today.">
+          <source src="/promo/airfield-defense.mp4" type="video/mp4">
+        </video>
+      </figure>
+      <figure class="promo-card">
+        <video muted loop playsinline preload="none" poster="/promo/cloud-ai.jpg" aria-label="A phone on a tripod facing a lit runway at dusk as a bird flies past. Text: Millions for radar? Try cloud AI.">
+          <source src="/promo/cloud-ai.mp4" type="video/mp4">
+        </video>
+      </figure>
+    </div>
+  </section>
+  <script>
+  // Promo clips: load and play only while on screen; under reduced motion, show the poster with controls instead.
+  (() => {
+    const clips = document.querySelectorAll('#promo video');
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
+      clips.forEach(v => { v.controls = true; });
+      return;
+    }
+    const io = new IntersectionObserver(entries => entries.forEach(e => {
+      if (e.isIntersecting) e.target.play().catch(() => { e.target.controls = true; });
+      else e.target.pause();
+    }), { threshold: 0.25 });
+    clips.forEach(v => io.observe(v));
+  })();
+  </script>
