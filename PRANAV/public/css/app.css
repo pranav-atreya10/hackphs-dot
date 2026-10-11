@@ -113,3 +113,31 @@ details.fold summary{cursor:pointer;font:600 1rem var(--sans);list-style:none;di
 details.fold summary::after{content:"+";color:var(--mute);font:400 1.3rem var(--sans);line-height:1} details.fold[open] summary::after{content:"\2212"}
 details.fold summary::-webkit-details-marker{display:none}
 @media (max-width:760px){main.grid{padding:14px 16px 40px}}
+
+/* ---------- motion (all off under prefers-reduced-motion) ----------
+   Content rises in once on load, staggered; demo cards rise as they scroll into view (CSS scroll timeline,
+   no JS, still everywhere else). Only wrappers animate, so the risk card's own red flash is untouched. */
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes live{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--go) 55%,transparent)}70%,100%{box-shadow:0 0 0 6px transparent}}
+@media (prefers-reduced-motion:no-preference){
+  .side-nav a,.icon-btn,.linkbtn,button.ghost,input,select{transition:background .15s,color .15s,border-color .15s,opacity .15s}
+  .side{animation:fade .4s ease-out both}
+  .page-head,main.grid .col > *,main.grid > details,main.cam > *,.intro,#libraryStatus{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+  .page-head{animation-delay:.04s}
+  main.grid .col:first-child > :nth-child(1),main.cam > :nth-child(1),.intro{animation-delay:.1s}
+  main.grid .col:first-child > :nth-child(2),main.grid .col:nth-child(2) > :nth-child(1),main.cam > :nth-child(2){animation-delay:.17s}
+  main.grid .col:nth-child(2) > :nth-child(2),main.cam > :nth-child(3),#libraryStatus{animation-delay:.24s}
+  main.grid > details,main.cam > :nth-child(n+4){animation-delay:.31s}
+  details.fold[open] > :not(summary){animation:rise .35s cubic-bezier(.2,.7,.2,1) both}
+  details.fold summary::after{transition:transform .2s} details.fold[open] summary::after{transform:rotate(180deg)}
+  .side .pill[data-ok="1"]::before{animation:live 2s ease-out infinite}
+  .side[data-open] > :not(.side-head){animation:rise .25s ease-out both}
+  .auth-card{animation:pop .35s cubic-bezier(.2,.7,.2,1) both}
+  .clip{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+  @supports (animation-timeline:view()){
+    .clip{animation:rise linear both;animation-timeline:view();animation-range:entry 5% entry 55%}
+    .clip:nth-child(3n+2){animation-range:entry 12% entry 62%} .clip:nth-child(3n){animation-range:entry 19% entry 69%}
+  }
+}
