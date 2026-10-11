@@ -1,0 +1,6 @@
+[
+  {"file": "gulls-sky.webm", "title": "Gulls swarming in open sky", "expect": "flock, should go red", "credit": "Marc Plomp / Beeld en Geluid, CC BY-SA 3.0 NL, Wikimedia Commons: Kokmeeuwen in de lucht-4961761.webm"},
+  {"file": "starling-murmuration.webm", "title": "Starling murmuration at dusk", "expect": "huge flock", "credit": "P K, CC BY 2.0, Wikimedia Commons: Starling cloud.webm"},
+  {"file": "drone-hover.webm", "title": "Drone hovering over a field", "expect": "steady object (drone)", "credit": "BLM Oregon & Washington, public domain, Wikimedia Commons: BLM drone training (34216006294).webm"},
+  {"file": "geese-beach.webm", "title": "Geese over a beach", "expect": "small flock", "credit": "Maoileann, CC BY-SA 4.0, Wikimedia Commons: Geese-1280554, Dingle Peninsula, Co. Kerry, Ireland.webm"}
+]

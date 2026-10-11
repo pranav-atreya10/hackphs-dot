@@ -4,7 +4,7 @@
 // server bot (bot:state). If the server bot hands over (bot:status mode "tower") or goes quiet while frames
 // keep arriving, this page runs its own copy of Vivan's engine on the same frames and reports events with
 // tower:bot-event. The server accepts them from one tower per camera, so alerts are never duplicated.
-import { DetectionEngine } from '/detection/index.js';
+import { DetectionEngine, PRESETS } from '/detection/index.js';
 
 const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)' };
 const FALLBACK_AFTER_MS = 3000;
@@ -15,7 +15,10 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
   function tile(cameraId) {
     if (tiles.has(cameraId)) return tiles.get(cameraId);
     const el = document.createElement('div'); el.className = 'tile';
-    el.innerHTML = '<canvas></canvas><canvas></canvas><span class="tag"></span><span class="bot">waiting…</span>';
+    el.innerHTML = `<div class="wrap"><canvas></canvas><canvas></canvas></div><span class="tag"></span><span class="bot">waiting…</span>
+      <div class="tools" role="toolbar" aria-label="Feed view">
+        <button type="button" data-z="-" aria-label="Zoom out">−</button><span class="zl">1×</span><button type="button" data-z="+" aria-label="Zoom in">+</button>
+        <button type="button" data-z="0" aria-label="Reset zoom">Fit</button><button type="button" data-fs aria-label="Full screen">Full screen</button></div>`;
     el.querySelector('.tag').textContent = cameraId;
     container.appendChild(el); hint.hidden = true;
     const [video, overlay] = el.querySelectorAll('canvas');
@@ -23,6 +26,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
     const t = { cameraId, el, video, overlay, vctx: video.getContext('2d'), octx: overlay.getContext('2d'), small, sctx: small.getContext('2d', { willReadFrequently: true }),
       botState: null, lastBotAt: 0, frames: 0, mode: 'server', reason: null, config: null, engine: null, bitmap: null, lastFrameAt: 0, owner: true };
     tiles.set(cameraId, t);
+    setupZoom(t);
     return t;
   }
 
@@ -43,6 +47,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
   }
   function applyConfig(t) {
     if (!t.engine || !t.config) return;
+    for (const name of [].concat(t.config.preset || 'phone_15fps')) if (PRESETS[name]) t.engine.setConfig(PRESETS[name]);
     if (t.config.camera) t.engine.setCamera(t.config.camera);
     if (Array.isArray(t.config.corridor)) t.engine.setCorridor(t.config.corridor);
   }
@@ -57,8 +62,10 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
   }
 
   function draw(t, state) {
-    const o = t.overlay, r = o.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
-    if (o.width !== Math.round(r.width * dpr)) { o.width = Math.round(r.width * dpr); o.height = Math.round(r.height * dpr); }
+    // clientWidth ignores the zoom transform, so the overlay stays aligned with the video at any zoom.
+    const o = t.overlay, dpr = Math.min(2, devicePixelRatio || 1) * Math.max(1, t.zoom?.z || 1);
+    const ow = Math.round(o.clientWidth * dpr), oh = Math.round(o.clientHeight * dpr);
+    if (o.width !== ow || o.height !== oh) { o.width = ow; o.height = oh; }
     const W = o.width, H = o.height, ar = t.video.width / t.video.height || 4 / 3;
     let w = W, h = W / ar; if (h > H) { h = H; w = H * ar; }
     const f = { x: (W - w) / 2, y: (H - h) / 2, w, h }, P = ([x, y]) => [f.x + x * f.w, f.y + y * f.h];
@@ -86,6 +93,41 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
   function label(t) {
     const fb = fallbackActive(t);
     t.el.querySelector('.bot').textContent = fb ? (t.owner ? 'bot: this tower (server bot unavailable)' : 'bot: another tower') : 'bot: server';
+  }
+
+  // Zoom (buttons, wheel, double-click) and pan (drag) on one wrapper holding video + overlay, plus full screen.
+  function setupZoom(t) {
+    const wrap = t.el.querySelector('.wrap'), z = t.zoom = { z: 1, x: 0, y: 0 };
+    const apply = () => {
+      const w = t.el.clientWidth, h = t.el.clientHeight;
+      z.x = Math.min(0, Math.max(w - w * z.z, z.x)); z.y = Math.min(0, Math.max(h - h * z.z, z.y));
+      wrap.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.z})`;
+      t.el.querySelector('.zl').textContent = `${+z.z.toFixed(1)}×`;
+      t.el.classList.toggle('zoomed', z.z > 1);
+    };
+    const zoomAt = (nz, px, py) => {               // keep the point under (px, py) fixed while zooming
+      nz = Math.min(6, Math.max(1, nz));
+      const r = t.el.getBoundingClientRect(), cx = px - r.left, cy = py - r.top;
+      z.x = cx - (cx - z.x) * (nz / z.z); z.y = cy - (cy - z.y) * (nz / z.z); z.z = nz; apply();
+    };
+    const centre = () => { const r = t.el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+    t.el.querySelector('.tools').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.z === '+') zoomAt(z.z * 1.5, ...centre());
+      if (b.dataset.z === '-') zoomAt(z.z / 1.5, ...centre());
+      if (b.dataset.z === '0') { z.z = 1; z.x = z.y = 0; apply(); }
+      if ('fs' in b.dataset) {
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        else t.el.requestFullscreen?.().catch(() => {});
+      }
+    });
+    t.el.addEventListener('wheel', e => { e.preventDefault(); zoomAt(z.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY); }, { passive: false });
+    t.el.addEventListener('dblclick', e => { if (e.target.closest('.tools')) return; z.z > 1 ? (z.z = 1, z.x = z.y = 0, apply()) : zoomAt(2.5, e.clientX, e.clientY); });
+    let drag = null;
+    t.el.addEventListener('pointerdown', e => { if (z.z > 1 && !e.target.closest('.tools')) { drag = { x: e.clientX - z.x, y: e.clientY - z.y }; t.el.setPointerCapture(e.pointerId); } });
+    t.el.addEventListener('pointermove', e => { if (drag) { z.x = e.clientX - drag.x; z.y = e.clientY - drag.y; apply(); } });
+    t.el.addEventListener('pointerup', () => { drag = null; });
+    document.addEventListener('fullscreenchange', () => { t.el.querySelector('[data-fs]').textContent = document.fullscreenElement === t.el ? 'Exit full screen' : 'Full screen'; apply(); });
   }
 
   socket.on('camera:config', cfg => { const t = tile(cfg.cameraId); t.config = cfg; applyConfig(t); });

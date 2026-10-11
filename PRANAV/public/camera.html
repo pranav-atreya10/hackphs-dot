@@ -54,12 +54,16 @@
       <label for="mode">Where the bot runs
         <select id="mode"><option value="stream">Stream to the website (recommended)</option><option value="local">Detect on this phone (weak connection)</option></select></label>
       <label for="source">Video source
-        <select id="source"><option value="webcam">Phone / webcam camera</option><option value="synthetic">Synthetic sky (demo, no camera)</option><option value="clip">Video clip</option></select></label>
+        <select id="source"><option value="webcam">Phone / webcam camera</option><option value="demo">Demo clip (real birds and drones)</option><option value="synthetic">Synthetic sky (demo, no camera)</option><option value="clip">Video file from this device</option></select></label>
+      <label for="demoClip" id="demoWrap" hidden>Demo clip<select id="demoClip"></select></label>
       <label for="scenario" id="scenarioWrap">Synthetic scenario<select id="scenario"></select></label>
       <label for="clip" id="clipWrap" hidden>Video file<input id="clip" type="file" accept="video/*"></label>
     </section>
     <section class="card">
       <h2>This camera</h2>
+      <label for="tuning">Detection tuning
+        <select id="tuning"><option value="phone_15fps">Phone streaming (~15 fps)</option><option value="laptop_30fps">Laptop or clip (~30 fps)</option><option value="distant_birds">Distant birds (few pixels wide)</option><option value="noisy_camera">Grainy or low light</option></select></label>
+      <p class="hint">Use a tripod or lean the phone on something: the bot looks for movement against a still sky, so a moving camera confuses it.</p>
       <label for="cameraId">Camera ID<input id="cameraId" value="runway-east"></label>
       <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <label for="heading">Faces (compass °)<input id="heading" type="number" min="0" max="359" value="90"></label>
