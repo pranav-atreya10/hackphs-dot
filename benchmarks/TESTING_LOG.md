@@ -25,8 +25,16 @@ Illustrative example charts live in `benchmarks/demo/` and are NOT results.
 | ESC-50 | No "traffic" class; first download cut off at 504 MB | Traffic = engine (44); complete archive required before freezing; folds 1–3 test-only |
 | Field videos | 5 files = 3 unique (2 byte-identical pairs); faces in some segments | Duplicates removed; sky segments only; tier 2 frozen once 15–20 clips exist |
 
+## 2026-10-10: v0 audio model trained
+
+| Check | Finding | Action |
+|---|---|---|
+| Training | Log-mel CNN, 8 epochs, DADS shards 2 (first 85%), 5, 10, 19, 24; validation = shard 30 + last 15% of shard 2; test shards 3, 36 never touched | Weights `models/audio/v0_audio.pt` (hash in `.json`) |
+| Validation | **AUC 1.000 from epoch 1**: flagged as suspiciously good (protocol section 6) | Investigated before trusting |
+| Shortcut test | Short drone clips are looped to 1 s; could the model have learned "looped audio = drone"? No-drone audio continuous: 0.0% called drone (mean p 0.006); same audio cut to 0.6 s and looped: 0.0% (mean p 0.007) | **No looping shortcut.** Validation is within-dataset (likely the same drones/recording setups), so treat it as an upper bound; the held-out shards, ESC-50 noise mixes, helicopter/airplane look-alikes and field audio are the real tests |
+
 ## Versions
 
 | Version | Status |
 |---|---|
-| v0 | Training in progress: YOLO11n (labels from file names) epoch 2/40; audio CNN starts when DADS shards arrive. No results yet. |
+| v0 | Audio model trained (see above). YOLO11n (labels from file names) still training. No benchmark results yet. |
