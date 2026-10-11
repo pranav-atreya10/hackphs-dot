@@ -6,7 +6,7 @@ The PR #12 AI/voice design is adapted under PRANAV/ai-voice using native HTTP re
 ## Software-only remake: speed, live bird check, Gemini bird judge (branch `feature/software-only-perf-ai`)
 
 **Why:** the site was slow (18.8 MB on first load, no compression or caching), the tower crashed when a CDN
-failed, the "Enable trained bird check" never showed results, and the Arduino beacon didn't work out.
+failed, the "Enable trained bird check" never showed results, and the hardware beacon was dropped.
 
 **What changed and how it works**
 - **Loading speed** (`PRANAV/server.js`): gzip via `compression` and a one-week browser cache for `assets/`,
@@ -29,7 +29,7 @@ failed, the "Enable trained bird check" never showed results, and the Arduino be
   hypertable `bird_checks` (`db/schema.sql`, run `npm run db:setup`). Without keys, the hourly chart and
   incidents use a labelled in-memory fallback (`X-Data-Source` header) instead of returning 503.
 - **Software only**: the tower beacon is the on-screen beacon with a Full-screen button for a spare monitor.
-  The Web Serial/Arduino link is no longer used.
+  All hardware code and sketches were removed; the project is software only.
 - **Scroll animations**: `public/js/reveal.js` reveals sections/cards on scroll in browsers without CSS
   scroll timelines (Safari, Firefox) and on the app pages; it respects reduced motion.
 - **Tests**: `test/bird-judge.test.cjs` (6 new). `npm test`: 91 passing.
@@ -45,3 +45,20 @@ the frozen test sets. The judge is built to say "uncertain" rather than be confi
   alerts, incidents or database rows. The first real frame from that camera replaces the demo instantly.
 - **Camera page** (`public/js/camera.js`): devices with no camera start on a demo clip; if camera access is
   blocked or busy, pressing Start switches to a demo clip automatically and streams it as this camera.
+
+## All hardware removed (software only)
+- Deleted `arduino-stuff/`, `VIVAN/hardware/` (sketch + KiCad schematic) and `ATHARV/hardware/` (UNO Q sketches).
+- `detection/adapters/beacon.js` (both copies): the Web Serial `BeaconLink` is replaced by a software `BeaconPacer`
+  that only paces updates to the on-screen `VirtualBeacon`. No serial, USB or "READY" handshake remains.
+- The tower beacon now shows green CLEAR when there are no recent events (it used to show the old
+  hardware "OFFLINE" chase pattern), and every page and doc mentioning the hardware beacon was updated.
+
+## Demo / Live switch on every tower feed
+Each camera tile has a **Demo / Live** button (remembered per camera). Live is the default: real video when it
+arrives, demo footage automatically while there is none. Demo always shows the recorded clip in that tile;
+the server bot still analyses the real camera, so real alerts are unaffected.
+
+## Demo footage now drives the risk card and beacon (labelled DEMO)
+When no real camera has a recent event, the tower's risk card, sidebar status and beacon follow the demo footage
+(1-4 objects yellow, 5+ red, the site's rule), shown as "DEMO · …" with "Recorded demo footage · not a real alert".
+Demo footage still never creates alerts, sounds, incident reports or database rows; real camera events always win.

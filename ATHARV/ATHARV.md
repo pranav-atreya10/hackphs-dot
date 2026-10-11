@@ -9,7 +9,7 @@ Everyone's work now runs as **one website on Pranav's server** (`PRANAV/`, the f
 |---|---|---|
 | `/` | Landing page with the 3D film, how it works, risk levels, the alert journey, FAQ, and a **Live system** section | Atharv's site + film |
 | `/camera.html` | Phone-first camera station. Runs **Vivan's DetectionEngine** on the rear camera, a video clip, or his synthetic sky. Draws tracks, flocks and the runway corridor; sends his contract events (with a snapshot crop for yellow/red) to Pranav's `/camera` namespace. Optional COCO-SSD second opinion, drone-hum microphone, simulated drone, keeps the screen awake. | Vivan's engine + adapters |
-| `/tower.html` | Tower dashboard on Pranav's `/tower` namespace: risk across cameras, spoken alerts, Leaflet map with each camera's view cone and threat pins from Vivan's bearings, hourly chart (`/api/hourly`), incident reports (`/api/incidents`), "Ask SkySentry", a **QR code for adding a phone camera**, and **Vivan's beacon** (on-screen, plus the Arduino over Web Serial). | Atharv's dashboard, Pranav's API, Vivan's beacon |
+| `/tower.html` | Tower dashboard on Pranav's `/tower` namespace: risk across cameras, spoken alerts, Leaflet map with each camera's view cone and threat pins from Vivan's bearings, hourly chart (`/api/hourly`), incident reports (`/api/incidents`), "Ask SkySentry", a **QR code for adding a phone camera**, and **Vivan's beacon** (software, on screen). | Atharv's dashboard, Pranav's API, Vivan's beacon |
 | `/film.html` | The standalone film | Atharv |
 | `/detection/test/` | Vivan's engine tests and accuracy table | Vivan |
 | `/chat.html` | Pranav's original chat demo (moved from `/`) | Pranav |
@@ -73,8 +73,8 @@ The iPhone is just the camera. It streams its video to the website, and the **bo
 
 A third option on the camera page, **Detect on this phone**, runs the engine on the phone itself and only sends results. Use it on a weak connection.
 
-### Hardware
-`ATHARV/hardware/skysentry_beacon_unoq` is the UNO Q version of Vivan's beacon. It speaks his `B …` protocol, so the tower's **Connect Arduino beacon** button can drive it. See `ATHARV/hardware/README.md` for the wiring. It still needs testing on the board: the UNO Q routes USB serial through its Linux side.
+### Beacon
+The beacon is software only: the tower draws it on screen, and **Full-screen beacon** turns a spare monitor into the warning light. The earlier hardware sketches were removed.
 
 ### Tested
 - A scripted phone streamed 61–98 frames. Every frame and every overlay state reached the tower, and the bot raised yellow, then red, with a spoken alert.

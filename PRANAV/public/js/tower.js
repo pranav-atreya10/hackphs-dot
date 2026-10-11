@@ -2,7 +2,7 @@
 // shows risk, map pins from each camera's bearing, the hourly chart and incident reports, plays alerts,
 // and drives the software beacon (Vivan's VirtualBeacon protocol, rendered on screen; no hardware needed).
 import { signIn } from '/js/auth.js';
-import { BeaconLink, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
+import { BeaconPacer, VirtualBeacon, encodeBeacon, frameFromState } from '/detection/adapters/beacon.js';
 import { startFeeds } from '/js/feeds.js';
 import { VisualBirdVerifier } from '/js/visual-ai.js';
 import { createAlertPlayer } from '/js/alert-player.mjs';
@@ -50,6 +50,21 @@ const announcements = createAlertPlayer({
 
 /* ---------- risk across all cameras (each camera's latest event, for 10 s) ---------- */
 const latest = new Map();
+// Demo footage risk: shown on the risk card, sidebar and beacon when no real camera has a recent event,
+// always labelled DEMO. It never creates alerts, sounds, incidents or database rows.
+const demoRisk = new Map();
+function demoLevel(state) {
+  const objs = (state?.tracks || []).filter(tr => ['bird', 'unknown', 'drone'].includes(tr.classification));
+  const biggestFlock = Math.max(0, ...(state?.flocks || []).map(f => f.size || 0));
+  const n = Math.max(objs.length, biggestFlock);
+  let lvl = state?.risk?.level || 'green';
+  if (lvl === 'green' && n >= 1) lvl = n >= 5 ? 'red' : 'yellow';        // site rule: 1-4 birds yellow, 5+ red
+  if (lvl === 'yellow' && n >= 5) lvl = 'red';
+  const birds = objs.filter(tr => tr.classification === 'bird').length, drones = objs.some(tr => tr.classification === 'drone');
+  const what = !n ? 'Clear sky' : drones ? 'Drone in view' : `${n} flying object${n > 1 ? 's' : ''}${birds ? ` (${birds} classed as bird${birds > 1 ? 's' : ''})` : ''}`;
+  return { lvl, what, n };
+}
+function onDemoState({ cameraId, state }) { demoRisk.set(cameraId, { ...demoLevel(state), state, at: Date.now() }); }
 function describe(ev) {
   if (!ev || ev.risk === 'green' || ev.type === 'none') return 'Clear sky';
   if (ev.direction === 'heard, not seen') return 'Drone heard, not seen';
@@ -60,18 +75,21 @@ function refreshRisk() {
   const now = Date.now();
   let top = null;
   for (const ev of latest.values()) if (now - ev.receivedAt < 10000 && (!top || RANK[ev.risk] > RANK[top.risk])) top = ev;
-  const lvl = top?.risk || 'green';
+  let demo = null;
+  if (!top) for (const d of demoRisk.values()) if (now - d.at < 2000 && (!demo || RANK[d.lvl] > RANK[demo.lvl])) demo = d;
+  const lvl = top?.risk || demo?.lvl || 'green';
   $('risk').dataset.risk = lvl; $('riskLvl').textContent = lvl.toUpperCase();
-  $('riskWhat').textContent = describe(top);
+  const what = demo ? `DEMO · ${demo.what}` : describe(top);
+  $('riskWhat').textContent = what;
   // the same status, always visible in the sidebar
-  const side = $('sideRisk'), what = describe(top);
+  const side = $('sideRisk');
   if (side.dataset.risk !== lvl || side.dataset.what !== what) {
     side.dataset.risk = lvl; side.dataset.what = what;
     const line = document.createElement('span');
     line.append(Object.assign(document.createElement('b'), { textContent: lvl.toUpperCase() }), ` · ${what}`);
     side.replaceChildren(line);
   }
-  $('riskWhy').textContent = top ? `${top.cameraId} · ${time(top.receivedAt)}${top.eta_seconds != null ? ` · ${Math.round(top.eta_seconds)} s to corridor` : ''}${top.reasons?.length ? ' · ' + top.reasons.join(', ') : ''}` : 'No recent camera events';
+  $('riskWhy').textContent = demo ? 'Recorded demo footage · not a real alert' : top ? `${top.cameraId} · ${time(top.receivedAt)}${top.eta_seconds != null ? ` · ${Math.round(top.eta_seconds)} s to corridor` : ''}${top.reasons?.length ? ' · ' + top.reasons.join(', ') : ''}` : 'No recent camera events';
 }
 setInterval(refreshRisk, 1000);
 
@@ -119,14 +137,20 @@ function feed(ev) {
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
 }
 
-/* ---------- beacon: Vivan's protocol, rendered in software (no Arduino) ---------- */
+/* ---------- beacon: Vivan's protocol, rendered in software ---------- */
 const virtual = new VirtualBeacon($('beaconView'));
-const beacon = new BeaconLink();   // never connected to serial; it only encodes and paces the protocol lines
+const beacon = new BeaconPacer();   // software only: paces updates to the on-screen beacon
 beacon.writeLine = async line => { virtual.feed(line); };
 let lastBeaconEv = null;
-setInterval(() => { if (lastBeaconEv && Date.now() - lastBeaconEv.receivedAt > 10000) beacon.push({ level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }); else beacon.tick(); }, 500);
+setInterval(() => {
+  if (lastBeaconEv && Date.now() - lastBeaconEv.receivedAt <= 10000) return beacon.tick();   // real camera events win
+  let demo = null;
+  for (const d of demoRisk.values()) if (Date.now() - d.at < 2000 && (!demo || RANK[d.lvl] > RANK[demo.lvl])) demo = d;
+  if (demo) beacon.push({ ...frameFromState({ ...demo.state, risk: { level: demo.lvl } }, { heading_deg: 90 }), count: Math.min(99, demo.n), kind: demo.n ? (demo.what.startsWith('Drone') ? 'D' : 'B') : 'N' });
+  else beacon.push({ level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 });
+}, 500);
 virtual.feed(encodeBeacon(0, { level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }));
-// Software-only beacon: the same G/Y/R protocol the old Arduino used, drawn on screen. The button puts it
+// Software-only beacon: Vivan's G/Y/R protocol drawn on screen. The button puts it
 // full screen so a spare monitor in the tower works as the warning light.
 $('beaconBtn').addEventListener('click', async () => {
   const view = $('beaconView');
@@ -310,7 +334,7 @@ async function connect() {
   // Warm the browser cache with the bird model while the tower is idle, so "Enable" is near-instant later.
   const warm = () => ['/ai-models/tf.min.js', '/ai-models/coco-ssd.min.js', '/ai-models/coco/model.json'].forEach(href => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = href; document.head.append(l); });
   ('requestIdleCallback' in window) ? requestIdleCallback(warm, { timeout: 4000 }) : setTimeout(warm, 3000);
-  startFeeds(socket, { container: $('feeds'), hint: $('feedsHint'), onFeed: t => visualBirds.onFeed(t) });
+  startFeeds(socket, { container: $('feeds'), hint: $('feedsHint'), onFeed: t => visualBirds.onFeed(t), onDemoState });
   socket.on('alert', announcements.receive);
   socket.on('alert_update', announcements.update);
 }
