@@ -228,3 +228,18 @@ Fixed a signing failure: the blockheight-aware web3 Transaction constructor requ
 - robots.txt keeps crawlers out of `/api/`.
 - 5 new tests; the full suite is 74/74.
 - Optional: set `SITE_URL=https://your-domain` once there's a custom domain.
+
+## Sign up / sign in, "Get the app" and the hero buttons
+**Top bar:** "Open the tower" is replaced by **Sign in** (text link) and **Sign up** (the highlighted button). Both go to the new `account.html`. On phones, the section links hide, but Sign in and Sign up stay visible.
+
+**Hero:** the highlighted button is now **Get the app**, which opens `app.html`. That page just says "Still Under Progress" and has a link back. Search engines are told not to index it. "Watch the 100-second film" is now the plain secondary button. "How it works" left the hero because it's already in the top bar.
+
+**How sign-up works (`account.html` + `js/account.js`):**
+- It uses the same Clerk setup the camera and tower pages already use, and the same server endpoints (`/api/auth/config`, `/api/auth/me`, `/api/auth/join`). No server changes.
+- `/account.html` shows Clerk's sign-up form. `/account.html?mode=sign-in` shows the sign-in form. Clerk's own "Already have an account?" links switch between them.
+- After signing up, the person picks "Tower dashboard" or "Camera station" and enters their airport's join code. This is the same step as before; I moved it out of `signIn()` into `finishSetup()` in `js/auth.js` so both places share it.
+- Once set up, the page shows the email, role and airport, plus buttons for Open the tower / Start the camera, Manage account and Sign out.
+- If the server has no Clerk keys, the page says accounts aren't on yet and links to the tower and camera pages.
+- Note: the production Clerk key only works on the DigitalOcean domain. On localhost the page shows "Could not load the sign-in service". That's expected.
+
+**Where the changes live:** the landing page is generated, so the nav and hero edits are in `scripts/sync-web.mjs`, followed by `npm run sync-web`. Atharv's `site.html` is untouched. The link styling is in `css/site.css`. `test/auth-ui.test.cjs` now strips every `export` from `auth.js` before loading it, because `auth.js` exports more functions. 74/74 tests pass.

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
-const source = fs.readFileSync(require('node:path').join(__dirname, '../public/js/auth.js'), 'utf8').replace('export async function signIn', 'async function signIn') + '\nthis.loadClerk = loadClerk;';
+const source = fs.readFileSync(require('node:path').join(__dirname, '../public/js/auth.js'), 'utf8').replace(/^export /gm, '') + '\nthis.loadClerk = loadClerk;';
 const key = 'pk_test_' + Buffer.from('auth.example.clerk.accounts.dev$').toString('base64');
 function fixture({ brokenUI = false } = {}) {
   const urls = [], loads = [], w = {};
