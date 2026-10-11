@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SkySentry Tower</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <meta name="description" content="SkySentry tower dashboard: live runway risk, camera feeds, spoken alerts and incident reports.">
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <script src="/js/theme.js"></script>
 <link rel="stylesheet" href="/css/app.css">
 <style>
@@ -33,7 +33,7 @@
   .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
   .incidents button:hover b,.incidents button:focus-visible b{text-decoration:underline;text-underline-offset:3px} .incidents b{font:500 .95rem var(--sans)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
   #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
-  #beaconView{padding:8px 0}
+  #beaconView{padding:8px 0} #beaconView:fullscreen{display:grid;place-items:center;background:var(--paper,#000);padding:6vmin} #beaconView:fullscreen>*{transform:scale(2.2)}
   .side-airport{display:grid;gap:4px;padding:0 6px} .side-airport .side-label{margin:14px 4px 2px} .side-airport input{width:100%;font-size:.9rem}
   .side-airport input:disabled{opacity:1;color:var(--ink);background:var(--paper-2)} .side-airport .hint{margin:0 4px;min-height:1em;font-size:.78rem}
   form.ask{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 14px;background:var(--card);box-shadow:0 4px 20px -10px rgb(0 0 0/.15)}
@@ -121,7 +121,7 @@
     <div class="more-grid">
       <section class="card"><h2>Tower beacon</h2>
       <div id="beaconView"></div>
-      <div class="row"><button class="ghost" id="beaconBtn" type="button">Connect Arduino beacon</button><span class="hint" id="beaconStatus">On-screen beacon running. Plug the Arduino in by USB to drive the real one.</span></div>
+      <div class="row"><button class="ghost" id="beaconBtn" type="button">Full-screen beacon</button><span class="hint" id="beaconStatus">Software beacon running · no hardware needed. Put it full screen on a spare monitor in the tower.</span></div>
     </section>
       <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>
       <section class="card"><h2>Detections by hour</h2><canvas id="chart" aria-label="Detections by hour, last 24 hours"></canvas><p class="hint" id="chartNote"></p></section>
@@ -136,9 +136,10 @@
 </main>
 </div>
 <script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/vendor/chart.umd.min.js"></script>
+<script src="/vendor/qrcode.min.js"></script>
 <script type="module" src="/js/tower.js"></script>
+<script src="/js/reveal.js" defer></script>
 </body>
 </html>

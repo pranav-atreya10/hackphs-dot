@@ -267,7 +267,9 @@ async function start() {
         video.srcObject = null; video.src = URL.createObjectURL(file); video.loop = true;
       } else if (source === 'demo') {
         if (!$('demoClip').value) throw new Error('No demo clips found on this server.');
-        video.srcObject = null; video.src = `/clips/${$('demoClip').value}`; video.loop = true;
+        // Browsers without H.264 (Chromium builds, some Linux Firefox) get the VP9 WebM copy of the same clip.
+        const clip = $('demoClip').value, h264 = video.canPlayType('video/mp4; codecs="avc1.42E01E"');
+        video.srcObject = null; video.src = `/clips/${h264 ? clip : clip.replace(/\.mp4$/, '.webm')}`; video.loop = true;
         // On-device detection runs at full frame rate; streaming is capped near 15 fps, so keep the phone preset there.
         if (mode() === 'local' && $('tuning').value === 'phone_15fps') { $('tuning').value = 'laptop_30fps'; applyCamera(); sendConfig(); }
       } else {
@@ -296,6 +298,11 @@ async function start() {
         : err.name === 'NotFoundError' ? 'This device has no camera' : 'The camera is busy in another app or tab';
       $('empty').textContent = `${why}, or use Upload a video.`; $('empty').hidden = false;
       status(`${why}.`);
+    } else {
+      // Every other failure (unplayable clip, missing file, model error) is shown, not just logged.
+      const why = /no supported source|NotSupported|decode/i.test(`${err.name} ${err.message}`) ? 'This browser cannot play that video format. Try Chrome, or upload an MP4 or WebM' : err.message;
+      $('empty').textContent = `Could not start: ${why}.`; $('empty').hidden = false;
+      status(`Could not start: ${why}.`);
     }
   }
   $('start').disabled = false;

@@ -2,6 +2,7 @@ const path = require("path");
 const http = require("http");
 const crypto = require("crypto");
 const express = require("express");
+const compression = require("compression");
 const { Server } = require("socket.io");
 const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
@@ -100,7 +101,36 @@ const toNumber = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? 
 
 // Persist one relayed event (columns per the team plan's event format; the snapshot is not stored here).
 // Failures are logged, not thrown, so a DB outage never blocks the live relay.
+// Without DATABASE_URL the last 24 h of detections are kept in memory, so the tower chart still works in a
+// demo. With Tiger Data configured, the hypertable + continuous aggregate are the source of truth.
+const memDetections = [];
+function rememberDetection(event) {
+  memDetections.push({ t: Number(event.receivedAt) || Date.now(), type: toText(event.type), n: toNumber(event.object_count) || 0 });
+  const cutoff = Date.now() - 24 * 3600_000;
+  while (memDetections.length && (memDetections[0].t < cutoff || memDetections.length > 50_000)) memDetections.shift();
+}
+function memHourly() {
+  const buckets = new Map();
+  for (const d of memDetections) {
+    if (!d.type) continue;
+    const hour = new Date(Math.floor(d.t / 3600_000) * 3600_000).toISOString();
+    const key = hour + "|" + d.type, b = buckets.get(key) || { hour, type: d.type, events: 0, total_objects: 0 };
+    b.events++; b.total_objects += d.n; buckets.set(key, b);
+  }
+  return [...buckets.values()].sort((a, b) => a.hour.localeCompare(b.hour) || a.type.localeCompare(b.type));
+}
+
+// Every Gemini bird verdict is kept for the judges' audit trail: the full document in MongoDB
+// (skysentry.bird_verdicts) and one time-series row in Tiger Data (bird_checks hypertable).
+async function logBirdVerdict(v, airport) {
+  const doc = { time: new Date(), airport, verdict: v.verdict, confidence: v.confidence, object: v.object, evidence: v.evidence, source: v.source, model: v.model || null };
+  if (mongo) withMongo((mdb) => mdb.collection("bird_verdicts").insertOne(doc)).catch((err) => console.error("failed to store bird verdict:", err.message));
+  if (db) db.query("INSERT INTO bird_checks (time, airport, verdict, confidence, source) VALUES (now(), $1, $2, $3, $4)",
+    [airport, v.verdict, v.confidence, v.source]).catch((err) => console.error("failed to store bird check:", err.message));
+}
+
 async function storeDetection(event) {
+  rememberDetection(event);
   if (!db) return;
   const count = toNumber(event.object_count);
   try {
@@ -124,8 +154,17 @@ async function storeDetection(event) {
 
 // Save a yellow/red event as an incident report (document shape per the team plan). The AI step fills
 // gemini_label, report, and solana_tx later by updating the document with _id = event.id.
+// Without MONGODB_URI the newest 50 incidents are kept in memory so the tower's report list still works.
+const memIncidents = [];
 async function storeIncident(event) {
-  if (!mongo) return;
+  if (!mongo) {
+    memIncidents.unshift({ _id: event.id, time: new Date(event.receivedAt), camera_id: event.cameraId, airport: event.airport,
+      type: toText(event.type), object_count: toNumber(event.object_count), direction: toText(event.direction),
+      confidence: toNumber(event.confidence), risk: event.risk, snapshot: typeof event.snapshot === "string" ? event.snapshot : null,
+      gemini_label: null, report: null, solana_tx: null });
+    memIncidents.length = Math.min(memIncidents.length, 50);
+    return;
+  }
   try {
     await withMongo((mdb) => mdb.collection("incidents").insertOne({
       _id: event.id,
@@ -265,6 +304,7 @@ function relayCameraEvent(cameraId, payload, airport = null) {
         create: () => storeIncident(event),
         save: async (fields) => {
           if (mongo) await withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields }));
+          else { const doc = memIncidents.find((d) => d._id === event.id); if (doc) Object.assign(doc, fields); }
         },
         emit: (name, data) => towersFor(airport).emit(name, data),
       })
@@ -292,7 +332,20 @@ app.use("/api", (req, res, next) => {
 });
 
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+// Gzip text responses (HTML/JS/CSS and the base64 *.json 3D assets shrink a lot). Socket.IO and
+// binary camera frames are unaffected; already-compressed media (mp4/jpg) is skipped by the filter.
+app.use(compression({ threshold: 1024 }));
+// Heavy, rarely-changing files (3D assets, AI model weights, vendored libraries, clips) are cached
+// by the browser for a week, so the second visit and the bird check load instantly. HTML and app JS
+// revalidate every time so new deploys show up immediately.
+const LONG_CACHE = /^\/(assets|ai-models|vendor|clips|promo|brand|detection\/models)\//;
+app.use(express.static(path.join(__dirname, "public"), {
+  setHeaders(res, filePath) {
+    const rel = "/" + path.relative(path.join(__dirname, "public"), filePath).split(path.sep).join("/");
+    if (LONG_CACHE.test(rel)) res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    else res.setHeader("Cache-Control", "no-cache");
+  },
+}));
 
 // Search engines: sitemap.xml and robots.txt with absolute URLs for whatever domain is serving the site.
 const SITE_BUILT = new Date().toISOString().slice(0, 10);
@@ -454,7 +507,7 @@ app.get("/health/db", async (req, res) => {
 
 // Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
 app.get("/api/hourly", requireDashboard, async (req, res) => {
-  if (!db) return res.status(503).json({ error: "database not configured" });
+  if (!db) { res.set("X-Data-Source", "memory (set DATABASE_URL for Tiger Data)"); return res.json(memHourly()); }
   try {
     const { rows } = await db.query(
       "SELECT * FROM detections_hourly WHERE hour > now() - interval '24 hours' ORDER BY hour, type"
@@ -468,7 +521,11 @@ app.get("/api/hourly", requireDashboard, async (req, res) => {
 
 // Latest 20 incident reports, newest first (only the caller's airport for signed-in dashboards).
 app.get("/api/incidents", requireDashboard, async (req, res) => {
-  if (!mongo) return res.status(503).json({ error: "incident store not configured" });
+  if (!mongo) {
+    const airport = viewAirport(req, req.query.airport);
+    res.set("X-Data-Source", "memory (set MONGODB_URI for MongoDB Atlas)");
+    return res.json(memIncidents.filter((d) => !airport || d.airport === airport).slice(0, 20));
+  }
   try {
     const airport = viewAirport(req, req.query.airport);
     const filter = airport ? { airport } : {};
@@ -572,6 +629,20 @@ app.post("/api/guide", async (req, res) => {
   const messages = req.body?.messages;
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: "send messages: [{ role, content }]" });
   res.json(await chat.guide(messages));
+});
+
+// Gemini bird judge: { image: base64 JPEG crop or data URL, context?: string } ->
+// { verdict: "bird"|"not_bird"|"uncertain", isBird, confidence, object, evidence, source }.
+// The tower calls this as a second opinion when the on-device model is unsure. Rate-limited per tower.
+const birdJudgeLimit = createRequestLimit({ max: 30, windowMs: 60_000 });
+const { verifyBird } = require("./ai-voice/ai");
+app.post("/api/verify-bird", requireDashboard, async (req, res) => {
+  if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip)) return res.status(429).json({ error: "too many checks; wait a minute" });
+  const image = typeof req.body?.image === "string" ? req.body.image : "";
+  if (!image || image.length > 900_000) return res.status(400).json({ error: "send image: a base64 JPEG under ~650 KB" });
+  const verdict = await verifyBird(image, typeof req.body?.context === "string" ? req.body.context : "");
+  logBirdVerdict(verdict, req.airport ?? null);
+  res.json(verdict);
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).
