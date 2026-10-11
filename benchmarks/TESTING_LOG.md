@@ -50,4 +50,4 @@ Illustrative example charts live in `benchmarks/demo/` and are NOT results.
 
 | Version | Status |
 |---|---|
-| v0 | Audio model trained (see above). YOLO11n (labels from file names) still training. No benchmark results yet. |
+| v0 | Audio model trained (see above). YOLO11n (labels from file names) training: 9/40 epochs done. No benchmark results yet. |
