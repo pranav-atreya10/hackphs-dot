@@ -10,13 +10,14 @@ function fixture(overrides = {}) {
   class Connection {
     async getGenesisHash() { return DEVNET_GENESIS; }
     async getBalance() { return 100000; }
+    async getFeeForMessage() { return { value: 5000 }; }
     async getLatestBlockhash() { return { blockhash: 'block', lastValidBlockHeight: 100 }; }
     async sendRawTransaction() { calls.push('send'); return 'signature-test'; }
     async getSignatureStatuses() { return { value: [{ confirmationStatus: 'confirmed', err: null }] }; }
     async getBlockHeight() { return 50; }
   }
   Object.assign(Connection.prototype, overrides);
-  class Transaction { add() { return this; } sign() {} serialize() { return Buffer.from('tx'); } }
+  class Transaction { add() { return this; } compileMessage() { return {}; } sign() {} serialize() { return Buffer.from('tx'); } }
   class PublicKey { constructor(value) { this.value = value; } toBase58() { return this.value; } }
   return { calls, web3: { Connection, Transaction, PublicKey, TransactionInstruction: class {}, Keypair: { fromSecretKey: () => ({ publicKey: new PublicKey('public-wallet') }) } } };
 }
