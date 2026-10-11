@@ -457,3 +457,8 @@ The tower sidebar's Status section now starts with the current risk, e.g. **RED 
 The landing page's 3D film listens on the whole page for **Space** (play/pause) and the **arrow keys** (scenes), and skips key presses that come from text boxes. The chat widget (`js/guide.js`) lives in a shadow root, and from outside a shadow root a key press looks like it came from the widget's outer element, not its text box. So whenever the film was on screen, every space you typed in the chat paused the film and the space never appeared; the arrow keys also skipped scenes. The widget now stops key events at its own boundary, so they never reach the film. Atharv's film code is unchanged.
 
 **Checked:** headless Chrome, film on screen, chat open, typing "a", Space, "b". Before: "ab", and the film paused. After: "a b", and the film kept playing. Tests: 91/91.
+
+## Tower: close a video feed (✕)
+Each feed tile on the tower has an **✕** at the end of its toolbar. Closing a tile removes it, and the tower ignores that camera (no tile, no video decoding) even while it keeps streaming, so stale cameras and demo-footage tiles stop piling up. A **Show hidden feeds (N)** button under the feeds brings them all back. The "Demo footage" placeholder tile can be closed too. Closing only affects this tower screen; the camera keeps sending, and alerts still arrive.
+
+**Checked:** headless Chrome on a local server: the demo placeholder showed with no cameras; two cameras gave two tiles. Closing cam-a removed its tile and kept it hidden while it was still sending, and Show hidden feeds brought it back. No script errors. Tests: 91/91.

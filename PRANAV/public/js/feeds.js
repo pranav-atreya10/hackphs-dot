@@ -17,6 +17,20 @@ const DEMO_CLIPS = ['gulls-sky', 'starling-murmuration', 'geese-beach', 'padilla
 export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove, onDemoState, demo = true }) {
   const tiles = new Map();
   let demoCount = 0, emptyDemo = null;
+  // Feeds closed with ✕: ignored (no tile, no decoding) until "Show hidden feeds" brings them back.
+  const dismissed = new Set();
+  let emptyDemoClosed = false;
+  const restore = document.createElement('button');
+  restore.type = 'button'; restore.className = 'ghost feeds-restore'; restore.hidden = true;
+  restore.onclick = () => { dismissed.clear(); emptyDemoClosed = false; restore.hidden = true; showEmptyDemo(); };
+  container.after(restore);
+  const showRestore = () => { const n = dismissed.size + (emptyDemoClosed ? 1 : 0); restore.hidden = !n; restore.textContent = `Show hidden feeds (${n})`; };
+  function closeTile(t) {
+    if (t === emptyDemo) { removeEmptyDemo(); emptyDemoClosed = true; }
+    else { dismissed.add(t.cameraId); stopDemo(t); t.bitmap?.close?.(); t.el.remove(); tiles.delete(t.cameraId); onRemove?.(t.cameraId); }
+    hint.hidden = tiles.size > 0 || Boolean(emptyDemo);
+    showRestore();
+  }
 
   function tile(cameraId) {
     if (tiles.has(cameraId)) return tiles.get(cameraId);
@@ -25,7 +39,8 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
       <div class="tools" role="toolbar" aria-label="Feed view">
         <button type="button" data-z="-" aria-label="Zoom out">−</button><span class="zl">1×</span><button type="button" data-z="+" aria-label="Zoom in">+</button>
         <button type="button" data-z="0" aria-label="Reset zoom">Fit</button><button type="button" data-fs aria-label="Full screen">Full screen</button>
-        <button type="button" data-src aria-pressed="false" title="Switch between the live camera and recorded demo footage">Demo</button></div>`;
+        <button type="button" data-src aria-pressed="false" title="Switch between the live camera and recorded demo footage">Demo</button>
+        <button type="button" data-close aria-label="Close this feed" title="Close this feed">✕</button></div>`;
     el.querySelector('.tag').textContent = cameraId;
     el.querySelector('.wrap').setAttribute('role', 'img');
     el.querySelector('.wrap').setAttribute('aria-label', `Live video from camera ${cameraId}, with the detector's boxes drawn over birds and drones`);
@@ -37,6 +52,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
       decoding: false, pending: null, received: 0, fps: 0, fpsAt: performance.now(), offline: false };
     t.source = store.get(`skysentry.feedSource.${cameraId}`) === 'demo' ? 'demo' : 'live';
     tiles.set(cameraId, t);
+    el.querySelector('[data-close]').onclick = () => closeTile(t);
     setupZoom(t);
     updateSourceButton(t);
     if (t.source === 'demo') startDemo(t);
@@ -105,7 +121,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
   }
   // No camera connected at all: one demo tile fills the feed area until a real camera appears.
   function showEmptyDemo() {
-    if (!demo || emptyDemo || tiles.size) return;
+    if (!demo || emptyDemo || tiles.size || emptyDemoClosed) return;
     const id = 'Demo footage';
     emptyDemo = tile(id); emptyDemo.placeholder = true; emptyDemo.placeholderFor = null; emptyDemo.el.querySelector('[data-src]').hidden = true;
     tiles.delete(id);                       // not a real camera: never matched by socket events
@@ -228,9 +244,9 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     document.addEventListener('fullscreenchange', () => { t.el.querySelector('[data-fs]').textContent = document.fullscreenElement === t.el ? 'Exit full screen' : 'Full screen'; apply(); });
   }
 
-  socket.on('camera:config', cfg => { const t = tile(cfg.cameraId); t.config = cfg; applyConfig(t); });
-  socket.on('bot:status', s => { const t = tile(s.cameraId); t.mode = s.mode; t.reason = s.reason; label(t); });
-  socket.on('bot:state', ({ cameraId, state }) => { const t = tile(cameraId); t.botState = state; t.lastBotAt = Date.now(); label(t); });
+  socket.on('camera:config', cfg => { if (dismissed.has(cfg.cameraId)) return; const t = tile(cfg.cameraId); t.config = cfg; applyConfig(t); });
+  socket.on('bot:status', s => { if (dismissed.has(s.cameraId)) return; const t = tile(s.cameraId); t.mode = s.mode; t.reason = s.reason; label(t); });
+  socket.on('bot:state', ({ cameraId, state }) => { if (dismissed.has(cameraId)) return; const t = tile(cameraId); t.botState = state; t.lastBotAt = Date.now(); label(t); });
   socket.on('camera:status', ({ cameraId, online }) => {
     const t = tiles.get(cameraId); if (!t) return;
     t.offline = !online; label(t);
@@ -238,6 +254,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     setTimeout(() => { if (Date.now() - t.lastFrameAt > 9000) { stopDemo(t); t.bitmap?.close?.(); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
   });
   socket.on('camera:frame', ({ cameraId, t: ft, jpeg }) => {
+    if (dismissed.has(cameraId)) return;
     const t = tile(cameraId);
     if (t.demo && t.source !== 'demo') stopDemo(t);   // real video beats automatic demo footage immediately
     t.lastFrameAt = Date.now(); t.offline = false; t.received++;
