@@ -8,6 +8,7 @@ import { DetectionEngine, PRESETS } from '/detection/index.js';
 
 const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)', debris: '#a08c78' };
 const FALLBACK_AFTER_MS = 3000;
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 // When a camera sends no video (or no camera is connected at all), a recorded demo clip plays in its place.
 // Demo footage runs the detector locally only for the boxes: it never emits events, alerts or incidents.
 const DEMO_AFTER_MS = 4000;
@@ -23,7 +24,8 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     el.innerHTML = `<div class="wrap"><canvas aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></div><span class="tag"></span><span class="bot">waiting…</span>
       <div class="tools" role="toolbar" aria-label="Feed view">
         <button type="button" data-z="-" aria-label="Zoom out">−</button><span class="zl">1×</span><button type="button" data-z="+" aria-label="Zoom in">+</button>
-        <button type="button" data-z="0" aria-label="Reset zoom">Fit</button><button type="button" data-fs aria-label="Full screen">Full screen</button></div>`;
+        <button type="button" data-z="0" aria-label="Reset zoom">Fit</button><button type="button" data-fs aria-label="Full screen">Full screen</button>
+        <button type="button" data-src aria-pressed="false" title="Switch between the live camera and recorded demo footage">Demo</button></div>`;
     el.querySelector('.tag').textContent = cameraId;
     el.querySelector('.wrap').setAttribute('role', 'img');
     el.querySelector('.wrap').setAttribute('aria-label', `Live video from camera ${cameraId}, with the detector's boxes drawn over birds and drones`);
@@ -33,11 +35,32 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     const t = { cameraId, el, video, overlay, vctx: video.getContext('2d'), octx: overlay.getContext('2d'), small, sctx: small.getContext('2d', { willReadFrequently: true }),
       botState: null, lastBotAt: 0, frames: 0, mode: 'server', reason: null, config: null, engine: null, bitmap: null, lastFrameAt: 0, owner: true,
       decoding: false, pending: null, received: 0, fps: 0, fpsAt: performance.now(), offline: false };
+    t.source = store.get(`skysentry.feedSource.${cameraId}`) === 'demo' ? 'demo' : 'live';
     tiles.set(cameraId, t);
     setupZoom(t);
+    updateSourceButton(t);
+    if (t.source === 'demo') startDemo(t);
     if (demo) setTimeout(() => { if (tiles.get(cameraId) === t && !t.frames) startDemo(t); }, DEMO_AFTER_MS);
     if (emptyDemo && !emptyDemo.placeholderFor) removeEmptyDemo();
     return t;
+  }
+
+  // ---------- Demo / Live switch ----------
+  // Live (default): real video when it arrives, demo footage automatically while there is none.
+  // Demo: always show recorded footage in this tile, even if the camera is streaming (alerts still come from the live camera).
+  function updateSourceButton(t) {
+    const b = t.el.querySelector('[data-src]'); if (!b) return;
+    const demoOn = t.source === 'demo';
+    b.textContent = demoOn ? 'Live' : 'Demo'; b.setAttribute('aria-pressed', String(demoOn));
+    b.setAttribute('aria-label', demoOn ? 'Show the live camera' : 'Show demo footage');
+  }
+  function setSource(t, source) {
+    t.source = source; if (!t.placeholder) store.set(`skysentry.feedSource.${t.cameraId}`, source);
+    updateSourceButton(t);
+    if (source === 'demo') startDemo(t);
+    else if (t.frames && Date.now() - t.lastFrameAt < 3000) stopDemo(t);   // live video is flowing: show it
+    else if (!t.demo) startDemo(t);                                        // nothing live yet: keep demo until it arrives
+    label(t);
   }
 
   // ---------- demo footage ----------
@@ -83,7 +106,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
   function showEmptyDemo() {
     if (!demo || emptyDemo || tiles.size) return;
     const id = 'Demo footage';
-    emptyDemo = tile(id); emptyDemo.placeholder = true; emptyDemo.placeholderFor = null;
+    emptyDemo = tile(id); emptyDemo.placeholder = true; emptyDemo.placeholderFor = null; emptyDemo.el.querySelector('[data-src]').hidden = true;
     tiles.delete(id);                       // not a real camera: never matched by socket events
     hint.hidden = false; hint.textContent = 'No camera is streaming yet, so recorded demo footage is playing. Open Camera on a phone (or scan the QR code) to go live.';
     startDemo(emptyDemo);
@@ -161,7 +184,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
     const state = fb ? t.fallbackState : t.botState;
     const shake = state?.motion?.shake ?? state?.shake;
     const learning = state?.motion ? !state.motion.ready : state?.learning;
-    if (t.demo) { const el = t.el.querySelector('.bot'), text = `DEMO · recorded clip · alerts off${t.placeholder ? '' : ' · waiting for this camera'}`; if (el.textContent !== text) el.textContent = text; return; }
+    if (t.demo) { const el = t.el.querySelector('.bot'), text = `DEMO · recorded clip${t.placeholder ? ' · alerts off' : t.source === 'demo' ? ' · press Live for the camera' : ' · waiting for this camera'}`; if (el.textContent !== text) el.textContent = text; return; }
     let text = t.offline ? 'Camera offline' : !t.frames ? 'Waiting for video…' : shake ? 'Camera moving · hold still' : learning ? 'Model warming up · hold still' : !state ? 'Starting model…' : fb ? (t.owner ? 'Model active on this Mac' : 'Model active on another tower') : 'Model active on server';
     if (t.frames && !t.offline) text += ` · ${Math.round(t.fps)} fps`;
     const el = t.el.querySelector('.bot');
@@ -189,6 +212,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
       if (b.dataset.z === '+') zoomAt(z.z * 1.5, ...centre());
       if (b.dataset.z === '-') zoomAt(z.z / 1.5, ...centre());
       if (b.dataset.z === '0') { z.z = 1; z.x = z.y = 0; apply(); }
+      if ('src' in b.dataset) { if (t.placeholder) { b.disabled = true; return; } setSource(t, t.source === 'demo' ? 'live' : 'demo'); return; }
       if ('fs' in b.dataset) {
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
         else t.el.requestFullscreen?.().catch(() => {});
@@ -214,7 +238,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
   });
   socket.on('camera:frame', ({ cameraId, t: ft, jpeg }) => {
     const t = tile(cameraId);
-    if (t.demo) stopDemo(t);              // real video beats demo footage immediately
+    if (t.demo && t.source !== 'demo') stopDemo(t);   // real video beats automatic demo footage immediately
     t.lastFrameAt = Date.now(); t.offline = false; t.received++;
     const now = performance.now(), dt = now - t.fpsAt;
     if (dt >= 1000) { t.fps = t.received * 1000 / dt; t.received = 0; t.fpsAt = now; }
@@ -233,6 +257,7 @@ export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, o
         if (tiles.get(t.cameraId) !== t) { bitmap.close(); break; }
         t.bitmap?.close?.(); t.bitmap = bitmap; t.frames++; t.frameT = Number(ft);
         if (t.video.width !== bitmap.width || t.video.height !== bitmap.height) { t.video.width = bitmap.width; t.video.height = bitmap.height; }
+        if (t.demo) continue;   // Demo selected: the server bot still analyses the live frames; this tile shows the demo
         t.vctx.drawImage(bitmap, 0, 0);
         let state = t.botState;
         t.fallbackActive = fallbackActive(t);

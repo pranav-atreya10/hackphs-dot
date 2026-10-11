@@ -15,7 +15,7 @@ import { mulberry32 } from '../src/synthetic.js';
 import { runScenario, evaluateConfig } from '../src/tune.js';
 import { PARAMS, PRESETS, describeParams, getParam } from '../src/params.js';
 import { cropRect, interpretPredictions } from '../adapters/coco.js';
-import { beaconFrame, frameFromState, frameFromEvent, encodeBeacon, parseBeaconLine, BeaconLink, BEACON_DEFAULTS } from '../adapters/beacon.js';
+import { beaconFrame, frameFromState, frameFromEvent, encodeBeacon, parseBeaconLine, BeaconPacer, BEACON_DEFAULTS } from '../adapters/beacon.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -444,7 +444,7 @@ test('COCO interpretation: only boxes on our object count; sky classes preferred
   ok(interpretPredictions([], obj, 300, 0.75).label === null);
 });
 
-// ---------- Arduino beacon protocol ----------
+// ---------- software beacon protocol ----------
 test('beacon: servo points toward the threat (90 = straight ahead, scale 2 exaggerates)', () => {
   const f = (bearing, opts = BEACON_DEFAULTS) => beaconFrame({ level: 'red', classification: 'bird', size: 6, eta_seconds: 9.4, bearing_deg: bearing, flap_hz: 3.84 }, 90, opts).servo;
   ok(f(90) === 90, 'ahead');
@@ -466,7 +466,7 @@ test('beacon: encode -> parse round trip, green shows nothing, rejected never ta
   ok(parseBeaconLine('B 1 X B 1 1 1 1') === null && parseBeaconLine('garbage') === null, 'bad lines rejected');
 });
 test('beacon: rate limit, deadband, instant escalation, heartbeat', () => {
-  const link = new BeaconLink();
+  const link = new BeaconPacer();
   const sent = [];
   let clock = 0;
   link.now = () => clock;

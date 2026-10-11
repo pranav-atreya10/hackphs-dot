@@ -1,29 +1,24 @@
-// Tower beacon: drives an Arduino (LEDs, buzzer, pointing servo, optional LCD) from the
-// detection engine over USB using Web Serial (Chrome/Edge desktop, https or localhost).
+// Tower beacon (software only): turns detector state or server events into a compact beacon frame
+// and shows it on screen (VirtualBeacon). No hardware, USB or serial port is involved.
 //
-// Protocol, laptop -> Arduino, one ASCII line per update (max ~40 chars, fits the Uno's
-// 64-byte serial buffer):
+// Frame line, one per update:
 //
-//   B <seq> <level> <kind> <count> <eta_s> <servo_deg> <flap_dHz>\n
+//   B <seq> <level> <kind> <count> <eta_s> <aim_deg> <flap_dHz>
 //     level  G | Y | R              risk level
 //     kind   N | B | D | U          none / bird / drone / unknown (the primary threat)
 //     count  0-99                   flock size / object count
 //     eta_s  whole seconds, -1      time to the approach corridor, -1 = not heading in
-//     servo  0-180, -1              where the pointer should aim, -1 = park centred
+//     aim    0-180, -1              where the on-screen arrow points, -1 = straight up
 //     flap   Hz x 10, -1            wingbeat rate (3.8 Hz -> 38)
 //
-// Arduino -> laptop:  "READY beacon v1" after boot, "OK <seq>" per line, "ERR ..." on a bad line.
-//
-// Example: "B 42 R B 6 9 63 38" = red, flock of 6 birds, 9 s out, point at 63 deg, 3.8 Hz.
+// Example: "B 42 R B 6 9 63 38" = red, flock of 6 birds, 9 s out, arrow at 63 deg, 3.8 Hz.
 
 export const BEACON_DEFAULTS = {
-  baudRate: 115200,
-  minIntervalMs: 200,   // at most 5 updates/s (servo can't use more, serial stays quiet)
-  heartbeatMs: 1000,    // resend even if nothing changed: feeds the beacon's 3 s offline watchdog
-  servoScale: 2,        // 1 = true compass pointing; 2 = exaggerate so a 65 deg view swings +-65 deg
-  servoInvert: false,   // flip if the arrow turns the wrong way (depends on how the servo is mounted)
-  servoDeadband: 2,     // ignore aim changes smaller than this (stops servo buzz/wear)
-  readyTimeoutMs: 4000, // Uno resets when the port opens; wait this long for "READY"
+  minIntervalMs: 200,   // at most 5 updates/s (keeps the arrow steady)
+  heartbeatMs: 1000,    // re-render even if nothing changed (feeds the 3 s 'no data' watchdog)
+  servoScale: 2,        // 1 = true compass pointing; 2 = exaggerate the arrow swing
+  servoInvert: false,   // flip if the arrow turns the wrong way
+  servoDeadband: 2,     // ignore aim changes smaller than this (stops arrow jitter)
 };
 
 const LEVEL = { green: 'G', yellow: 'Y', red: 'R' };
@@ -84,7 +79,7 @@ export function encodeBeacon(seq, f) {
   return `B ${seq} ${f.level} ${f.kind} ${f.count} ${f.eta} ${f.servo} ${f.flap}`;
 }
 
-// Mirror of the Arduino parser (used by the on-screen VirtualBeacon and the tests).
+// Parser for beacon lines (used by the on-screen VirtualBeacon and the tests).
 export function parseBeaconLine(line) {
   const m = /^B (\d+) ([GYR]) ([NBDU]) (\d+) (-?\d+) (-?\d+) (-?\d+)$/.exec(String(line).trim());
   if (!m) return null;
@@ -98,93 +93,18 @@ function meaningfullyDifferent(a, b, deadband) {
   return Math.abs(a.servo - b.servo) >= deadband;
 }
 
-export class BeaconLink {
+// Software pacer: decides when the beacon should update (on a meaningful change, rate-limited, with
+// instant escalation and a heartbeat) and hands each encoded line to writeLine (the on-screen beacon).
+export class BeaconPacer {
   constructor(opts = {}) {
     this.opts = { ...BEACON_DEFAULTS, ...opts };
-    this.port = null;
-    this.writer = null;
     this.seq = 0;
-    this.want = null;      // latest frame we'd like the beacon to show
-    this.sent = null;      // last frame actually sent
+    this.want = null;      // latest frame the beacon should show
+    this.sent = null;      // last frame actually rendered
     this.lastSendMs = -Infinity;
-    this.pendingAcks = new Map();
-    this.listeners = new Set();
-    this.timer = null;
-    this.stats = { connected: false, ready: false, sent: 0, acked: 0, errors: 0, latencyMs: null, lastLine: null, lastError: null, device: null };
-    // Overridable for tests / other transports (WebSocket bridge, Raspberry Pi, ...).
-    this.writeLine = async (line) => { if (this.writer) await this.writer.write(line + '\n'); };
+    this.stats = { sent: 0, lastLine: null };
+    this.writeLine = async () => {};   // set by the page, e.g. line => virtualBeacon.feed(line)
     this.now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  }
-
-  static supported() {
-    return typeof navigator !== 'undefined' && 'serial' in navigator;
-  }
-
-  // Must be called from a click handler (the browser shows a port picker).
-  async connect(port) {
-    if (!BeaconLink.supported()) throw new Error('Web Serial not available: use desktop Chrome or Edge on https/localhost');
-    this.port = port || (await navigator.serial.requestPort());
-    await this.port.open({ baudRate: this.opts.baudRate });
-    this.stats.connected = true;
-    const enc = new TextEncoderStream();
-    enc.readable.pipeTo(this.port.writable).catch((e) => this.fail(e));
-    this.writer = enc.writable.getWriter();
-    this.readLoop();
-    // The Uno reboots when the port opens; wait for the sketch to say READY.
-    const ready = await new Promise((resolve) => {
-      const done = (ok) => { clearTimeout(to); this.listeners.delete(onLine); resolve(ok); };
-      const onLine = (l) => { if (l.startsWith('READY')) { this.stats.device = l; done(true); } };
-      const to = setTimeout(() => done(false), this.opts.readyTimeoutMs);
-      this.listeners.add(onLine);
-    });
-    this.stats.ready = ready;
-    if (!ready) console.warn('[beacon] no READY from the board; sending anyway');
-    this.timer = setInterval(() => this.tick(), Math.min(this.opts.minIntervalMs, this.opts.heartbeatMs) / 2);
-    return this.stats;
-  }
-
-  async readLoop() {
-    const dec = new TextDecoderStream();
-    this.port.readable.pipeTo(dec.writable).catch((e) => this.fail(e));
-    const reader = dec.readable.getReader();
-    let buf = '';
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += value;
-        let i;
-        while ((i = buf.indexOf('\n')) >= 0) {
-          const line = buf.slice(0, i).trim();
-          buf = buf.slice(i + 1);
-          if (line) this.onLine(line);
-        }
-      }
-    } catch (e) {
-      this.fail(e);
-    }
-  }
-
-  onLine(line) {
-    this.stats.lastLine = line;
-    const ok = /^OK (\d+)/.exec(line);
-    if (ok) {
-      const sentAt = this.pendingAcks.get(+ok[1]);
-      if (sentAt !== undefined) {
-        this.pendingAcks.delete(+ok[1]);
-        const ms = this.now() - sentAt;
-        this.stats.latencyMs = this.stats.latencyMs === null ? ms : Math.round(this.stats.latencyMs * 0.8 + ms * 0.2);
-      }
-      this.stats.acked++;
-    } else if (line.startsWith('ERR')) {
-      this.stats.errors++;
-    }
-    for (const fn of this.listeners) fn(line);
-  }
-
-  fail(e) {
-    this.stats.lastError = e.message || String(e);
-    this.stats.connected = false;
   }
 
   // Feed the engine directly (camera station).
@@ -202,7 +122,6 @@ export class BeaconLink {
     this.tick();
   }
 
-  // Decide whether to send now: on a meaningful change (rate-limited) or as a heartbeat.
   tick() {
     if (!this.want) return null;
     const now = this.now();
@@ -214,25 +133,15 @@ export class BeaconLink {
       const line = encodeBeacon(seq, this.want);
       this.sent = this.want;
       this.lastSendMs = now;
-      this.pendingAcks.set(seq, now);
-      if (this.pendingAcks.size > 50) this.pendingAcks.delete(this.pendingAcks.keys().next().value);
-      this.stats.sent++;
-      this.writeLine(line).catch((e) => this.fail(e));
+      this.stats.sent++; this.stats.lastLine = line;
+      Promise.resolve(this.writeLine(line)).catch(() => {});
       return line;
     }
     return null;
   }
-
-  async disconnect() {
-    clearInterval(this.timer);
-    try { if (this.writer) { await this.writer.close(); } } catch (e) { /* port already gone */ }
-    try { if (this.port) await this.port.close(); } catch (e) { /* ignore */ }
-    this.stats.connected = false;
-  }
 }
 
-// On-screen copy of the beacon: same protocol, same patterns. Use it to rehearse without
-// hardware, or as the backup if the Arduino fails mid-demo.
+// The beacon itself: three lamps, an arrow toward the threat and a short status line, drawn on screen.
 export class VirtualBeacon {
   constructor(el) {
     this.el = el;
@@ -260,9 +169,9 @@ export class VirtualBeacon {
     const f = this.state;
     const online = f && now - this.lastMs < 3000;
     const lamps = { G: 0, Y: 0, R: 0 };
-    let text = 'OFFLINE';
+    let text = 'NO DATA';
     if (!online) {
-      lamps['GYR'[Math.floor(now / 250) % 3]] = 1; // chase = link lost
+      lamps['GYR'[Math.floor(now / 250) % 3]] = 1; // chase = no updates from the tower page
     } else {
       if (f.level === 'G') lamps.G = 1;
       if (f.level === 'Y') lamps.Y = Math.floor(now / 500) % 2;
@@ -274,7 +183,7 @@ export class VirtualBeacon {
       text = `${what}${f.eta >= 0 ? `  ETA ${f.eta}s` : ''}${f.flap >= 0 ? `  ${(f.flap / 10).toFixed(1)}Hz` : ''}`;
     }
     for (const k of 'GYR') this.el.querySelector(`[data-l="${k}"]`).style.opacity = lamps[k] ? 1 : 0.15;
-    const ang = online && f.servo >= 0 ? 90 - f.servo : 0; // servo 90 = straight up on screen
+    const ang = online && f.servo >= 0 ? 90 - f.servo : 0; // 90 = straight up on screen
     this.el.querySelector('[data-arrow]').style.transform = `rotate(${ang}deg)`;
     this.el.querySelector('[data-text]').textContent = text;
   }

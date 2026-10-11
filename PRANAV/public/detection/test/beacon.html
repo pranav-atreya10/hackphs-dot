@@ -14,44 +14,28 @@
 </head>
 <body>
   <h1>SkySentry beacon rehearsal</h1>
-  <p>Plays a synthetic scene through the detection engine and drives the Arduino beacon (or the on-screen copy).
-     Web Serial needs desktop Chrome or Edge.</p>
+  <p>Plays a synthetic scene through the detection engine and drives the on-screen software beacon.</p>
   <div>
-    <button id="connect">Connect Arduino</button>
     <select id="scene"></select>
     <button id="play">Play</button>
     <button id="drone">Drone sound: off</button>
-    <span id="link">not connected</span>
   </div>
   <div id="virtual"></div>
   <canvas id="sky" width="320" height="240"></canvas>
   <pre id="log"></pre>
   <script type="module">
     import { DetectionEngine, SyntheticSky, SCENARIOS } from '../index.js';
-    import { BeaconLink, VirtualBeacon, frameFromState, encodeBeacon } from '../adapters/beacon.js';
+    import { BeaconPacer, VirtualBeacon, frameFromState, encodeBeacon } from '../adapters/beacon.js';
 
     const $ = (id) => document.getElementById(id);
     for (const [name, s] of Object.entries(SCENARIOS)) $('scene').append(new Option(`${name}: ${s.describe}`, name));
     const virtual = new VirtualBeacon($('virtual'));
-    const link = new BeaconLink();
+    const link = new BeaconPacer();
     const log = (line) => { const el = $('log'); el.textContent = (line + '\n' + el.textContent).slice(0, 4000); };
 
-    // Every line sent to the Arduino also drives the on-screen beacon, so both always match.
-    const realWrite = link.writeLine;
-    link.writeLine = async (line) => { virtual.feed(line); log('> ' + line); if (link.stats.connected) await realWrite(line); };
-    link.listeners.add((line) => log('< ' + line));
-    // Heartbeat even without hardware (the virtual beacon has the same 3 s watchdog).
+    // Every paced line drives the on-screen beacon.
+    link.writeLine = async (line) => { virtual.feed(line); log('> ' + line); };
     setInterval(() => link.tick(), 100);
-
-    $('connect').onclick = async () => {
-      try {
-        $('link').textContent = 'connecting… (the Uno reboots, ~2 s)';
-        const st = await link.connect();
-        $('link').textContent = st.ready ? `connected: ${st.device}` : 'connected, but no READY (check the sketch / baud 115200)';
-      } catch (e) {
-        $('link').textContent = 'failed: ' + e.message;
-      }
-    };
 
     let engine, droneOn = false;
     $('drone').onclick = () => {

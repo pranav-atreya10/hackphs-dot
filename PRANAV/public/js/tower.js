@@ -2,7 +2,7 @@
 // shows risk, map pins from each camera's bearing, the hourly chart and incident reports, plays alerts,
 // and drives the software beacon (Vivan's VirtualBeacon protocol, rendered on screen; no hardware needed).
 import { signIn } from '/js/auth.js';
-import { BeaconLink, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
+import { BeaconPacer, VirtualBeacon, encodeBeacon } from '/detection/adapters/beacon.js';
 import { startFeeds } from '/js/feeds.js';
 import { VisualBirdVerifier } from '/js/visual-ai.js';
 import { createAlertPlayer } from '/js/alert-player.mjs';
@@ -119,14 +119,14 @@ function feed(ev) {
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
 }
 
-/* ---------- beacon: Vivan's protocol, rendered in software (no Arduino) ---------- */
+/* ---------- beacon: Vivan's protocol, rendered in software ---------- */
 const virtual = new VirtualBeacon($('beaconView'));
-const beacon = new BeaconLink();   // never connected to serial; it only encodes and paces the protocol lines
+const beacon = new BeaconPacer();   // software only: paces updates to the on-screen beacon
 beacon.writeLine = async line => { virtual.feed(line); };
 let lastBeaconEv = null;
-setInterval(() => { if (lastBeaconEv && Date.now() - lastBeaconEv.receivedAt > 10000) beacon.push({ level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }); else beacon.tick(); }, 500);
+setInterval(() => { if (!lastBeaconEv || Date.now() - lastBeaconEv.receivedAt > 10000) beacon.push({ level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }); else beacon.tick(); }, 500);
 virtual.feed(encodeBeacon(0, { level: 'G', kind: 'N', count: 0, eta: -1, servo: -1, flap: -1 }));
-// Software-only beacon: the same G/Y/R protocol the old Arduino used, drawn on screen. The button puts it
+// Software-only beacon: Vivan's G/Y/R protocol drawn on screen. The button puts it
 // full screen so a spare monitor in the tower works as the warning light.
 $('beaconBtn').addEventListener('click', async () => {
   const view = $('beaconView');
