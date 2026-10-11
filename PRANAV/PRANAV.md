@@ -452,3 +452,8 @@ The tower sidebar's Status section now starts with the current risk, e.g. **RED 
 - Camera started, then the Tower opened in a second tab, putting the camera in the background: the camera kept sending (52 frames in 6 s), and the tower showed `cam-wxuw` with "Model active on server".
 - Two cameras forced to the same ID got separate tiles (`runway-east`, `runway-east-0qiI`), and the second kept streaming after the first left.
 - Tests: 85/85.
+
+## Fix: couldn't type a space in the "Ask about SkySentry" chat
+The landing page's 3D film listens on the whole page for **Space** (play/pause) and the **arrow keys** (scenes), and skips key presses that come from text boxes. The chat widget (`js/guide.js`) lives in a shadow root, and from outside a shadow root a key press looks like it came from the widget's outer element, not its text box. So whenever the film was on screen, every space you typed in the chat paused the film and the space never appeared; the arrow keys also skipped scenes. The widget now stops key events at its own boundary, so they never reach the film. Atharv's film code is unchanged.
+
+**Checked:** headless Chrome, film on screen, chat open, typing "a", Space, "b". Before: "ab", and the film paused. After: "a b", and the film kept playing. Tests: 91/91.
