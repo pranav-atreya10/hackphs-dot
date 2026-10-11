@@ -438,3 +438,17 @@ In the "demos for every account" change I put a `// comment` partway through a l
 The tower sidebar's Status section now starts with the current risk, e.g. **RED · Flock of 6 birds · toward runway**, so it's visible while scrolling. It has a green, yellow or red dot. At red the line gets a red tint and a pulsing dot (no pulse with reduce motion). Clicking it jumps to the big risk card. It comes from `refreshRisk()` in `js/tower.js`, so it always matches the risk card (the highest risk from any camera in the last 10 seconds).
 
 **Checked:** headless Chrome on a local server: green, then a yellow alert, then a red alert; the sidebar line matched the risk card each time. Tests: 83/83.
+
+## Fix: live camera feed (tower showed nothing) and "it isn't my camera"
+**Why the tower showed nothing:**
+- **Background tabs:** the camera page's frame loop used `requestAnimationFrame`, which browsers pause in background tabs. Starting the camera and then switching to the Tower tab stopped the stream, so the tower had no video.
+  - *Fix:* while the camera tab is hidden, `js/tick-worker.js` (a tiny worker timer, which background tabs don't pause) drives the loop at about 15 fps. When the tab is visible again it goes back to animation frames.
+- **Shared camera ID:** every camera defaulted to "runway-east", so two cameras (the live server had 2 connected) were treated as one. Their frames mixed in one feed, which also scrambled detection, and when either disconnected the feed was removed for both.
+  - *Fix:* each browser now gets its own ID like `cam-4k2p`, remembered in that browser. A browser still holding "runway-east" gets a new one. The server also renames a second live camera with a taken ID (e.g. `runway-east-0qiI`) and tells the camera page, which shows the new name.
+
+**"It isn't my camera":** on laptops the camera page started on the synthetic sky (a fake test video). Every device now starts on its own camera; the synthetic sky stays in Settings → Source. If camera access is blocked, there's no camera, or it's busy, the view says so and suggests Upload a video.
+
+**Checked (headless Chrome with a fake webcam, local server):**
+- Camera started, then the Tower opened in a second tab, putting the camera in the background: the camera kept sending (52 frames in 6 s), and the tower showed `cam-wxuw` with "Model active on server".
+- Two cameras forced to the same ID got separate tiles (`runway-east`, `runway-east-0qiI`), and the second kept streaming after the first left.
+- Tests: 85/85.

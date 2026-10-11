@@ -608,7 +608,12 @@ cameras.use(async (socket, next) => {
 });
 
 cameras.on("connection", (socket) => {
-  const cameraId = socket.handshake.auth.cameraId || socket.id;
+  // Two devices under one ID used to share one feed (frames mixed, and one disconnecting removed both), so a
+  // second live socket with a taken ID gets a unique one, which the camera page shows.
+  let cameraId = String(socket.handshake.auth.cameraId || socket.id).slice(0, 60);
+  const taken = liveCameras.get(cameraId);
+  if (taken?.socketId && taken.socketId !== socket.id && cameras.sockets.has(taken.socketId)) cameraId = `${cameraId}-${socket.id.slice(0, 4)}`;
+  socket.emit("camera:id", cameraId);
   const { airport } = socket.data;
   console.log(`camera connected: ${cameraId}${airport ? ` (${airport})` : ""}`);
   towersFor(airport).emit("camera:status", { cameraId, airport, online: true, at: Date.now() });
@@ -616,13 +621,14 @@ cameras.on("connection", (socket) => {
   socket.on("camera:event", (payload, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
     if (!isPlainObject(payload)) return reply({ ok: false, error: "payload must be an object" });
-    const event = relayCameraEvent(socket.handshake.auth.cameraId || payload.camera_id || cameraId, payload, airport);
+    const event = relayCameraEvent(cameraId, payload, airport);
     reply({ ok: true, id: event.id, towers: towers.sockets.size });
   });
 
   // Live video: the phone streams JPEG frames; the server bot runs Vivan's engine on them (bot.js) and
   // every tower at this airport gets the feed plus the bot's overlay. If the bot hands over, towers detect.
   const live = openLive(cameraId, airport, (name, data) => socket.emit(name, data));
+  live.socketId = socket.id;
   socket.on("camera:config", (config) => configureLive(live, config));
   socket.on("camera:frame", async (meta, jpegBuf, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
