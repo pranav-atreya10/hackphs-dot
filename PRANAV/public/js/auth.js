@@ -38,7 +38,7 @@ function loadScript(src, publishableKey) {
     document.head.appendChild(script);
   });
 }
-function loadClerk(publishableKey) {
+export function loadClerk(publishableKey) {
   if (clerkLoading) return clerkLoading;
   clerkLoading = (async () => {
     const origin = frontendApi(publishableKey);
@@ -54,17 +54,38 @@ function loadClerk(publishableKey) {
   return clerkLoading;
 }
 
-const MARK = '<svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>';
+export const MARK = '<svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>';
 // Clerk's sign-in box takes the page's current light/dark tokens (css/app.css).
-function clerkAppearance() {
+export function clerkAppearance() {
   const css = getComputedStyle(document.documentElement), v = name => css.getPropertyValue(name).trim();
   return { variables: { colorPrimary: v('--accent'), colorPrimaryForeground: v('--on-accent'), colorBackground: v('--card'), colorForeground: v('--ink'),
     colorMutedForeground: v('--mute'), colorInput: v('--card'), colorInputForeground: v('--ink'), colorBorder: v('--line'), fontFamily: v('--sans'), borderRadius: '8px' } };
 }
-function panel(mount, html) {
+export function panel(mount, html) {
   mount.hidden = false;
   mount.innerHTML = `<div class="auth-card">${MARK}${html}</div>`;
   return mount.firstElementChild;
+}
+
+// One-time step after a Clerk sign-up: pick "camera" or "dashboard" and enter the airport's join code.
+// Resolves with { role, airport } once the server has saved them.
+export function finishSetup({ mount, role = 'dashboard', headers }) {
+  return new Promise(resolve => {
+    const card = panel(mount, `<h2>Finish setting up</h2>
+      <p>Choose what this account does and enter your airport’s join code.</p>
+      <form id="join"><label for="role">This account is a
+        <select id="role"><option value="dashboard">Tower dashboard</option><option value="camera">Camera station</option></select></label>
+        <label for="code">Airport join code<input id="code" autocomplete="off" required></label>
+        <button>Continue</button><p class="auth-err" id="joinErr"></p></form>`);
+    card.querySelector('#role').value = role;
+    card.querySelector('#join').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = { role: card.querySelector('#role').value, code: card.querySelector('#code').value.trim() };
+      const r = await fetch('/api/auth/join', { method: 'POST', headers: { ...(await headers()), 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) resolve(data); else card.querySelector('#joinErr').textContent = data.error || 'That did not work. Try again.';
+    });
+  });
 }
 
 export async function signIn({ role, mount, onStatus = () => {} }) {
@@ -84,24 +105,7 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
     let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
 
-    if (!me.role || !me.airport) {
-      me = await new Promise(resolve => {
-        const card = panel(mount, `<h2>Finish setting up</h2>
-          <p>Choose what this account does and enter your airport’s join code.</p>
-          <form id="join"><label for="role">This account is a
-            <select id="role"><option value="dashboard">Tower dashboard</option><option value="camera">Camera station</option></select></label>
-            <label for="code">Airport join code<input id="code" autocomplete="off" required></label>
-            <button>Continue</button><p class="auth-err" id="joinErr"></p></form>`);
-        card.querySelector('#role').value = role;
-        card.querySelector('#join').addEventListener('submit', async e => {
-          e.preventDefault();
-          const body = { role: card.querySelector('#role').value, code: card.querySelector('#code').value.trim() };
-          const r = await fetch('/api/auth/join', { method: 'POST', headers: { ...(await headers()), 'content-type': 'application/json' }, body: JSON.stringify(body) });
-          const data = await r.json().catch(() => ({}));
-          if (r.ok) resolve(data); else card.querySelector('#joinErr').textContent = data.error || 'That did not work. Try again.';
-        });
-      });
-    }
+    if (!me.role || !me.airport) me = await finishSetup({ mount, role, headers });
     if (me.role !== role) {
       panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
