@@ -433,3 +433,8 @@ In the "demos for every account" change I put a `// comment` partway through a l
 **Not changed:** the 53 old empty incidents are still in MongoDB.
 
 **Checked:** 2 new tests (repeats aren't stored and an escalation is; health shows a failing Gemini); the suite is 85/85. On a local server (with MongoDB off, so real data wasn't touched), 3 repeated yellow alerts and a red one showed 4 rows in the live feed but 2 incidents (yellow, then red), both with reports.
+
+## Tower: current risk in the sidebar
+The tower sidebar's Status section now starts with the current risk, e.g. **RED · Flock of 6 birds · toward runway**, so it's visible while scrolling. It has a green, yellow or red dot. At red the line gets a red tint and a pulsing dot (no pulse with reduce motion). Clicking it jumps to the big risk card. It comes from `refreshRisk()` in `js/tower.js`, so it always matches the risk card (the highest risk from any camera in the last 10 seconds).
+
+**Checked:** headless Chrome on a local server: green, then a yellow alert, then a red alert; the sidebar line matched the risk card each time. Tests: 83/83.
