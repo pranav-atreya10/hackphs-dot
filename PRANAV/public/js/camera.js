@@ -16,7 +16,7 @@ const snapCanvas = document.createElement('canvas');
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
 const WEBCAM_CORRIDOR = [[0, 0], [0.3, 0], [0.3, 1], [0, 1]];   // left 30% = runway side, until you draw your own
-const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)' };
+const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)', debris: '#a08c78' };
 
 let engine = null, sky = null, coco = null, running = false, rafId = 0, t0 = 0, sent = 0, wakeLock = null;
 let corridor = JSON.parse(store.get('skysentry.corridor', 'null')) || WEBCAM_CORRIDOR;

@@ -6,7 +6,7 @@
 // tower:bot-event. The server accepts them from one tower per camera, so alerts are never duplicated.
 import { DetectionEngine, PRESETS } from '/detection/index.js';
 
-const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)' };
+const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)', debris: '#a08c78' };
 const FALLBACK_AFTER_MS = 3000;
 
 export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove }) {

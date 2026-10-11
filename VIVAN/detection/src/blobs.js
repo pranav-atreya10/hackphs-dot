@@ -128,6 +128,7 @@ function finalize(c) {
     meanContrast: c.mass / area,
     major: Math.sqrt(Math.max(0, half + root)) * 4, // ~full length along the long axis
     minor: Math.sqrt(Math.max(0, half - root)) * 4,
+    angle: 0.5 * Math.atan2(2 * vxy, vxx - vyy),    // long-axis direction, radians (-90°..90°)
     minX: c.minX, minY: c.minY, maxX: c.maxX + 1, maxY: c.maxY + 1,
   };
 }

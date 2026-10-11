@@ -74,6 +74,24 @@ export const DEFAULTS = {
     smoothing: 0.35,      // how quickly the per-track verdict follows new analyses
   },
 
+  // Debris check (see debris.js): thrown rocks and tumbling debris are not birds.
+  debris: {
+    enabled: true,
+    windowSec: 1.2,       // fit the path over this much recent trail
+    minPoints: 8,         // ...with at least this many positions
+    minSpanSec: 0.4,      // ...covering at least this long
+    minPull: 25,          // pull (downward accel ÷ own length, per s²) no bird can make; gravity on debris does
+    maxFitRatio: 0.35,    // the parabola must leave at most 35% of a straight line's error...
+    minBendPx: 0.6,       // ...and the path must visibly bend (px) before we judge it
+    downRatio: 2,         // the pull must point down: vertical at least 2x sideways
+    spinWindowSec: 1.5,   // look at this much recent shape history for spinning
+    minElongation: 1.4,   // only read the angle when the blob is clearly longer than wide
+    minSpinSteps: 8,      // ...in at least this many frame-to-frame steps
+    minTurnDeg: 180,      // spinning = turned at least half a revolution...
+    spinConsistency: 0.7, // ...with at least 70% of steps turning the same way
+    smoothing: 0.35,      // how quickly the per-track verdict follows new checks
+  },
+
   flocks: {
     radiusFrac: 0.14,      // tracks closer than 14% of the frame width can be flockmates
     maxHeadingDiff: 30,    // and must be flying within 30 degrees of each other

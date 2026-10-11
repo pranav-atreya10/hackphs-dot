@@ -36,7 +36,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // input: { level, classification, size, eta_seconds, bearing_deg }, cameraHeading in degrees.
 export function beaconFrame(input, cameraHeading, opts = BEACON_DEFAULTS) {
   const level = LEVEL[input.level] || 'G';
-  const hasTarget = level !== 'G' && input.classification && input.classification !== 'rejected';
+  const hasTarget = level !== 'G' && input.classification && input.classification !== 'rejected' && input.classification !== 'debris';
   const kind = hasTarget ? KIND[input.classification] || 'U' : 'N';
   let servo = -1;
   if (hasTarget && input.bearing_deg !== null && input.bearing_deg !== undefined && cameraHeading !== undefined) {
