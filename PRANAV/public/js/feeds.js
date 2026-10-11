@@ -9,7 +9,7 @@ import { DetectionEngine, PRESETS } from '/detection/index.js';
 const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected: 'rgba(200,200,200,.5)' };
 const FALLBACK_AFTER_MS = 3000;
 
-export function startFeeds(socket, { container, hint, onFallbackEvent }) {
+export function startFeeds(socket, { container, hint, onFallbackEvent, onFeed, onRemove }) {
   const tiles = new Map();
 
   function tile(cameraId) {
@@ -24,7 +24,8 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
     const [video, overlay] = el.querySelectorAll('canvas');
     const small = document.createElement('canvas');
     const t = { cameraId, el, video, overlay, vctx: video.getContext('2d'), octx: overlay.getContext('2d'), small, sctx: small.getContext('2d', { willReadFrequently: true }),
-      botState: null, lastBotAt: 0, frames: 0, mode: 'server', reason: null, config: null, engine: null, bitmap: null, lastFrameAt: 0, owner: true };
+      botState: null, lastBotAt: 0, frames: 0, mode: 'server', reason: null, config: null, engine: null, bitmap: null, lastFrameAt: 0, owner: true,
+      decoding: false, pending: null, received: 0, fps: 0, fpsAt: performance.now(), offline: false };
     tiles.set(cameraId, t);
     setupZoom(t);
     return t;
@@ -92,7 +93,13 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
 
   function label(t) {
     const fb = fallbackActive(t);
-    t.el.querySelector('.bot').textContent = fb ? (t.owner ? 'bot: this tower (server bot unavailable)' : 'bot: another tower') : 'bot: server';
+    const state = fb ? t.fallbackState : t.botState;
+    const shake = state?.motion?.shake ?? state?.shake;
+    const learning = state?.motion ? !state.motion.ready : state?.learning;
+    let text = t.offline ? 'Camera offline' : !t.frames ? 'Waiting for video…' : shake ? 'Camera moving · hold still' : learning ? 'Model warming up · hold still' : !state ? 'Starting model…' : fb ? (t.owner ? 'Model active on this Mac' : 'Model active on another tower') : 'Model active on server';
+    if (t.frames && !t.offline) text += ` · ${Math.round(t.fps)} fps`;
+    const el = t.el.querySelector('.bot');
+    if (el.textContent !== text) el.textContent = text;
   }
 
   // Zoom (buttons, wheel, double-click) and pan (drag) on one wrapper holding video + overlay, plus full screen.
@@ -132,27 +139,48 @@ export function startFeeds(socket, { container, hint, onFallbackEvent }) {
 
   socket.on('camera:config', cfg => { const t = tile(cfg.cameraId); t.config = cfg; applyConfig(t); });
   socket.on('bot:status', s => { const t = tile(s.cameraId); t.mode = s.mode; t.reason = s.reason; label(t); });
-  socket.on('bot:state', ({ cameraId, state }) => { const t = tile(cameraId); t.botState = state; t.lastBotAt = Date.now(); });
+  socket.on('bot:state', ({ cameraId, state }) => { const t = tile(cameraId); t.botState = state; t.lastBotAt = Date.now(); label(t); });
   socket.on('camera:status', ({ cameraId, online }) => {
-    const t = tiles.get(cameraId); if (!t || online) return;
-    t.el.querySelector('.bot').textContent = 'camera offline';
-    setTimeout(() => { if (Date.now() - t.lastFrameAt > 9000) { t.el.remove(); tiles.delete(cameraId); hint.hidden = tiles.size > 0; } }, 10000);
+    const t = tiles.get(cameraId); if (!t) return;
+    t.offline = !online; label(t);
+    if (online) return;
+    setTimeout(() => { if (Date.now() - t.lastFrameAt > 9000) { t.bitmap?.close?.(); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; } }, 10000);
   });
-  socket.on('camera:frame', async ({ cameraId, t: ft, jpeg }) => {
+  socket.on('camera:frame', ({ cameraId, t: ft, jpeg }) => {
     const t = tile(cameraId);
-    let bitmap;
-    try { bitmap = await createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' })); } catch { return; }
-    t.bitmap?.close?.(); t.bitmap = bitmap; t.frames++; t.lastFrameAt = Date.now();
-    if (t.video.width !== bitmap.width) { t.video.width = bitmap.width; t.video.height = bitmap.height; }
-    t.vctx.drawImage(bitmap, 0, 0);
-    let state = t.botState;
-    if (fallbackActive(t)) {
-      const e = ensureEngine(t);
-      t.small.width = 320; t.small.height = Math.round(320 * bitmap.height / bitmap.width);
-      t.sctx.drawImage(bitmap, 0, 0, t.small.width, t.small.height);
-      const st = e.process(t.sctx.getImageData(0, 0, t.small.width, t.small.height), Number(ft) || performance.now() / 1000);
-      state = { tracks: st.tracks, flocks: st.flocks };
-    }
-    draw(t, state); label(t);
+    t.lastFrameAt = Date.now(); t.offline = false; t.received++;
+    const now = performance.now(), dt = now - t.fpsAt;
+    if (dt >= 1000) { t.fps = t.received * 1000 / dt; t.received = 0; t.fpsAt = now; }
+    // Keep one newest frame while a decode is running. Never build a video backlog or draw old frames out of order.
+    t.pending = { ft, jpeg };
+    if (!t.decoding) renderLatest(t);
   });
+
+  async function renderLatest(t) {
+    t.decoding = true;
+    try {
+      while (t.pending && tiles.get(t.cameraId) === t) {
+        const { ft, jpeg } = t.pending; t.pending = null;
+        let bitmap;
+        try { bitmap = await createImageBitmap(new Blob([jpeg], { type: 'image/jpeg' })); } catch { continue; }
+        if (tiles.get(t.cameraId) !== t) { bitmap.close(); break; }
+        t.bitmap?.close?.(); t.bitmap = bitmap; t.frames++; t.frameT = Number(ft);
+        if (t.video.width !== bitmap.width || t.video.height !== bitmap.height) { t.video.width = bitmap.width; t.video.height = bitmap.height; }
+        t.vctx.drawImage(bitmap, 0, 0);
+        let state = t.botState;
+        t.fallbackActive = fallbackActive(t);
+        if (t.fallbackActive) {
+          const e = ensureEngine(t);
+          t.small.width = 320; t.small.height = Math.round(320 * bitmap.height / bitmap.width);
+          t.sctx.drawImage(bitmap, 0, 0, t.small.width, t.small.height);
+          t.fallbackState = e.process(t.sctx.getImageData(0, 0, t.small.width, t.small.height), Number(ft) || performance.now() / 1000);
+          state = t.fallbackState;
+        }
+        draw(t, state); label(t);
+        onFeed?.(t);
+      }
+    } finally {
+      t.decoding = false;
+    }
+  }
 }

@@ -32,12 +32,13 @@ function panel(mount, html) {
   return mount.firstElementChild;
 }
 
-export async function signIn({ role, mount }) {
+export async function signIn({ role, mount, onStatus = () => {} }) {
   const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
   const params = new URLSearchParams(location.search);
 
   // ---------- Clerk sign-in ----------
   if (cfg.publishableKey) {
+    onStatus('Sign in to connect');
     const clerk = await loadClerk(cfg.publishableKey);
     await clerk.load();
     if (!clerk.user) {
@@ -86,6 +87,7 @@ export async function signIn({ role, mount }) {
     let key = params.get('key') || store.get('skysentry.cameraKey');
     let airport = params.get('airport') || store.get('skysentry.airport');
     if (!key) {
+      onStatus('Camera key needed');
       ({ key, airport } = await new Promise(resolve => {
         const card = panel(mount, `<h2>Connect this camera</h2>
           <p>Sign-in isn’t set up on this server, so cameras use the camera key from the server’s settings (<code>CAMERA_API_KEY</code>).</p>

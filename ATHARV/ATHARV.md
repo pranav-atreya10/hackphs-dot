@@ -80,3 +80,6 @@ A third option on the camera page, **Detect on this phone**, runs the engine on 
 - A scripted phone streamed 61–98 frames. Every frame and every overlay state reached the tower, and the bot raised yellow, then red, with a spoken alert.
 - The native app in the simulator streamed 852 frames at 14.6 fps, and the bot's boxes landed on the demo flock.
 - The bot hands over and takes the camera back after the retry window.
+
+## Camera and real-video demos update
+Added a server demo library with AVPlayer frame replay through the camera uploader, explicit warmup/shake status, and long-edge 640px upload scaling to reduce portrait payload. All Swift sources pass device SDK type checking. A full Xcode asset build is blocked by unavailable simulator runtime services on this Mac; the installed iPhone app still needs a rebuild and install.

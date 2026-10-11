@@ -120,3 +120,6 @@ Ran the server locally with keys set and checked that:
 - wrong camera/tower keys are rejected (`unauthorized` / HTTP 401);
 - `/tower.html` is served and `.env` is loaded;
 - `NODE_ENV=production` with no `CAMERA_API_KEY` exits with an error.
+
+## Streaming and AI integration update
+JPEG decoding now runs in native workers with a bounded latest-frame queue on Tower. Synthetic startup tests preserve empty-sky behavior and flock alerts; phone warmup uses eight frames. Six licensed H.264 demo excerpts and a gallery are available at /demo.html. Tower can optionally run a same-origin COCO-SSD bird verifier; stale labels are rejected. Alerts appear immediately while Shreyansh's report, speech and devnet stamp run in parallel. Restart instructions are in OPERATIONS.md. Performance numbers are synthetic processing measurements, not accuracy or field validation.

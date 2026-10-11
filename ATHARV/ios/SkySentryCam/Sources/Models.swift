@@ -69,8 +69,10 @@ struct BotState: Decodable, Equatable {
     var flocks: [BotFlock]?
     var fps: Double?
     var proc_ms: Double?
+    var learning: Bool?
+    var shake: Bool?
 
-    enum CodingKeys: String, CodingKey { case t, risk, reasons, primary, tracks, flocks, fps, proc_ms }
+    enum CodingKeys: String, CodingKey { case t, risk, reasons, primary, tracks, flocks, fps, proc_ms, learning, shake }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -82,6 +84,8 @@ struct BotState: Decodable, Equatable {
         flocks = try? c.decodeIfPresent([BotFlock].self, forKey: .flocks)
         fps = try? c.decodeIfPresent(Double.self, forKey: .fps)
         proc_ms = try? c.decodeIfPresent(Double.self, forKey: .proc_ms)
+        learning = try? c.decodeIfPresent(Bool.self, forKey: .learning)
+        shake = try? c.decodeIfPresent(Bool.self, forKey: .shake)
     }
 }
 

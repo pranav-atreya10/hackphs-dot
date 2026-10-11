@@ -31,6 +31,8 @@ for (const id of ['cameraId', 'heading', 'fov', 'lat', 'lon']) {
   if (saved !== null) $(id).value = saved;
   $(id).addEventListener('change', () => { store.set('skysentry.' + id, $(id).value); applyCamera(); sendConfig(); });
 }
+const requestedCameraId = new URLSearchParams(location.search).get('cameraId');
+if (requestedCameraId) $('cameraId').value = requestedCameraId.slice(0, 60);
 const mode = () => $('mode').value;
 $('mode').value = store.get('skysentry.mode', 'stream');
 $('mode').addEventListener('change', () => store.set('skysentry.mode', mode()));
@@ -40,11 +42,18 @@ $('tuning').addEventListener('change', () => { store.set('skysentry.tuning', $('
 // Demo clips shipped with the site (public/clips/clips.json).
 fetch('/clips/clips.json').then(r => r.json()).then(list => {
   for (const c of list) $('demoClip').add(new Option(`${c.title} · ${c.expect}`, c.file));
+  const requested = new URLSearchParams(location.search).get('demo');
+  if (requested && list.some(c => c.file === requested)) {
+    $('demoClip').value = requested; $('source').value = 'demo'; showSourceFields();
+    $('empty').textContent = 'Recorded demo selected. Press Start, then open Tower to see the model.';
+  }
 }).catch(() => { $('source').querySelector('option[value="demo"]').disabled = true; });
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
 $('source').addEventListener('change', showSourceFields);
 // Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
 $('source').value = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'webcam' : 'synthetic';
+const requestedScenario = new URLSearchParams(location.search).get('scenario');
+if (SCENARIOS[requestedScenario]) { $('source').value = 'synthetic'; $('scenario').value = requestedScenario; }
 showSourceFields();
 
 function cameraConfig() {
@@ -70,8 +79,15 @@ function log(html) {
 
 /* ---------- connection to the server ---------- */
 async function connect() {
-  auth = await signIn({ role: 'camera', mount: $('auth') });
+  $('signout').disabled = true;
+  auth = await signIn({ role: 'camera', mount: $('auth'), onStatus: message => {
+    $('conn').textContent = message;
+    status(message === 'Camera key needed' ? 'Enter the camera key above, then press Connect.' : 'Sign in above to connect this camera.');
+  } });
+  $('conn').textContent = 'Connecting…';
   $('who').textContent = auth.label;
+  $('signout').disabled = false;
+  $('signout').textContent = auth.mode === 'key' ? 'Change camera key' : 'Sign out';
   $('signout').onclick = () => auth.signOut();
   // auth as a function so every reconnect gets a fresh sign-in token.
   socket = io('/camera', { auth: cb => auth.socketAuth({ cameraId: $('cameraId').value.trim() || 'runway-east' }).then(cb) });
@@ -82,7 +98,10 @@ async function connect() {
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; status('Lost the server, reconnecting automatically…'); });
   socket.on('connect_error', err => {
     $('conn').textContent = err.message === 'unauthorized' ? 'Key or sign-in rejected' : 'Server offline'; $('conn').dataset.ok = '0';
-    if (err.message === 'unauthorized' && auth.mode === 'key') log('The camera key was rejected. Use <b>Sign out</b> to enter it again.');
+    if (err.message === 'unauthorized' && auth.mode === 'key') {
+      status('Camera key rejected. Use Change camera key to enter it again.');
+      log('The camera key was rejected. Use <b>Change camera key</b> to enter it again.');
+    } else status(err.message === 'unauthorized' ? 'Sign-in rejected. Sign out and reconnect.' : 'Cannot reach the server. Retrying automatically…');
   });
 }
 
@@ -318,4 +337,8 @@ $('fakeDrone').addEventListener('click', () => {
 });
 
 draw(null);
-connect().catch(err => { if (err.message !== 'wrong role') log(`sign-in failed: ${err.message}`); });
+connect().catch(err => {
+  $('conn').textContent = 'Sign-in needs attention';
+  status(err.message === 'wrong role' ? 'Use a camera account to connect this page.' : `Could not connect: ${err.message}`);
+  if (err.message !== 'wrong role') log(`sign-in failed: ${err.message}`);
+});

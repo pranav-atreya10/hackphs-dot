@@ -6,7 +6,7 @@
 //
 // The bot backs off when it can't keep up or fails; towers then run their own copy of the engine as a
 // fallback (see public/js/tower.js) and send events with detected_by = "tower".
-const jpeg = require("jpeg-js");
+const sharp = require("sharp");
 const path = require("path");
 const { pathToFileURL } = require("url");
 
@@ -18,33 +18,24 @@ const DEFAULT_PRESET = process.env.BOT_PRESET || "phone_15fps";             // a
 const enginePath = pathToFileURL(path.join(__dirname, "public/detection/index.js")).href;
 let enginePromise = null;
 const loadEngine = () => (enginePromise ??= import(enginePath));
+const COCO_LABELS = new Set(('person,bicycle,car,motorcycle,airplane,bus,train,truck,boat,traffic light,fire hydrant,stop sign,parking meter,bench,bird,cat,dog,horse,sheep,cow,elephant,bear,zebra,giraffe,backpack,umbrella,handbag,tie,suitcase,frisbee,skis,snowboard,sports ball,kite,baseball bat,baseball glove,skateboard,surfboard,tennis racket,bottle,wine glass,cup,fork,knife,spoon,bowl,banana,apple,sandwich,orange,broccoli,carrot,hot dog,pizza,donut,cake,chair,couch,potted plant,bed,dining table,toilet,tv,laptop,mouse,remote,keyboard,cell phone,microwave,oven,toaster,sink,refrigerator,book,clock,vase,scissors,teddy bear,hair drier,toothbrush').split(','));
 
-// Box-filter downscale of an RGBA frame to PROC_W wide.
-function downscale(src, w, h) {
-  const tw = Math.min(PROC_W, w), th = Math.round((h * tw) / w), out = new Uint8ClampedArray(tw * th * 4);
-  const sx = w / tw, sy = h / th;
-  for (let y = 0; y < th; y++) {
-    const y0 = Math.floor(y * sy), y1 = Math.max(y0 + 1, Math.floor((y + 1) * sy));
-    for (let x = 0; x < tw; x++) {
-      const x0 = Math.floor(x * sx), x1 = Math.max(x0 + 1, Math.floor((x + 1) * sx));
-      let r = 0, g = 0, b = 0, n = 0;
-      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) { const i = (yy * w + xx) * 4; r += src[i]; g += src[i + 1]; b += src[i + 2]; n++; }
-      const o = (y * tw + x) * 4; out[o] = r / n; out[o + 1] = g / n; out[o + 2] = b / n; out[o + 3] = 255;
-    }
-  }
-  return { data: out, width: tw, height: th };
+// Decode and resize in libvips' native worker pool instead of blocking every camera's HTTP/socket traffic.
+async function decode(buf) {
+  const { data, info } = await sharp(buf, { limitInputPixels: 16_777_216 })
+    .resize({ width: PROC_W, height: 1280, fit: "inside", withoutEnlargement: true })
+    .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { data, width: info.width, height: info.height };
 }
 
-// JPEG crop (normalized box, padded by the engine) from the last full-resolution frame.
-function crop(frame, box) {
-  const { width: W, height: H, data } = frame;
+// Decode the original resolution only when an alert needs evidence.
+async function crop(buf, box) {
+  const image = sharp(buf, { limitInputPixels: 16_777_216 });
+  const { width: W, height: H } = await image.metadata();
   const x0 = Math.max(0, Math.floor(box.x * W)), y0 = Math.max(0, Math.floor(box.y * H));
   const cw = Math.min(W - x0, Math.ceil(box.w * W)), ch = Math.min(H - y0, Math.ceil(box.h * H));
   if (cw < 4 || ch < 4) return null;
-  const out = Buffer.alloc(cw * ch * 4);
-  for (let y = 0; y < ch; y++) data.copy ? data.copy(out, y * cw * 4, ((y0 + y) * W + x0) * 4, ((y0 + y) * W + x0 + cw) * 4)
-    : out.set(data.subarray(((y0 + y) * W + x0) * 4, ((y0 + y) * W + x0 + cw) * 4), y * cw * 4);
-  return jpeg.encode({ data: out, width: cw, height: ch }, 75).data.toString("base64");
+  return (await image.extract({ left: x0, top: y0, width: cw, height: ch }).jpeg({ quality: 75 }).toBuffer()).toString("base64");
 }
 
 // Small, overlay-only view of the engine state (tracks, flocks, primary, risk) sent with each frame.
@@ -64,6 +55,7 @@ class CameraBot {
   constructor({ cameraId, onEvent, onState, onStatus }) {
     Object.assign(this, { cameraId, onEvent, onState, onStatus });
     this.engine = null; this.last = null; this.avgMs = 0; this.busy = false; this.dropped = 0;
+    this.events = [];
     this.active = ENABLED; this.reason = ENABLED ? null : "SERVER_BOT=off"; this.retryAt = 0; this.timed = 0;
   }
 
@@ -74,7 +66,10 @@ class CameraBot {
   apply() {
     const c = this.config || {};
     // Vivan's tuning presets (params.js). Streamed phones run at ~15 fps, so that preset is the default.
-    for (const name of [].concat(c.preset || DEFAULT_PRESET)) if (this.presets?.[name]) this.engine.setConfig(this.presets[name]);
+    const presets = [].concat(c.preset || DEFAULT_PRESET);
+    for (const name of presets) if (this.presets?.[name]) this.engine.setConfig(this.presets[name]);
+    // A stronger learning rate clears first-frame ghosts with eight frames instead of fifteen.
+    if (presets.includes("phone_15fps")) this.engine.setConfig({ motion: { warmupFrames: 8, warmupAlpha: 0.4 } });
     if (c.camera) this.engine.setCamera(c.camera);
     if (c.camera_id) this.engine.setConfig({ camera_id: c.camera_id });
     if (Array.isArray(c.corridor)) this.engine.setCorridor(c.corridor);
@@ -95,17 +90,22 @@ class CameraBot {
         this.presets = PRESETS;
         this.engine = new DetectionEngine({ camera_id: this.cameraId });
         this.apply();
-        this.engine.on("event", (ev) => {
-          if (ev.needs_snapshot && ev.crop_box && this.last) ev.snapshot = crop(this.last, ev.crop_box);
-          ev.detected_by = "server";
-          this.onEvent(ev);
-        });
+        this.engine.on("event", (ev) => this.events.push(ev));
       }
       const t0 = performance.now();   // timed after the engine has loaded, so start-up isn't counted as slowness
-      const img = jpeg.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 64 });
-      this.last = img;
-      const st = this.engine.process(downscale(img.data, img.width, img.height), t);
-      this.onState(compact(st));
+      const img = await decode(buf);
+      this.last = buf;
+      const st = this.engine.process(img, t);
+      this.state = compact(st);
+      this.onState(this.state);
+      for (const ev of this.events.splice(0)) {
+        if (ev.needs_snapshot && ev.crop_box) {
+          try { ev.snapshot = await crop(buf, ev.crop_box); }
+          catch (err) { console.warn(`snapshot for ${this.cameraId} unavailable: ${err.message}`); }
+        }
+        ev.detected_by = "server";
+        this.onEvent(ev);
+      }
       const ms = performance.now() - t0;
       this.avgMs = this.avgMs ? this.avgMs * 0.9 + ms * 0.1 : ms;
       if (++this.timed > 60 && this.avgMs > BUDGET_MS) this.stop(`overloaded (${Math.round(this.avgMs)} ms per frame)`);
@@ -122,6 +122,26 @@ class CameraBot {
     this.active = false; this.reason = reason; this.retryAt = Date.now() + RETRY_MS;
     console.warn(`server bot for ${this.cameraId} handed over to towers: ${reason}`);
     this.onStatus();
+  }
+  applyLabel(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    const { trackId, label, score, source, bbox, frameT } = payload;
+    if (!this.active || !this.engine || source !== 'coco' || !Number.isSafeInteger(trackId)) return false;
+    if (!Number.isFinite(score) || score < 0 || score > 1 || (label === null ? score !== 0 : !COCO_LABELS.has(label))) return false;
+    if (!Number.isFinite(frameT) || Math.abs(this.engine.lastT - frameT) > 2.5) return false;
+    if (!bbox || !['x', 'y', 'w', 'h'].every(k => Number.isFinite(bbox[k])) || bbox.w <= 0 || bbox.h <= 0 || bbox.x < 0 || bbox.y < 0 || bbox.x + bbox.w > 1.01 || bbox.y + bbox.h > 1.01) return false;
+    const track = this.engine.tracker.tracks.find(tr => tr.id === trackId && tr.confirmed);
+    if (!track) return false;
+    const b = this.state?.tracks.find(tr => tr.id === trackId)?.bbox;
+    if (!b) return false;
+    const shift = Math.hypot(b.x + b.w / 2 - bbox.x - bbox.w / 2, b.y + b.h / 2 - bbox.y - bbox.h / 2);
+    if (shift > Math.max(0.08, 2 * Math.max(b.w, b.h))) return false;
+    const ratio = bbox.w * bbox.h / (b.w * b.h);
+    if (ratio < 0.2 || ratio > 5) return false;
+    const intersection = Math.max(0, Math.min(b.x + b.w, bbox.x + bbox.w) - Math.max(b.x, bbox.x)) * Math.max(0, Math.min(b.y + b.h, bbox.y + bbox.h) - Math.max(b.y, bbox.y));
+    if (intersection / (b.w * b.h + bbox.w * bbox.h - intersection) < 0.1) return false;
+    this.engine.applyLabel(trackId, label, score, 'coco');
+    return true;
   }
   status() { return { cameraId: this.cameraId, mode: this.active ? "server" : "tower", reason: this.reason, avg_ms: Math.round(this.avgMs), dropped: this.dropped }; }
 }

@@ -13,6 +13,7 @@ enum SettingKey {
     static let corridorSide = "corridorSide"
     static let corridorWidth = "corridorWidth"
     static let sourcePref = "sourcePref"
+    static let demoClip = "demoClip"
     static let fillVideo = "fillVideo"
 }
 
@@ -20,6 +21,7 @@ enum SettingKey {
 enum SettingDefaults {
     static let serverURL = "http://localhost:8095"
     static let cameraId = "iphone-1"
+    static let demoClip = "gulls-sky.mp4"
     static let heading = 90.0
     static let hfov = 65.0
     static let lat = 40.3987
@@ -40,19 +42,21 @@ enum SettingDefaults {
             SettingKey.corridorSide: corridorSide,
             SettingKey.corridorWidth: corridorWidth,
             SettingKey.sourcePref: SourcePreference.auto.rawValue,
+            SettingKey.demoClip: demoClip,
             SettingKey.fillVideo: true,
         ]
     }
 }
 
 enum SourcePreference: String, CaseIterable, Identifiable {
-    case auto, camera, demo
+    case auto, camera, demo, clip
     var id: String { rawValue }
     var label: String {
         switch self {
         case .auto: return "Automatic"
         case .camera: return "Rear camera"
         case .demo: return "Demo sky"
+        case .clip: return "Demo video"
         }
     }
 }
