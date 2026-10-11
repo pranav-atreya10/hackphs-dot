@@ -259,10 +259,11 @@ function relayCameraEvent(cameraId, payload, airport = null) {
   storeDetection(event);
   if (event.risk === "yellow" || event.risk === "red") {
     // Show warnings immediately. Persistence and provider work proceed without blocking the feed.
-    const stored = storeIncident(event);
+    // Only new alerts become incidents (the pipeline calls create); a camera's 2-second repeats of the same alert
+    // used to be stored too, leaving dozens of incidents with no report.
     ai.processIncident(event, {
+        create: () => storeIncident(event),
         save: async (fields) => {
-          await stored;
           if (mongo) await withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields }));
         },
         emit: (name, data) => towersFor(airport).emit(name, data),

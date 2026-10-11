@@ -110,6 +110,8 @@ async function askGeminiForReport(model, event, image, timeLimitMs) {
  * Runs `ask(model, timeLimitMs)` with the main model, then the backup model, inside one 10 second budget.
  * Returns the first successful answer, or null if every model failed (busy, quota, timeout, bad reply).
  */
+// Last Gemini outcome, so /health can say "failing (HTTP 404)" instead of just "configured".
+const geminiState = { lastError: null, lastErrorAt: 0, lastSuccessAt: 0 };
 async function tryModels(task, ask) {
   const models = [...new Set([config.GEMINI_MODEL, BACKUP_MODEL])];
   const deadline = Date.now() + TIMEOUT_MS;
@@ -120,10 +122,13 @@ async function tryModels(task, ask) {
     const isLast = model === models[models.length - 1];
     const limit = isLast ? msLeft : Math.min(msLeft, MAIN_MODEL_LIMIT_MS);
     try {
-      return await ask(model, limit);
+      const answer = await ask(model, limit);
+      geminiState.lastSuccessAt = Date.now();
+      return answer;
     } catch (err) {
       const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? `no reply within ${limit} ms` : err.message;
       console.warn(`[ai] ${task}: Gemini (${model}) failed: ${config.redact(reason).slice(0, 160)}`);
+      Object.assign(geminiState, { lastError: `${model}: ${config.redact(reason).slice(0, 80)}`, lastErrorAt: Date.now() });
     }
   }
   return null;
@@ -217,4 +222,4 @@ async function answerQuestion(question, hourlyRows) {
   return answer || 'Sorry, the assistant is unavailable right now. Please try again in a moment.';
 }
 
-module.exports = { analyzeEvent, answerQuestion };
+module.exports = { analyzeEvent, answerQuestion, geminiState };
