@@ -4,7 +4,7 @@
 //   video / synthetic sky ──► 320 px frame ──► DetectionEngine.process()
 //      ├─ 'frame' → overlay (tracks, flocks, corridor) + stats
 //      └─ 'event' → crop snapshot for yellow/red → socket.emit('camera:event')
-import { DetectionEngine, SyntheticSky, SCENARIOS, HumDetector } from '/detection/index.js';
+import { DetectionEngine, SyntheticSky, SCENARIOS, HumDetector, PRESETS } from '/detection/index.js';
 import { CocoVerifier } from '/detection/adapters/coco.js';
 import { signIn } from '/js/auth.js';
 
@@ -34,8 +34,14 @@ for (const id of ['cameraId', 'heading', 'fov', 'lat', 'lon']) {
 const mode = () => $('mode').value;
 $('mode').value = store.get('skysentry.mode', 'stream');
 $('mode').addEventListener('change', () => store.set('skysentry.mode', mode()));
-function sendConfig() { socket?.connected && socket.emit('camera:config', { camera: cameraConfig(), corridor }); }
-const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; };
+function sendConfig() { socket?.connected && socket.emit('camera:config', { camera: cameraConfig(), corridor, preset: [$('tuning').value] }); }
+$('tuning').value = store.get('skysentry.tuning', 'phone_15fps');
+$('tuning').addEventListener('change', () => { store.set('skysentry.tuning', $('tuning').value); applyCamera(); sendConfig(); });
+// Demo clips shipped with the site (public/clips/clips.json).
+fetch('/clips/clips.json').then(r => r.json()).then(list => {
+  for (const c of list) $('demoClip').add(new Option(`${c.title} · ${c.expect}`, c.file));
+}).catch(() => { $('source').querySelector('option[value="demo"]').disabled = true; });
+const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
 $('source').addEventListener('change', showSourceFields);
 // Phones default to the real camera; laptops to the synthetic sky so a demo works anywhere.
 $('source').value = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 'webcam' : 'synthetic';
@@ -47,6 +53,7 @@ function cameraConfig() {
 function applyCamera() {
   if (!engine) return;
   engine.setConfig({ camera_id: $('cameraId').value.trim() || 'runway-east', camera: cameraConfig() });
+  if (PRESETS[$('tuning').value]) engine.setConfig(PRESETS[$('tuning').value]);
 }
 
 function log(html) {
@@ -153,7 +160,7 @@ function showState(st) {
 function loop() {
   if (!running) return;
   const synthetic = $('source').value === 'synthetic';
-  const t = synthetic ? (performance.now() - t0) / 1000 : $('source').value === 'clip' ? video.currentTime : (performance.now() - t0) / 1000;
+  const t = synthetic ? (performance.now() - t0) / 1000 : ['clip', 'demo'].includes($('source').value) ? video.currentTime : (performance.now() - t0) / 1000;
   if (synthetic) {
     const img = sky.render(t);
     srcCtx.putImageData(new ImageData(img.data, srcCanvas.width, srcCanvas.height), 0, 0);
@@ -183,6 +190,11 @@ async function start() {
       if (source === 'clip') {
         const file = $('clip').files[0]; if (!file) throw new Error('Choose a video file first.');
         video.srcObject = null; video.src = URL.createObjectURL(file); video.loop = true;
+      } else if (source === 'demo') {
+        if (!$('demoClip').value) throw new Error('No demo clips found on this server.');
+        video.srcObject = null; video.src = `/clips/${$('demoClip').value}`; video.loop = true;
+        // On-device detection runs at full frame rate; streaming is capped near 15 fps, so keep the phone preset there.
+        if (mode() === 'local' && $('tuning').value === 'phone_15fps') { $('tuning').value = 'laptop_30fps'; applyCamera(); sendConfig(); }
       } else {
         video.src = ''; video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
       }

@@ -13,7 +13,8 @@ const { pathToFileURL } = require("url");
 const ENABLED = (process.env.SERVER_BOT || "on") !== "off";
 const PROC_W = 320;                 // Vivan's engine is tuned for 320 px wide frames
 const BUDGET_MS = 60;               // average decode+detect time above this = overloaded, hand over to towers
-const RETRY_MS = 20000;             // after handing over, try running on the server again this often
+const RETRY_MS = 20000;
+const DEFAULT_PRESET = process.env.BOT_PRESET || "phone_15fps";             // after handing over, try running on the server again this often
 const enginePath = pathToFileURL(path.join(__dirname, "public/detection/index.js")).href;
 let enginePromise = null;
 const loadEngine = () => (enginePromise ??= import(enginePath));
@@ -64,12 +65,14 @@ class CameraBot {
     this.active = ENABLED; this.reason = ENABLED ? null : "SERVER_BOT=off"; this.retryAt = 0; this.timed = 0;
   }
 
-  configure({ camera, corridor, camera_id }) {
-    this.config = { camera, corridor, camera_id };
+  configure({ camera, corridor, camera_id, preset }) {
+    this.config = { camera, corridor, camera_id, preset };
     if (this.engine) this.apply();
   }
   apply() {
     const c = this.config || {};
+    // Vivan's tuning presets (params.js). Streamed phones run at ~15 fps, so that preset is the default.
+    for (const name of [].concat(c.preset || DEFAULT_PRESET)) if (this.presets?.[name]) this.engine.setConfig(this.presets[name]);
     if (c.camera) this.engine.setCamera(c.camera);
     if (c.camera_id) this.engine.setConfig({ camera_id: c.camera_id });
     if (Array.isArray(c.corridor)) this.engine.setCorridor(c.corridor);
@@ -86,7 +89,8 @@ class CameraBot {
     this.busy = true;
     try {
       if (!this.engine) {
-        const { DetectionEngine } = await loadEngine();
+        const { DetectionEngine, PRESETS } = await loadEngine();
+        this.presets = PRESETS;
         this.engine = new DetectionEngine({ camera_id: this.cameraId });
         this.apply();
         this.engine.on("event", (ev) => {

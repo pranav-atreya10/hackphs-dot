@@ -480,7 +480,8 @@ function openLive(cameraId, airport, toCamera = () => {}) {
 }
 function configureLive(live, config) {
   if (!isPlainObject(config)) return false;
-  live.config = { camera: config.camera, corridor: config.corridor, camera_id: live.cameraId };
+  const preset = [].concat(config.preset || []).filter((x) => typeof x === "string").slice(0, 3);
+  live.config = { camera: config.camera, corridor: config.corridor, preset: preset.length ? preset : undefined, camera_id: live.cameraId };
   live.bot.configure(live.config);
   towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, ...live.config });
   return true;

@@ -26,7 +26,15 @@
   canvas#chart{max-height:220px}
   #feeds{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
   .tile{position:relative;background:#0e1620;border-radius:10px;overflow:hidden;aspect-ratio:4/3}
+  .tile .wrap{position:absolute;inset:0;transform-origin:0 0}
   .tile canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .tile.zoomed{cursor:grab} .tile.zoomed:active{cursor:grabbing}
+  .tile:fullscreen{aspect-ratio:auto;border-radius:0;width:100vw;height:100vh}
+  .tile .tools{position:absolute;right:10px;top:10px;display:flex;gap:4px;align-items:center;background:rgba(14,22,32,.75);padding:4px;border-radius:99px}
+  .tile .tools button{all:unset;cursor:pointer;color:#fff;font:600 .78rem var(--sans);padding:3px 9px;border-radius:99px;min-width:14px;text-align:center}
+  .tile .tools button:hover,.tile .tools button:focus-visible{background:rgba(255,255,255,.18)}
+  .tile .tools .zl{color:#c9d4dd;font:500 .72rem var(--mono);min-width:2.4em;text-align:center}
+  #feeds:has(.tile:only-child){grid-template-columns:1fr}
   .tile .tag{position:absolute;left:10px;top:10px;font:600 .78rem var(--sans);color:#fff;background:rgba(14,22,32,.75);padding:4px 10px;border-radius:99px}
   .tile .bot{position:absolute;right:10px;bottom:10px;font:500 .72rem var(--mono);color:#e8eef1;background:rgba(14,22,32,.75);padding:3px 8px;border-radius:6px}
   @media (max-width:1000px){main.grid{grid-template-columns:1fr}#detail{grid-template-columns:1fr}}
