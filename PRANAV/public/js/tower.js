@@ -11,6 +11,10 @@ const $ = id => document.getElementById(id);
 const RANK = { green: 0, yellow: 1, red: 2 };
 const time = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
 let auth = null, socket = null, soundOn = false, audioCtx = null;
+// Airport picker: all-access towers (admins, tower key) can narrow everything to one airport. Kept in the URL
+// (?airport=KTTN, shareable) and remembered in this browser; the server does the filtering.
+const savedView = () => { try { return localStorage.getItem('skysentry.towerAirport') || ''; } catch { return ''; } };
+let view = new URLSearchParams(location.search).get('airport') ?? savedView();
 
 /* ---------- phone camera QR ---------- */
 const camUrl = `${location.origin}/camera.html`;
@@ -173,7 +177,7 @@ async function api(path, opts = {}) {
   return data;
 }
 async function loadIncidents() {
-  try { const list = await api('/api/incidents'); $('incidents').replaceChildren(); incidentEls.clear(); incidentData.clear(); list.reverse().forEach(upsertIncident); $('incNote').textContent = ''; }
+  try { const list = await api(`/api/incidents${view ? `?airport=${encodeURIComponent(view)}` : ''}`); $('incidents').replaceChildren(); incidentEls.clear(); incidentData.clear(); list.reverse().forEach(upsertIncident); $('incNote').textContent = ''; }
   catch (err) { $('incNote').textContent = err.message === 'incident store not configured' ? 'MongoDB is not connected yet, so reports appear here live only.' : `Could not load reports: ${err.message}`; }
 }
 
@@ -204,7 +208,7 @@ async function loadHourly() {
     chart.data.labels = hours.map(h => new Date(h).toLocaleTimeString('en-US', { hour: 'numeric' }));
     chart.data.datasets[0].data = hours.map(h => val(h, 'bird', 'total_objects'));
     chart.data.datasets[1].data = hours.map(h => val(h, 'drone', 'events'));
-    chart.update(); $('chartNote').textContent = rows.length ? '' : 'No detections in the last 24 hours yet.';
+    chart.update(); $('chartNote').textContent = rows.length ? (view ? 'Hourly totals cover every airport.' : '') : 'No detections in the last 24 hours yet.';
   } catch (err) { $('chartNote').textContent = err.message === 'database not configured' ? 'Tiger Data is not connected yet, so the chart is empty.' : `Could not load the chart: ${err.message}`; }
 }
 
@@ -223,7 +227,7 @@ $('ask').addEventListener('submit', async e => {
   const reply = chatBubble('bot', 'Thinking…'); reply.setAttribute('aria-busy', 'true');
   const button = $('ask').querySelector('button'); button.disabled = true;
   try {
-    const r = await api('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: chatHistory }) });
+    const r = await api('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: chatHistory, airport: view || undefined }) });
     reply.textContent = r.answer; chatHistory.push({ role: 'assistant', content: r.answer });
     const meta = document.createElement('div'); meta.className = 'meta';
     for (const label of r.tools || []) { const s = document.createElement('span'); s.className = 'chip'; s.textContent = label; meta.append(s); }
@@ -243,13 +247,41 @@ $('ask').addEventListener('submit', async e => {
 });
 $('askClear').addEventListener('click', () => { chatHistory = []; $('chat').replaceChildren(); $('askClear').hidden = true; $('q').focus(); });
 
+/* ---------- airport picker ---------- */
+async function setupAirports() {
+  const { airports = [], scoped = false } = await api('/api/airports').catch(() => ({}));
+  const label = a => (a.name && a.name !== a.code ? `${a.code} · ${a.name}` : a.code);
+  const input = $('airportSearch');
+  if (scoped || !airports.some(a => a.code === view)) view = '';
+  $('airportBox').hidden = !airports.length;
+  if (scoped) { input.value = airports[0] ? label(airports[0]) : ''; input.disabled = true; $('airportHint').textContent = 'Your account’s airport.'; return; }
+  $('airportList').replaceChildren(...['All airports', ...airports.map(label)].map(v => Object.assign(document.createElement('option'), { value: v })));
+  input.value = view ? label(airports.find(a => a.code === view)) : '';
+  $('airportHint').textContent = `${airports.length} airport${airports.length === 1 ? '' : 's'} · type a code or name`;
+  if (view) document.querySelector('.page-head h1').textContent = `Tower · ${view}`;
+  const choose = () => {
+    const q = input.value.trim().toLowerCase();
+    const next = !q || q === 'all airports' ? ''
+      : (airports.find(a => label(a).toLowerCase() === q || a.code.toLowerCase() === q) || airports.find(a => label(a).toLowerCase().includes(q)))?.code;
+    if (next === undefined) { $('airportHint').textContent = 'No airport matches that.'; return; }
+    if (next === view) { input.value = next ? label(airports.find(a => a.code === next)) : ''; return; }
+    try { localStorage.setItem('skysentry.towerAirport', next); } catch {}
+    const url = new URL(location.href);
+    next ? url.searchParams.set('airport', next) : url.searchParams.delete('airport');
+    location.assign(url);   // reconnect cleanly so feeds, map and alerts only carry this airport
+  };
+  input.addEventListener('change', choose);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') choose(); if (e.key === 'Escape') { input.value = view ? label(airports.find(a => a.code === view)) : ''; input.blur(); } });
+}
+
 /* ---------- socket ---------- */
 async function connect() {
   auth = await signIn({ role: 'dashboard', mount: $('auth') });
   $('who').textContent = auth.label;
   $('accountSecurity').hidden = !auth.manageAccount;
   $('accountSecurity').onclick = () => auth.manageAccount?.();
-  socket = io('/tower', { auth: cb => auth.socketAuth().then(cb) });
+  await setupAirports();
+  socket = io('/tower', { auth: cb => auth.socketAuth(view ? { airport: view } : undefined).then(cb) });
   socket.on('connect', () => { $('conn').textContent = 'Live'; $('conn').dataset.ok = '1'; loadIncidents(); loadHourly(); });
   socket.on('disconnect', () => { $('conn').textContent = 'Reconnecting…'; $('conn').dataset.ok = '0'; });
   socket.on('connect_error', err => { $('conn').textContent = err.message === 'unauthorized' ? 'Not allowed' : 'Offline'; $('conn').dataset.ok = '0'; });
