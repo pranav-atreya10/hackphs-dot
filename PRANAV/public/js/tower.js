@@ -195,14 +195,40 @@ async function loadHourly() {
   } catch (err) { $('chartNote').textContent = err.message === 'database not configured' ? 'Tiger Data is not connected yet, so the chart is empty.' : `Could not load the chart: ${err.message}`; }
 }
 
-/* ---------- Ask SkySentry ---------- */
+/* ---------- Ask SkySentry (copilot chat: OpenAI with tools, Gemini fallback) ---------- */
+let chatHistory = [];
+function chatBubble(role, text) {
+  const li = document.createElement('li'); li.className = role === 'user' ? 'user' : 'bot';
+  li.textContent = text; $('chat').append(li); $('chat').scrollTop = $('chat').scrollHeight;
+  return li;
+}
 $('ask').addEventListener('submit', async e => {
   e.preventDefault();
-  const question = $('q').value.trim(); if (!question) { $('answer').textContent = 'Type a question first.'; return; }
-  $('answer').textContent = 'Thinking…';
-  try { $('answer').textContent = (await api('/api/ask', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ question }) })).answer; }
-  catch (err) { $('answer').textContent = `The assistant could not answer: ${err.message}`; }
+  const question = $('q').value.trim(); if (!question) { $('q').focus(); return; }
+  $('q').value = ''; $('askClear').hidden = false;
+  chatHistory.push({ role: 'user', content: question }); chatBubble('user', question);
+  const reply = chatBubble('bot', 'Thinking…'); reply.setAttribute('aria-busy', 'true');
+  const button = $('ask').querySelector('button'); button.disabled = true;
+  try {
+    const r = await api('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: chatHistory }) });
+    reply.textContent = r.answer; chatHistory.push({ role: 'assistant', content: r.answer });
+    const meta = document.createElement('div'); meta.className = 'meta';
+    for (const label of r.tools || []) { const s = document.createElement('span'); s.className = 'chip'; s.textContent = label; meta.append(s); }
+    for (const id of r.incident_ids || []) {
+      const inc = incidentData.get(id); if (!inc) continue;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip';
+      b.textContent = `${inc.type} · ${new Date(inc.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+      b.addEventListener('click', () => { showIncident(inc); incidentEls.get(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+      meta.append(b);
+    }
+    if (r.source === 'fallback') { const s = document.createElement('span'); s.className = 'chip'; s.textContent = 'basic mode'; meta.append(s); }
+    if (meta.childElementCount) reply.append(meta);
+  } catch (err) {
+    reply.textContent = `The assistant could not answer: ${err.message}`;
+    chatHistory.pop();   // let the question be asked again
+  } finally { reply.removeAttribute('aria-busy'); button.disabled = false; chatHistory = chatHistory.slice(-12); }
 });
+$('askClear').addEventListener('click', () => { chatHistory = []; $('chat').replaceChildren(); $('askClear').hidden = true; $('q').focus(); });
 
 /* ---------- socket ---------- */
 async function connect() {

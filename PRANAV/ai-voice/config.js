@@ -20,10 +20,13 @@ const config = {
   SOLANA_SECRET_KEY: value('SOLANA_SECRET_KEY'),
   SOLANA_RPC_URL: value('SOLANA_RPC_URL', 'https://api.devnet.solana.com'),
   AIRPORT_NAME: value('AIRPORT_NAME', 'Princeton Airport'),
+  OPENAI_API_KEY: value('OPENAI_API_KEY'),
+  OPENAI_MODEL: value('OPENAI_MODEL', 'gpt-5-mini'),
+  OPENAI_GUIDE_MODEL: value('OPENAI_GUIDE_MODEL', 'gpt-5-nano'),
 };
 function redact(text) {
   let result = String(text);
-  for (const name of ['GEMINI_API_KEY', 'ELEVENLABS_API_KEY', 'SOLANA_SECRET_KEY', 'CAMERA_API_KEY', 'TOWER_API_KEY']) {
+  for (const name of ['GEMINI_API_KEY', 'OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'SOLANA_SECRET_KEY', 'CAMERA_API_KEY', 'TOWER_API_KEY']) {
     const secret = config[name] || process.env[name];
     if (secret) result = result.split(secret).join('[hidden]');
   }

@@ -23,8 +23,17 @@
   .incidents button:hover b,.incidents button:focus-visible b{color:var(--clay)} .incidents b{font:500 1rem var(--serif)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
   #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
   #beaconView{padding:8px 0}
-  form.ask{display:flex;gap:8px} form.ask input{flex:1}
-  #answer{margin:0;font:400 1.02rem/1.5 var(--serif);min-height:1.5em}
+  form.ask{display:flex;gap:8px} form.ask input{flex:1;min-width:0}
+  .chat{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:300px;overflow:auto;align-content:start}
+  .chat:empty{display:none}
+  .chat li{max-width:88%;padding:8px 12px;border-radius:12px;font:400 .98rem/1.45 var(--serif)}
+  .chat li.user{justify-self:end;background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:.9rem}
+  .chat li.bot{justify-self:start;background:var(--paper-2)}
+  .chat li.bot[aria-busy="true"]{color:var(--mute)}
+  .chat .meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .chat .chip{font:500 .7rem var(--mono);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:2px 8px;background:var(--card)}
+  .chat button.chip{cursor:pointer;color:var(--clay)} .chat button.chip:hover{border-color:var(--clay);background:var(--card)}
+  .ask-head{display:flex;justify-content:space-between;align-items:center}
   .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px}
   #qr canvas,#qr img{width:100%!important;height:100%!important}
   canvas#chart{max-height:220px}
@@ -82,9 +91,10 @@
     </section>
       <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>
       <section class="card"><h2>Detections by hour</h2><canvas id="chart" aria-label="Detections by hour, last 24 hours"></canvas><p class="hint" id="chartNote"></p></section>
-      <section class="card"><h2>Ask SkySentry</h2>
-      <form class="ask" id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question"><button>Ask</button></form>
-      <p id="answer"></p>
+      <section class="card"><div class="ask-head"><h2>Ask SkySentry</h2><button class="linkbtn" id="askClear" type="button" hidden>New chat</button></div>
+      <ul class="chat" id="chat" aria-live="polite"></ul>
+      <form class="ask" id="ask"><input id="q" placeholder="When were birds worst today?" aria-label="Question" maxlength="1000" autocomplete="off"><button>Ask</button></form>
+      <p class="hint" id="answer">Ask about today's birds and drones, recent incidents, or what the cameras see right now. Advisory only.</p>
     </section>
       <section class="card"><h2>Live events</h2><ul class="log feed" id="feed"></ul></section>
     </div>
