@@ -33,12 +33,13 @@ async function main() {
     .then(r => r.json()).catch(() => ({}));
   const tower = me.role === 'dashboard';
   try { if (me.role) localStorage.setItem('skysentry.role', me.role); } catch {}   // the landing page's Dashboard button reads this
-  const access = me.role && me.airport
-    ? `<div><span>Role</span><b>${tower ? 'Tower dashboard' : 'Camera station'}</b></div><div><span>Airport</span><b>${esc(me.airport)}</b></div>`
-    : '<div><span>Airport access</span><b>Not set up yet</b></div>';
-  const open = me.role && me.airport
-    ? `<a href="${tower ? '/tower.html' : '/camera.html'}">${tower ? 'Open the tower' : 'Start the camera'}</a>`
-    : '<a href="/account.html">Finish setting up</a>';
+  const airport = me.airport ? `${esc(me.airport)}${me.airportName && me.airportName !== me.airport ? ` · ${esc(me.airportName)}` : ''}` : '';
+  const access = (me.admin ? '<div><span>Admin</span><b>Yes · manages airports and join codes</b></div>' : '') + (me.role && me.airport
+    ? `<div><span>Role</span><b>${tower ? 'Tower dashboard' : 'Camera station'}</b></div><div><span>Airport</span><b>${airport}</b></div>`
+    : me.admin ? '' : '<div><span>Airport access</span><b>Not set up yet</b></div>');
+  const open = (me.admin ? '<a href="/admin.html">Manage airports</a>' : '') + (me.role && me.airport
+    ? `<a class="${me.admin ? 'ghost' : ''}" href="${tower ? '/tower.html' : '/camera.html'}">${tower ? 'Open the tower' : 'Start the camera'}</a>`
+    : me.admin ? '<a class="ghost" href="/tower.html">Open the tower (all airports)</a>' : '<a href="/account.html">Finish setting up</a>');
 
   show(`<div class="rows">
       <div><span>Name</span><b>${esc(user.fullName || user.username || '—')}</b></div>
@@ -46,9 +47,15 @@ async function main() {
       ${access}
     </div>
     <div class="actions">${open}<button class="ghost" id="manage" type="button">Profile and security</button><button class="ghost" id="out" type="button">Sign out</button></div>
-    <p class="hint">Profile and security covers your name, email, password, two-step verification, signed-in devices and deleting your account.</p>`);
+    <p class="hint">Profile and security covers your name, email, password, two-step verification and signed-in devices.</p>
+    <div class="rows"><div><span>Delete account</span><button class="danger-btn" id="delete" type="button">Delete my account</button></div></div>`);
   $('manage').onclick = () => clerk.openUserProfile({ appearance: clerkAppearance() });
   $('out').onclick = () => clerk.signOut().then(() => location.assign('/'));
+  $('delete').onclick = async () => {
+    if (!confirm('Delete your SkySentry account? This can’t be undone.')) return;
+    try { await user.delete(); await clerk.signOut().catch(() => {}); location.assign('/'); }
+    catch (err) { show(`<p class="danger">${esc(err.errors?.[0]?.longMessage || err.message || 'Could not delete the account.')}</p><div class="actions"><a href="/settings.html">Back</a></div>`); }
+  };
 }
 
 main().catch(err => show(`<p class="danger">${esc(err.message || err)}</p><div class="actions"><a href="/settings.html">Try again</a></div>`));

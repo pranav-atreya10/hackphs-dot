@@ -15,6 +15,7 @@ try {
 // Provider and bot modules read configuration as they load.
 const ai = require("./ai");
 const { createChat, createRequestLimit } = require("./ai-voice/chat");
+const { createAirports, AirportError } = require("./airports");
 const { localHourLabel } = require("./ai-voice/describe");
 const { CameraBot, BOT_ENABLED } = require("./bot");
 const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
@@ -32,13 +33,11 @@ const TOWER_API_KEY = process.env.TOWER_API_KEY || "";
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || "";
 const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || "";
 // Join codes per airport, e.g. "KPCT=pct-sky-4821,KTTN=ttn-sky-9310". Signing up needs one of these codes,
-// and each user only sees their own airport's alerts.
-const AIRPORT_CODES = new Map(
-  (process.env.AIRPORT_CODES || "")
-    .split(",")
-    .map((pair) => pair.split("=").map((s) => s.trim()))
-    .filter(([airport, code]) => airport && code)
-);
+// and each user only sees their own airport's alerts. Admins can add more airports on admin.html (saved in MongoDB).
+const AIRPORT_CODES_ENV = process.env.AIRPORT_CODES || "";
+// Admin accounts, by verified email, e.g. "you@example.com,teammate@example.com". Admins create airports and
+// join codes on admin.html and see every airport in the tower.
+const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 // Tiger Data (TimescaleDB) connection string, e.g. postgres://tsdbadmin:<pw>@<host>:<port>/tsdb?sslmode=require
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
@@ -76,6 +75,14 @@ async function withMongo(fn) {
     return fn(mongo.db("skysentry"));
   }
 }
+
+// Airports + join codes: AIRPORT_CODES from the environment, plus the ones admins add (MongoDB "airports").
+const airports = createAirports({
+  env: AIRPORT_CODES_ENV,
+  collection: async () => (mongo ? withMongo(async (mdb) => mdb.collection("airports")) : null),
+  matches: keyMatches,
+});
+airports.load().catch((err) => console.error("failed to load airports from MongoDB:", err.message));
 
 // Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
 const toText = (v) => (typeof v === "string" && v ? v.slice(0, 100) : null);
@@ -151,7 +158,7 @@ const clerk = CLERK_SECRET_KEY ? createClerkClient({ secretKey: CLERK_SECRET_KEY
 const ROLES = ["camera", "dashboard"];
 
 if (!clerk) console.warn("CLERK_SECRET_KEY is not set; sign-in is off (dashboards are open, cameras use CAMERA_API_KEY)");
-else if (!AIRPORT_CODES.size) console.warn("AIRPORT_CODES is not set; nobody can finish signing up");
+else if (!ADMIN_EMAILS.size) console.warn("ADMIN_EMAILS is not set; nobody can open admin.html to create airports");
 
 // Role and airport live in each Clerk user's publicMetadata, which only this server can write.
 // Cached briefly so dashboards polling the API don't hit Clerk's rate limits.
@@ -165,11 +172,14 @@ async function clerkAccess(token) {
     const { sub } = await verifyToken(token, { secretKey: CLERK_SECRET_KEY });
     const hit = accessCache.get(sub);
     if (hit && Date.now() - hit.at < ACCESS_TTL_MS) return hit.access;
-    const { role, airport } = (await clerk.users.getUser(sub)).publicMetadata || {};
+    const user = await clerk.users.getUser(sub);
+    const { role, airport } = user.publicMetadata || {};
+    const verified = (user.emailAddresses || []).filter((e) => e.verification?.status === "verified").map((e) => e.emailAddress.toLowerCase());
     const access = {
       userId: sub,
       role: ROLES.includes(role) ? role : null,
-      airport: AIRPORT_CODES.has(airport) ? airport : null,
+      airport: airports.has(airport) ? airport : null,
+      admin: verified.some((e) => ADMIN_EMAILS.has(e)),
     };
     accessCache.set(sub, { at: Date.now(), access });
     return access;
@@ -181,11 +191,7 @@ async function clerkAccess(token) {
 const bearerToken = (req) => (req.get("authorization") || "").replace(/^Bearer\s+/i, "");
 
 // Find the airport whose join code matches, comparing every code in constant time.
-function airportForCode(code) {
-  let match = null;
-  for (const [airport, expected] of AIRPORT_CODES) if (keyMatches(code, expected)) match = airport;
-  return match;
-}
+const airportForCode = (code) => airports.forJoinCode(code);
 
 // Dashboard-only HTTP routes. With Clerk on, the caller needs a dashboard account (scoped to its airport)
 // or TOWER_API_KEY in x-api-key (all airports). With Clerk off, they stay open as before.
@@ -194,8 +200,19 @@ async function requireDashboard(req, res, next) {
   if (TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)) return next();
   const access = await clerkAccess(bearerToken(req));
   if (!access) return res.status(401).json({ error: "sign-in required" });
+  if (access.admin) return next();   // admins see every airport, like TOWER_API_KEY
   if (access.role !== "dashboard" || !access.airport) return res.status(403).json({ error: "dashboard account required" });
   req.airport = access.airport;
+  next();
+}
+
+// Admin-only routes (admin.html): a signed-in account whose verified email is in ADMIN_EMAILS.
+async function requireAdmin(req, res, next) {
+  if (!clerk) return res.status(503).json({ error: "sign-in is not configured" });
+  const access = await clerkAccess(bearerToken(req));
+  if (!access) return res.status(401).json({ error: "sign-in required" });
+  if (!access.admin) return res.status(403).json({ error: "admin account required" });
+  req.userId = access.userId;
   next();
 }
 
@@ -322,7 +339,31 @@ app.post("/api/auth/join", async (req, res) => {
 app.get("/api/auth/me", async (req, res) => {
   const access = await clerkAccess(bearerToken(req));
   if (!access) return res.status(401).json({ error: "sign-in required" });
-  res.json({ role: access.role, airport: access.airport });
+  res.json({ role: access.role, airport: access.airport, admin: access.admin, airportName: airports.get(access.airport)?.name ?? null });
+});
+
+// ---------- Admin: airports and join codes ----------
+const sendAirportError = (res, err) => {
+  if (err instanceof AirportError) return res.status(err.status).json({ error: err.message });
+  console.error("airport admin failed:", err.message);
+  res.status(500).json({ error: "could not save, try again" });
+};
+app.get("/api/admin/airports", requireAdmin, async (req, res) => {
+  try { await airports.load(); } catch (err) { console.error("failed to reload airports:", err.message); }
+  res.json({ airports: airports.all(), canSave: Boolean(mongo) });
+});
+app.post("/api/admin/airports", requireAdmin, async (req, res) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {};
+    res.status(201).json(await airports.create({ code: body.code, name: body.name, by: req.userId }));
+  } catch (err) { sendAirportError(res, err); }
+});
+app.post("/api/admin/airports/:code/rotate", requireAdmin, async (req, res) => {
+  try { res.json(await airports.rotate(req.params.code)); } catch (err) { sendAirportError(res, err); }
+});
+app.delete("/api/admin/airports/:code", requireAdmin, async (req, res) => {
+  try { await airports.remove(req.params.code); accessCache.clear(); res.json({ ok: true }); }   // its users lose access right away
+  catch (err) { sendAirportError(res, err); }
 });
 
 // Health check used by DigitalOcean to decide whether the app is up.
@@ -357,7 +398,7 @@ app.get("/health/db", async (req, res) => {
     mongo ? dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured",
   ]);
   const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
-  res.json({ tiger, mongodb, clerk: clerkStatus, airports: AIRPORT_CODES.size });
+  res.json({ tiger, mongodb, clerk: clerkStatus, airports: airports.size });
 });
 
 // Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
@@ -480,7 +521,7 @@ app.post("/api/guide", async (req, res) => {
 // microcontrollers "x-api-key: <CAMERA_API_KEY>" (or Bearer <CAMERA_API_KEY>) plus optional "x-airport: <code>".
 // Returns the camera's airport (null = all towers), or undefined if not allowed.
 async function cameraAirport(key, token, requestedAirport) {
-  if (keyMatches(key, CAMERA_API_KEY)) return AIRPORT_CODES.has(requestedAirport) ? requestedAirport : null;
+  if (keyMatches(key, CAMERA_API_KEY)) return airports.has(requestedAirport) ? requestedAirport : null;
   const access = await clerkAccess(token);
   if (access?.role === "camera" && access.airport) return access.airport;
   return undefined;
@@ -544,6 +585,7 @@ towers.use(async (socket, next) => {
   if (TOWER_API_KEY && keyMatches(key, TOWER_API_KEY)) return next();
   if (clerk) {
     const access = await clerkAccess(token);
+    if (access?.admin) return next();   // admins watch every airport
     if (access?.role === "dashboard" && access.airport) {
       socket.data.airport = access.airport;
       return next();

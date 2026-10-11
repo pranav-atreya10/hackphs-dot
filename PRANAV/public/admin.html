@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkySentry Admin</title>
+<meta name="description" content="SkySentry admin: create airports and their join codes.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script src="/js/theme.js"></script>
+<link rel="stylesheet" href="/css/app.css">
+<style>
+  .top{display:flex;align-items:center;gap:16px;max-width:1080px;margin:0 auto;padding:14px 24px}
+  .top nav{margin-left:auto;display:flex;gap:16px} .top nav a{color:var(--mute);text-decoration:none;font:500 .9rem var(--sans)} .top nav a:hover{color:var(--ink)}
+  .admin{max-width:820px;margin:0 auto;padding:24px 16px 80px;display:grid;gap:16px}
+  .admin > h1{margin:0;font:600 1.8rem var(--sans)}
+  .admin > p{margin:-8px 0 0;color:var(--mute)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:14px}
+  .panel[hidden]{display:none}
+  .panel h2{margin:0;font:600 1.05rem var(--sans)}
+  .panel > p{margin:0;color:var(--mute)}
+  form.add{display:grid;grid-template-columns:8rem minmax(0,1fr) auto;gap:10px;align-items:end}
+  form.add input{width:100%}
+  @media (max-width:600px){form.add{grid-template-columns:1fr}}
+  .err{color:var(--stop);margin:0;min-height:1.2em;font-size:.9rem}
+  table{width:100%;border-collapse:collapse;font-size:.93rem}
+  th{text-align:left;font:500 .78rem var(--sans);color:var(--mute);padding:0 8px 8px;border-bottom:1px solid var(--line)}
+  td{padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  td code{font:500 .9rem var(--mono);background:var(--paper-2);border-radius:6px;padding:3px 7px;white-space:nowrap}
+  td .tag{font:500 .72rem var(--sans);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:2px 8px;white-space:nowrap}
+  td.acts{text-align:right;white-space:nowrap} td.acts button{padding:5px 10px;font-size:.84rem;margin-left:4px}
+  button.danger{background:var(--card);color:var(--stop);border-color:var(--line)} button.danger:hover{opacity:1;background:var(--hover)}
+  @media (max-width:640px){table,tbody,tr,td{display:block} thead{display:none} tr{border-bottom:1px solid var(--line);padding:8px 0} td{border:0;padding:4px 0} td.acts{text-align:left}}
+  .new{animation:flashrow 1.6s ease-out} @keyframes flashrow{from{background:color-mix(in srgb,var(--go) 22%,transparent)}}
+  @media (prefers-reduced-motion:reduce){.new{animation:none}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
+  <nav><a href="/tower.html">Tower</a><a href="/settings.html">Settings</a></nav>
+</header>
+<main class="admin">
+  <h1>Admin</h1>
+  <p>Create airports and the join codes their staff use when they sign up.</p>
+  <div id="gate" class="panel" aria-live="polite"><p>Loading…</p></div>
+  <section class="panel" id="addPanel" hidden>
+    <h2>Add an airport</h2>
+    <form class="add" id="add">
+      <label for="code">Airport code<input id="code" placeholder="KTTN" maxlength="5" autocomplete="off" required></label>
+      <label for="name">Name<input id="name" placeholder="Trenton-Mercer Airport" maxlength="80" autocomplete="off"></label>
+      <button>Create</button>
+    </form>
+    <p class="err" id="addErr" role="alert"></p>
+  </section>
+  <section class="panel" id="listPanel" hidden>
+    <h2>Airports</h2>
+    <p>Share an airport’s join code with its tower and camera staff. A new code stops the old one working for new sign-ups; deleting an airport removes access for everyone in it.</p>
+    <table><thead><tr><th>Code</th><th>Name</th><th>Join code</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+    <p class="err" id="listErr" role="alert"></p>
+  </section>
+</main>
+<script type="module" src="/js/admin.js"></script>
+</body>
+</html>

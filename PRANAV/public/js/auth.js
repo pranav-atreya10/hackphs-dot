@@ -108,16 +108,18 @@ export async function signIn({ role, mount, onStatus = () => {} }) {
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
     let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
 
-    if (!me.role || !me.airport) me = await finishSetup({ mount, role, headers });
-    if (me.role !== role) {
+    // Admins open the tower for every airport without joining one.
+    const adminTower = me.admin && role === 'dashboard' && !(me.role === 'dashboard' && me.airport);
+    if (!adminTower && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers })) };
+    if (!adminTower && me.role !== role) {
       panel(mount, `<h2>Wrong account type</h2><p>This account is set up as a ${me.role === 'camera' ? 'camera station' : 'tower dashboard'}. Open the <a href="/${me.role === 'camera' ? 'camera' : 'tower'}.html">${me.role === 'camera' ? 'camera' : 'tower'} page</a> instead, or sign out and use another account.</p><button id="out">Sign out</button>`)
         .querySelector('#out').onclick = () => clerk.signOut().then(() => location.reload());
       throw new Error('wrong role');
     }
-    store.set('skysentry.role', me.role);   // the landing page's Dashboard button reads this
+    store.set('skysentry.role', adminTower ? 'dashboard' : me.role);   // the landing page's Dashboard button reads this
     mount.hidden = true;
     return {
-      mode: 'clerk', airport: me.airport, label: `${me.airport} · signed in`,
+      mode: 'clerk', airport: adminTower ? null : me.airport, label: adminTower ? 'Admin · all airports' : `${me.airport} · signed in`,
       socketAuth: async extra => ({ token: await token(), ...extra }),
       headers,
       manageAccount: () => clerk.openUserProfile(),

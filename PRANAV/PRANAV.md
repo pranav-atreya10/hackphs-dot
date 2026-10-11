@@ -316,3 +316,26 @@ It checks free disk space before starting and every second while rendering, and 
 **Upload a video (camera page):** a button next to Start. Pick a video on this computer and it plays through the detector right away. In stream mode it also goes to the tower like a live camera. It uses the same path as Settings → "Video file from this device"; the button just makes it one click. Sky-only footage works best: waves, grass or a moving ground make lots of false "unknown" boxes.
 
 **Checked:** headless Chrome on a local server with the live (unreachable) Clerk key showed the camera-key panel and connected with the key. Uploading `clips/geese-beach.mp4` started streaming and showed detections. Tests: 74/74.
+
+## Admin accounts: create airports and join codes
+**Who is an admin:** any signed-in account whose *verified* email is in the server's `ADMIN_EMAILS` setting (comma-separated, set in DigitalOcean). Admin can't be picked at sign-up and isn't stored on the account, so nobody can make themselves one. Changing the setting takes effect on redeploy.
+
+**Admin page (`admin.html` + `js/admin.js`):**
+- Lists every airport with its join code (and a Copy button).
+- **Add an airport:** code (3 to 5 letters or digits, e.g. KTTN) and a name. The server generates the join code, e.g. `kttn-4821-9310`.
+- **New code:** replaces the join code, so the old one stops working for new sign-ups.
+- **Delete:** removes the airport; everyone signed up to it loses access right away.
+- Airports from `AIRPORT_CODES` are shown but marked "From server settings". Change those in DigitalOcean.
+- Non-admins see "Admins only"; the server checks too (`/api/admin/*` returns 401/403).
+
+**Server:**
+- `airports.js` merges `AIRPORT_CODES` with the MongoDB `airports` collection.
+- Sign-up join codes, camera keys and tower access all read from it, so a new airport works immediately, with no redeploy.
+- Admins pass `requireDashboard` and the tower socket for every airport, like `TOWER_API_KEY`.
+- `/api/auth/me` now also returns `admin` and `airportName`.
+
+**Settings:**
+- Admins see "Admin: Yes" and a **Manage airports** button.
+- Everyone gets a **Delete my account** button (with a confirmation). It uses Clerk's account deletion, which needs "allow users to delete their accounts" left on in the Clerk dashboard (it's on by default).
+
+**Checked:** 5 new unit tests for `airports.js` (create, join, new code, delete, env airports locked, MongoDB down); the full suite is 79/79. On a local server, `/api/admin/airports` refuses requests that aren't signed in (401), and admin.html shows only the sign-in prompt when signed out. The signed-in admin flow needs the real Clerk secret key, so test it on the live site after deploy.
