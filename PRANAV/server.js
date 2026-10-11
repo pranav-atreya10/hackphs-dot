@@ -463,7 +463,9 @@ const liveCameras = new Map();
 function openLive(cameraId, airport, toCamera = () => {}) {
   const old = liveCameras.get(cameraId);
   if (old && old.airport === airport) { old.toCamera = toCamera; return old; }
-  const live = { cameraId, airport, config: null, fallbackOwner: null, fallbackAt: 0, toCamera, lastState: null, lastSeen: Date.now() };
+  // Until the camera sends its own settings, assume the runway approach is the left 30% of the frame,
+  // so the bot can judge "heading toward the runway" from the very first frame.
+  const live = { cameraId, airport, config: { corridor: [[0, 0], [0.3, 0], [0.3, 1], [0, 1]], camera_id: cameraId }, fallbackOwner: null, fallbackAt: 0, toCamera, lastState: null, lastSeen: Date.now() };
   live.bot = new CameraBot({
     cameraId,
     onEvent: (ev) => relayCameraEvent(cameraId, ev, airport),
@@ -474,6 +476,7 @@ function openLive(cameraId, airport, toCamera = () => {}) {
     },
     onStatus: () => { towersFor(airport).emit("bot:status", live.bot.status()); live.toCamera("bot:status", live.bot.status()); },
   });
+  live.bot.configure(live.config);
   liveCameras.set(cameraId, live);
   towersFor(airport).emit("bot:status", live.bot.status());
   return live;
