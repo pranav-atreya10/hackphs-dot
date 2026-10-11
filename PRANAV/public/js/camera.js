@@ -4,7 +4,7 @@
 //   video / synthetic sky ──► 320 px frame ──► DetectionEngine.process()
 //      ├─ 'frame' → overlay (tracks, flocks, corridor) + stats
 //      └─ 'event' → crop snapshot for yellow/red → socket.emit('camera:event')
-import { DetectionEngine, SyntheticSky, SCENARIOS, HumDetector, PRESETS } from '/detection/index.js';
+import { DetectionEngine, SyntheticSky, SCENARIOS, HumDetector, PRESETS, DroneAudioModel, startModelMic } from '/detection/index.js';
 import { CocoVerifier } from '/detection/adapters/coco.js';
 import { signIn } from '/js/auth.js';
 
@@ -352,18 +352,26 @@ $('coco').addEventListener('click', async () => {
   if (!on) coco?.stop();
 });
 
-let micTimer = null, micStream = null;
+let micTimer = null, micStream = null, micStop = null, audioModel = null;
 $('mic').addEventListener('click', async () => {
   const on = $('mic').getAttribute('aria-pressed') !== 'true';
-  if (!on) { clearInterval(micTimer); micStream?.getTracks().forEach(t => t.stop()); $('mic').setAttribute('aria-pressed', 'false'); return; }
+  if (!on) { clearInterval(micTimer); micStop?.(); micStop = null; micStream?.getTracks().forEach(t => t.stop()); $('mic').setAttribute('aria-pressed', 'false'); return; }
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
-    const ctx = new AudioContext(), an = ctx.createAnalyser(); an.fftSize = 4096;
-    ctx.createMediaStreamSource(micStream).connect(an);
-    const spec = new Float32Array(an.frequencyBinCount), hum = new HumDetector();
-    micTimer = setInterval(() => { an.getFloatFrequencyData(spec); engine?.setAudioProbability(hum.update(spec, ctx.sampleRate), 'hum'); }, 120);
+    // Trained drone-sound model first (99% of test drones, 0.4% false alarms); the hum rule is the fallback.
+    try {
+      audioModel ??= await DroneAudioModel.load('/detection/models/drone_audio_v0.json');
+      micStop = await startModelMic(micStream, engine, audioModel);
+      $('aiStatus').textContent = 'Listening with the trained drone-sound model.';
+    } catch (err) {
+      const ctx = new AudioContext(), an = ctx.createAnalyser(); an.fftSize = 4096;
+      ctx.createMediaStreamSource(micStream).connect(an);
+      const spec = new Float32Array(an.frequencyBinCount), hum = new HumDetector();
+      micTimer = setInterval(() => { an.getFloatFrequencyData(spec); engine?.setAudioProbability(hum.update(spec, ctx.sampleRate), 'hum'); }, 120);
+      micStop = () => ctx.close();
+      $('aiStatus').textContent = `Listening for a steady drone hum (model unavailable: ${err.message}).`;
+    }
     $('mic').setAttribute('aria-pressed', 'true');
-    $('aiStatus').textContent = 'Listening for a steady drone hum.';
   } catch (err) { $('aiStatus').textContent = `Microphone blocked: ${err.message}`; }
 });
 $('fakeDrone').addEventListener('click', () => {

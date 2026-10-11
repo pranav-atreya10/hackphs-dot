@@ -2,7 +2,7 @@
 // DigitalOcean only deploys the PRANAV folder, so the copies are committed. Run after changing
 // Vivan's detection engine or Atharv's film/site:  npm run sync-web
 //
-//   VIVAN/detection/{index.js,src,adapters,test}  -> public/detection/
+//   VIVAN/detection/{index.js,src,adapters,models,test}  -> public/detection/
 //   ATHARV/skysentry/dist (film runtime + assets)  -> public/  (film.html = standalone film)
 //   ATHARV/skysentry/dist/site.html                -> public/index.html (landing page, film built in)
 import { cpSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
@@ -16,7 +16,7 @@ const film = join(repo, 'ATHARV/skysentry/dist');
 
 // Vivan's engine, adapters and test pages, unchanged.
 rmSync(join(pub, 'detection'), { recursive: true, force: true });
-for (const p of ['index.js', 'src', 'adapters', 'test']) cpSync(join(vivan, p), join(pub, 'detection', p), { recursive: true });
+for (const p of ['index.js', 'src', 'adapters', 'models', 'test']) cpSync(join(vivan, p), join(pub, 'detection', p), { recursive: true });
 writeFileSync(join(pub, 'detection/package.json'), '{ "type": "module" }\n');   // lets the server import the engine without warnings
 
 // Atharv's film runtime. Binary originals (.glb/.bin/.hdr/.gltf) are skipped; the loaders read the .json forms.

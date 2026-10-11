@@ -6,6 +6,8 @@ export { DEFAULTS, mergeConfig } from './src/config.js';
 export { SyntheticSky, SCENARIOS } from './src/synthetic.js';
 export { ClipEvaluator } from './src/eval.js';
 export { HumDetector } from './src/audio.js';
+export { DroneAudioModel } from './src/audio_model.js';
+export { startModelMic } from './adapters/mic.js';
 export { analyzeWingbeat } from './src/wingbeat.js';
 export { bearingFromX, compassName, destination } from './src/geo.js';
 export { etaToPolygon, pointInPolygon } from './src/geometry.js';

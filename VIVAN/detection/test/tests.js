@@ -10,6 +10,7 @@ import { FlockGrouper } from '../src/flocks.js';
 import { RiskEngine } from '../src/risk.js';
 import { HumDetector } from '../src/audio.js';
 import { gravityArc, spinCheck } from '../src/debris.js';
+import { DroneAudioModel, referenceSignal } from '../src/audio_model.js';
 import { mulberry32 } from '../src/synthetic.js';
 import { runScenario, evaluateConfig } from '../src/tune.js';
 import { PARAMS, PRESETS, describeParams, getParam } from '../src/params.js';
@@ -302,6 +303,19 @@ test('hum detector: low engine/rotor pitch and long overtone ladders are not dro
   ok(engine.p === 0 && /pitch too low/.test(engine.why), `120 Hz engine: ${JSON.stringify(engine)}`);
   const ladder = run(260, 10);
   ok(ladder.p === 0 && /overtone ladder/.test(ladder.why), `260 Hz with 9 overtones: ${JSON.stringify(ladder)}`);
+});
+
+test('audio model: the JS port gives the same scores as the trained Python model', async () => {
+  const model = await DroneAudioModel.load(new URL('../models/drone_audio_v0.json', import.meta.url));
+  for (const [name, ref] of Object.entries(model.reference)) {
+    const x = model.logMel(referenceSignal(name));
+    ok(x.w === ref.frames, `${name}: ${x.w} frames, expected ${ref.frames}`);
+    near(model.predict(referenceSignal(name)).logit, ref.logit, 0.05, `${name} logit`);
+  }
+  const t0 = performance.now();
+  for (let i = 0; i < 5; i++) model.predict(referenceSignal('lcg_noise'));
+  const ms = (performance.now() - t0) / 5;
+  ok(ms < 150, `${ms.toFixed(1)} ms per 1 s window`);
 });
 
 test('contract: track_batch points have every field the backend needs', () => {
