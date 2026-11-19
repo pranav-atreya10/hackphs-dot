@@ -586,7 +586,8 @@ async function connect() {
     if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
     if (selectedIncident) { $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
     monitoring.setConnected(false); refreshRisk();
-    status(reason === 'io server disconnect' ? 'Access ended; reload to reconnect' : 'Reconnecting…');
+    status(['io server disconnect', 'io client disconnect'].includes(reason)
+      ? 'Access ended; reload to reconnect' : 'Reconnecting…');
     $('conn').dataset.ok = '0';
   });
   socket.on('connect_error', err => {

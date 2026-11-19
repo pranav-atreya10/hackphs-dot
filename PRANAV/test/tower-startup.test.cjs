@@ -50,4 +50,17 @@ test('only an authorized socket reveals tower data and starts optional loads', a
   assert.ok(assetPaths.includes('/js/walkthrough.js'));
   assert.match(document.getElementById('mapNote').textContent, /Loading|unavailable/);
   assert.equal(assetPaths.includes('/vendor/chart.umd.min.js'), false);
+
+  for (const [reason, status] of [
+    ['transport close', 'Reconnecting…'],
+    ['io client disconnect', 'Access ended; reload to reconnect'],
+    ['io server disconnect', 'Access ended; reload to reconnect'],
+  ]) {
+    socket.connected = false;
+    events.get('disconnect')(reason);
+    assert.equal(document.getElementById('conn').textContent, status);
+    assert.equal(document.getElementById('risk').dataset.risk, 'unavailable');
+    socket.connected = true;
+    events.get('connect')();
+  }
 });
