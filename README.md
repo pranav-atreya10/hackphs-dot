@@ -12,10 +12,14 @@ SkySentry connects an iPhone camera to a live tower dashboard, detects moving bi
 | `/account.html` | Sign up / sign in (Clerk), then pick an account type and enter an airport join code | Everyone |
 | `/camera.html` | **Camera station.** Uses this device's camera (or **Upload a video**), detects birds and drones, and streams to the tower. On a laptop, a QR code opens it on a phone. | Camera accounts, admins; tower accounts only for demo clips |
 | `/tower.html` | **Tower dashboard.** Live risk (also in the sidebar), camera feeds with the detector's boxes, map pins, spoken alerts, AI incident reports, hourly chart, beacon, and the assistant | Tower accounts, admins |
-| `/demo.html` | Demo library: recorded bird and drone clips to run through the detector | Everyone; "Use this demo" works for any account |
+| `/demo.html` | Demo library: recorded bird and drone clips. Not linked from any menu (camera stations pick demo clips in their own settings); still works by URL | Everyone |
 | `/settings.html` | Account type, airport, profile and security (Clerk), switch-type requests, delete account, light/dark theme | Signed-in users (theme for everyone) |
 | `/admin.html` | Create airports and join codes; approve or deny account-type switch requests | Admins |
 | `/app.html` | Placeholder for the mobile app ("Still Under Progress") | Everyone |
+
+### First-visit walkthrough
+
+The first time someone opens the **Tower** or **Camera** page, a short guided tour highlights each part (risk level, feeds, map, adding a camera, reports, assistant / Start, upload, settings). It waits until sign-in is done, shows once per browser, and **Take the tour** in the side menu replays it. Code: `PRANAV/public/js/walkthrough.js`.
 
 ### Accounts
 
