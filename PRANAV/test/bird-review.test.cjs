@@ -52,3 +52,14 @@ test("provider unavailability cannot become a verdict", async () => {
   const f = fixture(async () => ({ status: "unavailable", source: "fallback", reason: "timeout" }));
   assert.deepEqual(await f.service.review(f.ref, "A"), { status: "unavailable", reason: "timeout" });
 });
+
+test("review reads the live camera's state where server.js keeps it (live.lastResult.state), and accepts a local judge", async () => {
+  const f = fixture(async () => ({ status: "verified", source: "local", verdict: "bird", model: "qwen2.5vl:7b" }));
+  const state = f.live.lastState;
+  delete f.live.lastState;
+  f.live.lastResult = { frame: {}, state };   // the shape server.js actually stores
+  const result = await f.service.review(f.ref, "A");
+  assert.equal(result.status, "verified");
+  assert.equal(result.source, "local");
+  assert.equal(result.crop, "crop");          // kept for the opt-in training set; the route strips it before replying
+});

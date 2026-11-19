@@ -597,3 +597,18 @@ first operator. See [the runbook](OPERATIONS.md) for the precise failure modes.
 The tower HTTP data APIs and live rooms use the same airport access policy. Credentials cannot open a global view; operators select one authorized airport at a time. Mongo incident history, hourly detections and both chat providers use that scope. Rows with missing, null, or nonscalar airport ownership are excluded, not assigned to a default tenant.
 
 Initial Clerk setup reserves one assignment per account in Mongo before sending the Clerk update. Role requests compare an immutable revision and expected state; approval disconnects existing sockets and suspends the account until Clerk confirms the persisted transition ID. See `OPERATIONS.md` for configuration and recovery.
+
+## End-to-end check: camera → server → tower → local bird model → bird judge
+
+Tested the whole chain in real browsers: a camera page streaming a fake webcam (the geese demo clip), the server
+detector, a tower signed in with a tower key, Shreyansh's in-browser "trained bird check" (COCO-SSD), and the server
+bird judge set to `BIRD_JUDGE=local` against a stand-in local model. Three bugs found and fixed:
+1. **Tower-key towers never opened** (`public/js/tower.js`): a key bound to one airport left the page on "Select an
+   airport" with the airport box locked. It now picks the only airport automatically.
+2. **Every evidence review failed with `unknown_evidence`** (`bird-review.js`): it read the camera's newest detector
+   state from `live.lastState`, but `server.js` stores it as `live.lastResult.state`. Tests used a fixture with
+   `lastState`, so they passed. Now reads `lastResult.state` (still accepts `lastState`); new regression test.
+3. **The tower ignored local-model answers** (`public/js/visual-ai.js`, `tower.js`): it only accepted `source: 'gemini'`.
+   Now accepts `local` and labels it "Local-model advisory"; incident details name the model instead of always "Gemini".
+Result: the stand-in model received real crops with the shared rubric and schema, and the tower showed
+"Local-model advisory · object 596: bird". Server tests 151/151, engine tests 67/67, web/site checks pass.

@@ -65,3 +65,9 @@ the server bot still analyses the real camera, so real alerts are unaffected.
 When no real camera has a recent event, the tower's risk card, sidebar status and beacon follow the demo footage
 (1-4 objects yellow, 5+ red, the site's rule), shown as "DEMO · …" with "Recorded demo footage · not a real alert".
 Demo footage still never creates alerts, sounds, incident reports or database rows; real camera events always win.
+
+## Fixes to the bird check after an end-to-end test (by Pranav's session)
+- `bird-review.js` read `live.lastState`, which `server.js` never sets (it stores `live.lastResult.state`), so every
+  server evidence review answered `unknown_evidence` in the real app. Fixed, with a test using the real shape.
+- Tower-key towers stayed on "Select an airport" (scoped key, locked airport box); now the single airport is chosen.
+- The trained bird check now also accepts answers from a local model (`BIRD_JUDGE=local`), labelled "Local-model".

@@ -143,7 +143,7 @@ export class VisualBirdVerifier {
       if (!this.enabled || generation !== this.generation) return;
       const match = Object.keys(ref).every(key => result?.evidenceRef?.[key] === ref[key]) &&
         result.evidenceRef.generation === c.generation && result.evidenceRef.t === c.frameT;
-      if (match && result.status === 'verified' && result.source === 'gemini' &&
+      if (match && result.status === 'verified' && ['gemini', 'local'].includes(result.source) &&
           ['bird', 'not_bird', 'uncertain'].includes(result.verdict)) {
         this.review = { result, c };
       } else this.review = { unavailable: true };
@@ -159,12 +159,13 @@ export class VisualBirdVerifier {
     if (!this.reviewStatus) return;
     const review = this.review;
     if (!this.enabled || !this.judge || !review) this.reviewStatus.textContent = '';
-    else if (review.pending) this.reviewStatus.textContent = 'Cloud evidence review pending. Local checks continue.';
-    else if (review.unavailable) this.reviewStatus.textContent = 'Cloud evidence review unavailable. Local checks continue.';
+    else if (review.pending) this.reviewStatus.textContent = 'Evidence review pending. Local checks continue.';
+    else if (review.unavailable) this.reviewStatus.textContent = 'Evidence review unavailable. Local checks continue.';
     else {
       const { result, c } = review;
       const verdict = { bird: 'bird', not_bird: 'not a bird', uncertain: 'uncertain' }[result.verdict];
-      const label = result.application === 'advisory' && this.isLive(c) ? 'Cloud advisory' : 'Earlier cloud review';
+      const where = result.source === 'local' ? 'local-model' : 'cloud'; // BIRD_JUDGE=local answers come from the operator's own model
+      const label = result.application === 'advisory' && this.isLive(c) ? `${where === 'cloud' ? 'Cloud' : 'Local-model'} advisory` : `Earlier ${where} review`;
       this.reviewStatus.textContent = `${label} · ${c.t.cameraId}, object ${c.tr.id}: ${verdict}. Not a clearance.`;
     }
   }
