@@ -1,0 +1,107 @@
+{
+ "weights": "models/audio/v2_audio.pt",
+ "sha256": "71a4a5ad371700b7aa8a6c06d4a374ef776b8f8a6f08e8931baecfbb792c1efa",
+ "trained_utc": "2026-11-19T15:34:59Z",
+ "args": {
+  "out": "models/audio/v2_audio.pt",
+  "epochs": 8,
+  "per_class": 12000,
+  "batch": 128,
+  "lr": 0.001,
+  "seed": 0,
+  "noise_aug": "",
+  "extra_negatives": "data/esc50/folds45"
+ },
+ "train_shards": [
+  2,
+  5,
+  10,
+  19,
+  24
+ ],
+ "val_shards": [
+  30
+ ],
+ "val_tail_of": {
+  "2": 0.15
+ },
+ "test_shards_excluded": [
+  3,
+  36
+ ],
+ "dads_revision": "981b832c35b45a57518c989f0f79101adb4ae91f",
+ "shard_sha256": {
+  "2": "37913cdf6074b14b4c198459d741b84c96ec1a67a19871a21f4402f104d639cd",
+  "5": "2b550d54d9349bd3c8456b57dea7a980fdcb983127cbaf8d23176dc221fbfb05",
+  "10": "1c55d7ab75b7743584b32d7d3219e63eb37ddf502b43b37b452ebdcf2c0e152f",
+  "19": "498eb6e48a63fc1fae84c447e88691672fa5df3dc40c4ae7360b87f77dee0fe9",
+  "24": "be874e2578010c11566705f2e45a04f4087f18205b429b3fc02e6ca0c695098a",
+  "30": "5a8d780811a0ae54bc144655cd9309d85932ec4023a812d429347d155bae910d"
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "loss": 0.05567367127452521,
+   "val_auc": 0.9996437499999999,
+   "val_acc": 0.99425
+  },
+  {
+   "epoch": 2,
+   "loss": 0.009031115714064303,
+   "val_auc": 0.9997882499999999,
+   "val_acc": 0.9925
+  },
+  {
+   "epoch": 3,
+   "loss": 0.00854149481939261,
+   "val_auc": 0.9999917500000001,
+   "val_acc": 0.998
+  },
+  {
+   "epoch": 4,
+   "loss": 0.0056684078850555535,
+   "val_auc": 0.99999525,
+   "val_acc": 0.999
+  },
+  {
+   "epoch": 5,
+   "loss": 0.004586597753625531,
+   "val_auc": 0.9999502499999999,
+   "val_acc": 0.9965
+  },
+  {
+   "epoch": 6,
+   "loss": 0.0031953447145729405,
+   "val_auc": 0.99997075,
+   "val_acc": 0.99775
+  },
+  {
+   "epoch": 7,
+   "loss": 0.0026233665737387863,
+   "val_auc": 0.9999905,
+   "val_acc": 0.999
+  },
+  {
+   "epoch": 8,
+   "loss": 0.0020120262756307132,
+   "val_auc": 0.999998,
+   "val_acc": 0.9995
+  }
+ ],
+ "best_val_auc": 0.999998,
+ "git": {
+  "commit": "15a5d9c2e99e596648b5dfd1c0bea1577dba124c",
+  "branch": "claude/fervent-cerf-setrc4",
+  "dirty": false
+ },
+ "hardware": {
+  "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "python": "3.13.18",
+  "torch": "2.15.0+cu132",
+  "accelerator": "cpu",
+  "numpy": "2.5.5",
+  "librosa": "1.0.1",
+  "sklearn": "1.9.1"
+ }
+}

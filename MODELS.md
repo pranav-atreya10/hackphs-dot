@@ -28,6 +28,9 @@ Settings were last tuned with `node VIVAN/detection/tools/autotune.mjs` (report 
 - **Export to ONNX:** `.venv/bin/python benchmarks/export_audio_onnx.py --json VIVAN/detection/models/drone_audio_vN.json`
   Both exports are checked against stored reference outputs, so all three formats give the same answers.
 
+Other trained versions (v1–v3, not live; results in `benchmarks/CHANGELOG.md`) are in `models/audio/candidates/`
+in all three formats.
+
 Using the ONNX file from Python:
 
 ```python

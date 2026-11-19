@@ -44,3 +44,25 @@ examples (`--extra_negatives`) teaches the model that helicopters, planes and en
 - **v3 = v1 + extra negatives** (one change from v1). Expected: keeps v1's noise robustness while bringing false alarms
   back down near v0.
 Same data, split, epochs, windows and seed as v0. Judged the same way as v1.
+
+**Results (held-out; significance vs v0 unless noted).**
+
+| Held-out metric | v0 | v2 (v0 + look-alikes) | v3 (v1 + look-alikes) |
+|---|---|---|---|
+| DADS drone recall | 0.996 [0.995–0.998] | 0.987 [0.982–0.992] **worse** | 0.996 [0.994–0.997] not sig. |
+| DADS false-alarm rate | 0.001 [0.000–0.003] | 0.001 not sig. | 0.014 [0.009–0.020] **worse** |
+| ESC-50 false alarms, all | 0.037 [0.026–0.048] | 0.012 [0.006–0.018] **better** | 0.075 [0.061–0.090] **worse** (better than v1's 0.123) |
+| ESC-50 false alarms, helicopter | 0.000 | 0.000 | 0.167 [0.042–0.333] **worse** |
+| Drone recall in noise +5 / 0 / −5 / −10 dB | 0.86 / 0.60 / 0.40 / 0.25 | 0.83 / 0.52 / 0.30 / 0.13 (−10 dB **worse**) | 1.00 / 0.98 / 0.92 / 0.65 (**better**, all four) |
+
+**Decisions (recommended, pending Vivan): v2 revert, v3 revert; v0 stays live.**
+- v2: the look-alike examples did what the hypothesis said (false alarms on everyday sounds down 3×, every
+  look-alike category at 0), but drone recall dropped significantly (headline metric), worst in loud noise.
+- v3: kept v1's noise robustness and the look-alikes cut v1's false alarms (0.123 → 0.075, significant), but false
+  alarms are still significantly worse than v0, especially helicopters.
+- No version beats v0 on both headline metrics, so none is claimed as an improvement. If false alarms near
+  helicopters/planes matter more than ~1% of clean drone clips, v2 is the candidate to discuss.
+- All three are saved in portable form (`models/audio/candidates/drone_audio_v{1,2,3}.json/.onnx/.card.json`,
+  each checked against its reference outputs), so switching needs no retraining.
+- **Next idea (one change):** v3 with a higher decision threshold, chosen on a tuning split (not the test data).
+  It may keep most of v3's noise robustness while cutting its false alarms.

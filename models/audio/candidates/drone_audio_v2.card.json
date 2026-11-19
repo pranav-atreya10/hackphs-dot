@@ -1,0 +1,56 @@
+{
+ "name": "drone_audio_v2",
+ "format": "onnx",
+ "opset": 17,
+ "files": {
+  "onnx": "drone_audio_v2.onnx",
+  "onnx_sha256": "563d49bfade6ec3b681612808dee8e8971e11b3e66c371241d3ed7f93cb22c87",
+  "json": "drone_audio_v2.json",
+  "json_sha256": "94f04c403516331166f7dda266531c25aad1fe20c1a9d812f3155345ed6f3541"
+ },
+ "task": "Is there a drone sound in this 1 s of audio? Output: probability 0..1.",
+ "input": {
+  "name": "logmel",
+  "shape": [
+   "batch",
+   1,
+   64,
+   "frames (101 for 1 s)"
+  ],
+  "dtype": "float32",
+  "how_to_make_it": "mono audio at sr Hz, 1 s window; STFT with n_fft, hop, periodic Hann window, centred (reflect pad); power spectrum; multiply by the mel filterbank (in the JSON, 'mel_fb'); natural log of (mel + log_eps); then (x - norm_mean) / norm_std",
+  "frontend": {
+   "sr": 16000,
+   "n_fft": 1024,
+   "hop": 160,
+   "n_mels": 64,
+   "window_s": 1.0,
+   "log_eps": 1e-06,
+   "norm_mean": -3.583408832550049,
+   "norm_std": 3.750802516937256,
+   "mel_fb_shape": [
+    64,
+    513
+   ]
+  }
+ },
+ "output": {
+  "name": "prob",
+  "threshold": 0.5,
+  "decision": "a clip is 'drone' if any 1 s window (0.5 s hop) reaches the threshold"
+ },
+ "trained_from": "models/audio/v2_audio.pt",
+ "trained_weights_sha256": "71a4a5ad371700b7aa8a6c06d4a374ef776b8f8a6f08e8931baecfbb792c1efa",
+ "reference_outputs": {
+  "tone_260hz": {
+   "prob": 5e-06
+  },
+  "chirp": {
+   "prob": 1e-06
+  },
+  "lcg_noise": {
+   "prob": 0.0217
+  }
+ },
+ "license_note": "Trained on DADS (Hugging Face geronimobasso/drone-audio-detection-samples); check its license before redistributing."
+}
