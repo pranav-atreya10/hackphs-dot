@@ -12,3 +12,11 @@ Upstream assets:
 TensorFlow.js and TensorFlow.js Models are published by Google under the Apache 2.0 license. Original license headers are retained in the script files. Official projects: https://github.com/tensorflow/tfjs and https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd.
 
 The faster motion tracker stays active during model loading and inference. The browser does not upload crops for review. If cloud evidence review is explicitly enabled, the server can send an authenticated, frame-bound crop from a server-tracked camera to the provider. Local checks and cloud results are advisory, not a change to risk or a clearance. This is a project demonstration, not a validated aviation safety system.
+
+## SkySentry v4.1 export
+
+The v4.1 export from `Shreyansh Local Ai Model/` at `fd85c001` is served at
+`/ai-models/skysentry_classifier.js` and `/ai-models/skysentry_classifier.json`.
+From the repository root, run `npm --prefix PRANAV run sync-web` to copy the
+export or `npm --prefix PRANAV run check:web` to verify its exact bytes.
+Packaging these files does not enable the classifier or change COCO-SSD.
