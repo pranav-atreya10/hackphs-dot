@@ -88,5 +88,9 @@ script (not run: the key is free tier).
 planes/helicopters are still below the 95% target. Earlier versions scored 95%+ on Mendeley but only 1.5% on
 real footage from another source: always test on footage from a different source.
 
+**Browser worker client:** An explicit load starts a local module worker. The client sends one request at
+a time and transfers only the frame helper's owned RGBA copy. Closing cancels outstanding work; a new
+explicit load starts a fresh worker after close, a timeout, or a worker error.
+
 **Not done yet:** the app wiring (approved), v5 (bigger pretrained model, needs a GPU), the Gemini comparison.
 Datasets are not in git (data/ is ignored); the scripts re-download them and check their checksums.
