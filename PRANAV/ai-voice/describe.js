@@ -30,11 +30,10 @@ function cameraName(event) {
   return event.camera_id || event.cameraId || 'unknown camera';
 }
 
-// The tracker reports direction relative to the runway, not as a compass heading.
+// Current motion descriptions are camera-image observations, not runway-relative positions.
 function directionPhrase(direction) {
   const text = String(direction || '');
-  if (text.includes('toward corridor') && !text.includes('not toward')) return 'heading toward the runway';
-  if (text.includes('not toward')) return 'near the runway';
+  if (text.includes('image-space corridor')) return 'in the camera view';
   switch (direction) {
     case 'toward runway': return 'heading toward the runway';
     case 'away from runway': return 'moving away from the runway';

@@ -201,3 +201,12 @@ complete Hugging Face mirror was used: all 2,000 clips).
 
 **Not done:** the audio test sets are still not frozen in `test_sets.json` (that changes the manifest and needs your
 approval), so these are held-out checks, not official `benchmark.py` versions.
+
+# Corridor geometry and field qualification
+
+Corridor timing is an image-space projection, not runway arrival or a tracked
+physical location. The detector emits an approximate bearing, not a guessed target
+point or geographic path. Reports use the reviewed survey's ID when available.
+Batch reporting skips work when no consumer is subscribed and expires stale book-
+keeping. [Airport pilot qualification](../benchmarks/README.md#airport-pilot-qualification)
+requires independent field evidence; synthetic regressions do not qualify a site.

@@ -1,5 +1,8 @@
 This is the file for Shreyansh. Refer to AI.md for reference.
 
+## Advisory bird verification
+The tower loads the existing COCO assets only on opt-in and shows runtime, weight, and warmup progress. Local bird checks continue while an optional cloud review is pending. The server crops its own matching camera frame and track; the browser sends only the evidence reference. Gemini outcomes remain `bird`, `not_bird`, or `uncertain`, and late outcomes are shown as history. Neither verification path changes tower risk or provides clearance.
+
 ## Deployed integration and devnet fixes
 The PR #12 AI/voice design is adapted under PRANAV/ai-voice using native HTTP requests so the DigitalOcean PRANAV service includes it. Immediate alerts receive later report/audio/stamp updates using the same incident ID. Solana validates secret bytes, configurable RPC devnet genesis, funding, submission and bounded confirmation; missing/failed providers keep the dashboard usable and expose honest status. /api/integrations returns configuration/status without keys. Live voice and ledger success require runtime credentials.
 

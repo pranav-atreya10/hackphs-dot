@@ -7,6 +7,7 @@ enum APIError: Error {
     case unreachable(String)
     case insecure
     case badReply
+    case deviceIdentity
 
     /// Clear, user-facing text for the camera screen.
     func message(server: String) -> String {
@@ -23,11 +24,13 @@ enum APIError: Error {
             return "iOS only allows plain http:// on the local network. Use the https:// address for the deployed server."
         case .badReply:
             return "The server sent a reply the app couldn't read. Is the URL pointing at the SkySentry server?"
+        case .deviceIdentity:
+            return "The camera device ID is unavailable in Keychain. Unlock the iPhone and try again."
         }
     }
 }
 
-/// The two HTTP calls of the native-camera API (PRANAV/server.js: /api/camera-config and /api/camera-frame).
+/// Native live-camera configuration, frame uploads and stop.
 final class SkyAPI {
     private let session: URLSession
 
@@ -57,46 +60,63 @@ final class SkyAPI {
         return url
     }
 
-    private func request(_ path: String, _ s: StreamSettings) -> URLRequest? {
+    private func request(_ path: String, _ s: StreamSettings, deviceID: String, streamID: String) -> URLRequest? {
         guard let base = Self.baseURL(s.serverURL) else { return nil }
         var req = URLRequest(url: base.appendingPathComponent(path))
         req.httpMethod = "POST"
         req.setValue(s.apiKey.trimmingCharacters(in: .whitespacesAndNewlines), forHTTPHeaderField: "x-api-key")
         let id = s.cameraId.trimmingCharacters(in: .whitespacesAndNewlines)
         req.setValue(id.isEmpty ? SettingDefaults.cameraId : id, forHTTPHeaderField: "x-camera-id")
+        req.setValue(deviceID, forHTTPHeaderField: "x-camera-device")
+        req.setValue(streamID, forHTTPHeaderField: "x-camera-session")
+        req.setValue("live", forHTTPHeaderField: "x-camera-source")
         let airport = s.airport.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         if !airport.isEmpty { req.setValue(airport, forHTTPHeaderField: "x-airport") }
         return req
     }
 
-    func sendConfig(_ s: StreamSettings, completion: @escaping (Result<Void, APIError>) -> Void) {
-        guard var req = request("api/camera-config", s) else { return completion(.failure(.badURL)) }
+    @discardableResult
+    func sendConfig(_ s: StreamSettings, streamID: String, completion: @escaping (Result<Void, APIError>) -> Void) -> URLSessionTask? {
+        guard let deviceID = s.deviceId else { completion(.failure(.deviceIdentity)); return nil }
+        guard var req = request("api/camera-config", s, deviceID: deviceID, streamID: streamID) else { completion(.failure(.badURL)); return nil }
         let body: [String: Any] = [
+            "source": "live",
             "camera": ["lat": s.lat, "lon": s.lon, "heading_deg": s.heading, "hfov_deg": s.hfov],
-            "corridor": s.corridor,
         ]
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        session.dataTask(with: req) { data, resp, err in
+        let task = session.dataTask(with: req) { data, resp, err in
             completion(Self.check(data, resp, err).map { _ in () })
-        }.resume()
+        }
+        task.resume()
+        return task
     }
 
-    func sendFrame(_ jpeg: Data, time: Double, settings s: StreamSettings,
-                   completion: @escaping (Result<FrameReply, APIError>) -> Void) {
-        guard var req = request("api/camera-frame", s) else { return completion(.failure(.badURL)) }
+    func sendStop(_ s: StreamSettings, streamID: String) {
+        guard let deviceID = s.deviceId,
+              let req = request("api/camera-stop", s, deviceID: deviceID, streamID: streamID) else { return }
+        session.dataTask(with: req) { _, _, _ in }.resume()
+    }
+
+    @discardableResult
+    func sendFrame(_ jpeg: Data, time: Double, settings s: StreamSettings, streamID: String,
+                   completion: @escaping (Result<FrameReply, APIError>) -> Void) -> URLSessionTask? {
+        guard let deviceID = s.deviceId else { completion(.failure(.deviceIdentity)); return nil }
+        guard var req = request("api/camera-frame", s, deviceID: deviceID, streamID: streamID) else { completion(.failure(.badURL)); return nil }
         req.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         req.setValue(String(format: "%.3f", time), forHTTPHeaderField: "x-frame-time")
-        session.uploadTask(with: req, from: jpeg) { data, resp, err in
+        let task = session.uploadTask(with: req, from: jpeg) { data, resp, err in
             switch Self.check(data, resp, err) {
             case .failure(let e): completion(.failure(e))
             case .success(let body):
-                guard let reply = try? JSONDecoder().decode(FrameReply.self, from: body) else {
+                guard let reply = try? JSONDecoder().decode(FrameReply.self, from: body), reply.ok == true else {
                     return completion(.failure(.badReply))
                 }
                 completion(.success(reply))
             }
-        }.resume()
+        }
+        task.resume()
+        return task
     }
 
     private static func check(_ data: Data?, _ resp: URLResponse?, _ err: Error?) -> Result<Data, APIError> {

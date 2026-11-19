@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "test": "node --test test/*.test.cjs",
     "sync-web": "node scripts/sync-web.mjs",
+    "check:web": "node scripts/sync-web.mjs --check",
     "record-film": "node scripts/record-film.mjs",
     "export-judge": "node scripts/export-judge-dataset.mjs",
     "eval-local-judge": "node scripts/eval-local-judge.mjs"

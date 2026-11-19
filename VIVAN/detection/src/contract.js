@@ -1,8 +1,6 @@
 // Builds the JSON messages the camera sends to the server (see CONTRACT.md).
 // Everything here is plain data: no DOM, no network.
 
-import { destination } from './geo.js';
-
 const r1 = (v) => (v === null || v === undefined ? null : Math.round(v * 10) / 10);
 const r3 = (v) => (v === null || v === undefined ? null : Math.round(v * 1000) / 1000);
 
@@ -13,7 +11,7 @@ export function isoAt(wallSec) {
 // primary: the most important group right now (see DetectionEngine.pickPrimary), or null.
 export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop, forecast }) {
   const cam = cfg.camera;
-  const active = groups.filter((g) => g.classification !== 'rejected' && g.classification !== 'debris');
+  const active = groups.filter((g) => g.classification !== 'rejected');
   const objectCount = active.reduce((s, g) => s + g.size, 0);
 
   const ev = {
@@ -26,8 +24,10 @@ export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop
     risk: risk.level,
     // Contract additions (detection lead)
     flock_size: primary ? primary.size : 0,
-    eta_seconds: primary ? r1(primary.eta_seconds) : null,
-    eta_range: primary ? primary.eta_range || null : null,   // [earliest, latest, 'certain'|'possible']
+    eta_seconds: primary?.eta_basis ? r1(primary.eta_seconds) : null,
+    eta_range: primary?.eta_basis ? primary.eta_range || null : null,
+    eta_basis: primary?.eta_basis ?? null,
+    corridor_survey_id: primary?.eta_basis === 'image_space_corridor' ? cfg.corridor.surveyId : null,
     bearing_deg: primary ? r1(primary.bearing_deg) : null,
     classification: primary ? primary.classification : null,
     flap_hz: primary ? r1(primary.flap_hz) : null,
@@ -44,34 +44,8 @@ export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop
     crop_box: crop || null,   // normalized {x, y, w, h}; the browser adapter fills `snapshot`
     snapshot: null,
     evidence: evidence || null,
-    target_geo: null,
-    path_geo: null,
   };
-
-  if (primary && primary.bearing_deg !== null) {
-    ev.target_geo = { type: 'Point', coordinates: destination(cam.lat, cam.lon, primary.bearing_deg, cam.assumed_range_m) };
-    ev.path_geo = pathLine(cam, evidence);
-  }
   return ev;
-}
-
-// GeoJSON LineString for MongoDB: the target's bearings over time, projected to the
-// assumed range. Falls back to camera -> target if there's only one bearing.
-function pathLine(cam, evidence) {
-  const pts = [];
-  if (evidence && evidence.track_points) {
-    for (const p of evidence.track_points) {
-      const c = destination(cam.lat, cam.lon, p.bearing_deg, cam.assumed_range_m);
-      const last = pts[pts.length - 1];
-      if (!last || Math.abs(last[0] - c[0]) > 1e-7 || Math.abs(last[1] - c[1]) > 1e-7) pts.push(c);
-    }
-  }
-  if (pts.length < 2) {
-    const target = pts[0] || null;
-    if (!target) return null;
-    return { type: 'LineString', coordinates: [[cam.lon, cam.lat], target] };
-  }
-  return { type: 'LineString', coordinates: pts };
 }
 
 function typeOf(cls) {
@@ -84,9 +58,10 @@ function describeDirection(g) {
   if (g.kind === 'audio') return 'heard, not seen';
   const parts = [];
   parts.push(g.heading ? `heading ${g.heading.name}` : 'hovering or climbing');
-  if (g.eta_seconds === 0) parts.push('inside corridor');
-  else if (g.eta_seconds !== null) parts.push(`toward corridor, ${Math.round(g.eta_seconds)} s`);
-  else parts.push('not toward corridor');
+  if (g.eta_basis && g.eta_seconds === 0) parts.push('inside the image-space corridor mask');
+  else if (g.eta_basis && g.eta_seconds !== null) {
+    parts.push(`projected image-space corridor entry in ${Math.round(g.eta_seconds)} s`);
+  }
   return parts.join(', ');
 }
 

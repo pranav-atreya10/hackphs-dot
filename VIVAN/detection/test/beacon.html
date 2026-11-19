@@ -50,7 +50,7 @@
       const name = $('scene').value;
       const sky = new SyntheticSky({ scenario: name, seed: 7 });
       engine = new DetectionEngine();
-      engine.setCorridor(sky.corridor);
+      engine.setCorridor(sky.corridor, { demo: true });
       if (droneOn) engine.simulateDroneSound(true);
       const ctx = $('sky').getContext('2d');
       const t0 = performance.now();

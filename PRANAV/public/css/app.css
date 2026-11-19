@@ -48,6 +48,7 @@ body.app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh
 .side .side-risk{text-decoration:none;margin-bottom:2px;border:1px solid var(--line);background:var(--card)} .side .side-risk:hover{background:var(--hover)}
 .side .side-risk b{font-weight:700;letter-spacing:.02em}
 .side .side-risk[data-risk="green"]::before{background:var(--go)} .side .side-risk[data-risk="yellow"]::before{background:var(--warn)}
+.side .side-risk[data-risk="unavailable"]::before,.side .side-risk[data-risk="degraded"]::before{background:var(--mute)}
 .side .side-risk[data-risk="red"]::before{background:var(--stop)} .side .side-risk[data-risk="red"]{border-color:var(--stop);background:color-mix(in srgb,var(--stop) 14%,var(--card))}
 .side-foot{margin-top:auto;display:grid;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
 .side-foot .who{display:flex;align-items:center;gap:9px;padding:4px 6px;font:500 .9rem var(--sans);min-width:0}
@@ -111,9 +112,11 @@ button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);bord
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .hint{margin:0;font-size:.82rem;color:var(--mute)}
 .mono{font-family:var(--mono)}
-.risk{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;border-left:6px solid var(--go);transition:border-color .3s}
+.risk{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;border-left:6px solid var(--mute);transition:border-color .3s}
+.risk[data-risk="green"]{border-left-color:var(--go)}
 .risk[data-risk="yellow"]{border-left-color:var(--warn)} .risk[data-risk="red"]{border-left-color:var(--stop)}
 .risk .lvl{font:600 2.3rem/1 var(--sans);letter-spacing:-.03em;grid-row:span 2} .risk .what{font-weight:600} .risk .why{color:var(--mute);font:500 .8rem var(--mono)}
+.risk:is([data-risk="unavailable"],[data-risk="degraded"]) .lvl{font-size:clamp(1rem,2.4vw,1.5rem)}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
 .stats div{font:500 .75rem var(--sans);color:var(--mute)} .stats b{display:block;font:600 1.25rem var(--sans);color:var(--ink);font-variant-numeric:tabular-nums}
 .log{list-style:none;margin:0;padding:0;font:400 .78rem var(--mono);color:var(--mute);max-height:220px;overflow:auto;display:grid;gap:3px}

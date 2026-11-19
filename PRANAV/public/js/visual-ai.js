@@ -1,43 +1,16 @@
-// A trained second opinion runs separately from the fast motion model and video renderer.
-// Only TensorFlow.js and model weights are downloaded; camera pixels stay in this browser.
+import { captureBirdEvidence, chooseBirdCandidate, pruneBirdAttempts } from './bird-evidence.js';
+export { chooseBirdCandidate, validBox } from './bird-evidence.js';
+
+// Local inference and optional server-side evidence review are advisory only.
 const MAX_FRAME_AGE = 2500;
-const CHECK_COOLDOWN = 3000;
 const LOAD_TIMEOUT = 35000;
 
-export function validBox(box) {
-  return !!box && ['x', 'y', 'w', 'h'].every(k => Number.isFinite(box[k])) &&
-    box.x >= 0 && box.y >= 0 && box.w > 0 && box.h > 0 &&
-    box.x + box.w <= 1.001 && box.y + box.h <= 1.001;
-}
-
-// Pure selection makes missing, stale or unstable feeds harmless to verification.
-export function chooseBirdCandidate(feeds, checked, now = Date.now()) {
-  const candidates = [];
-  for (const t of feeds.values()) {
-    const state = t.mode === 'tower' || t.fallbackActive ? t.fallbackState : t.botState;
-    if (t.offline || !t.video?.width || !t.video?.height || !Number.isFinite(t.frameT) || !state ||
-      now - t.lastFrameAt > MAX_FRAME_AGE || state.shake || state.learning ||
-      state.motion?.shake || (state.motion && !state.motion.ready)) continue;
-    for (const tr of state.tracks || []) {
-      if (!Number.isSafeInteger(tr.id) || !validBox(tr.bbox) || tr.classification === 'rejected' || tr.classification === 'debris') continue;
-      const key = `${t.cameraId}:${tr.id}`;
-      if (now - (checked.get(key) ?? -Infinity) < CHECK_COOLDOWN) continue;
-      const px = Math.max(tr.bbox.w * t.video.width, tr.bbox.h * t.video.height);
-      if (px < 24) continue; // A few pixels cannot support a meaningful shape judgement.
-      candidates.push({ t, tr, key, priority: (tr.classification === 'unknown' ? 1000 : 0) + Math.min(px, 400) });
-    }
-  }
-  return candidates.sort((a, b) => b.priority - a.priority)[0] || null;
-}
-
 export class VisualBirdVerifier {
-  constructor({ socket, button, status, loadAdapter = () => import('../detection/adapters/coco.js'), judge = null }) {
-    // judge(dataUrl, context) -> Gemini verdict; asked only when the on-device model is unsure.
-    Object.assign(this, { socket, button, status, loadAdapter, judge });
-    this.judgeOff = !judge; this.judged = 0;
-    this.feeds = new Map(); this.checked = new Map(); this.enabled = false;
+  constructor({ button, status, reviewStatus, loadAdapter = () => import('../detection/adapters/coco.js'), judge = null }) {
+    Object.assign(this, { button, status, reviewStatus, loadAdapter, judge });
+    this.feeds = new Map(); this.checked = new Map(); this.cameraAttempts = new Map(); this.enabled = false;
     this.generation = 0; this.timer = null; this.verifier = null; this.loading = null;
-    this.busy = false;
+    this.busy = false; this.reviewPending = false; this.review = null;
     this.checks = 0; this.birds = 0; this.lastResult = '';
     button.addEventListener('click', () => this.enabled ? this.disable() : this.enable());
     this.updateButton();
@@ -54,6 +27,7 @@ export class VisualBirdVerifier {
     this.enabled = true; const generation = ++this.generation;
     this.updateButton();
     this.setStatus('Loading trained bird model… video and motion detection stay active.', 'loading');
+    this.renderReview();
     let timer;
     try {
       if (!this.loading) {
@@ -66,7 +40,7 @@ export class VisualBirdVerifier {
           });
           try {
             await verifier.load(stage => {
-              if (this.enabled && generation === this.generation)
+              if (this.enabled && this.loading === pending)
                 this.setStatus(`${stage} Video and motion detection stay active.`, 'loading');
             });
             return verifier;
@@ -93,8 +67,10 @@ export class VisualBirdVerifier {
 
   disable() {
     this.enabled = false; this.generation++;
+    this.review = null;
     clearTimeout(this.timer); this.timer = null; this.updateButton();
     this.setStatus('Bird check off · motion detection stays active.', 'off');
+    this.renderReview();
   }
 
   schedule() {
@@ -109,59 +85,87 @@ export class VisualBirdVerifier {
   async tick() {
     if (!this.enabled || !this.verifier || this.busy || (typeof document !== 'undefined' && document.hidden)) return;
     const generation = this.generation, now = Date.now();
-    for (const [id, t] of this.feeds) if (now - t.lastFrameAt > 10000) this.feeds.delete(id);
-    for (const [key, at] of this.checked) if (now - at > 15000) this.checked.delete(key);
-    const c = chooseBirdCandidate(this.feeds, this.checked, now);
+    this.renderReview();
+    for (const [id, t] of this.feeds) if (now - t.lastFrameAt > 10000) { this.feeds.delete(id); this.cameraAttempts.delete(id); }
+    pruneBirdAttempts(this.feeds, this.checked, this.cameraAttempts, now);
+    const c = chooseBirdCandidate(this.feeds, this.checked, now, this.cameraAttempts);
     if (!c) {
       this.setStatus(this.checks ? `Bird check ready · ${this.checks} checks, ${this.birds} bird labels. ${this.lastResult}` : 'Bird check ready · waiting for a stable tracked object at least 24 pixels across.', 'ready');
       return;
     }
     this.checked.set(c.key, now);
-    const bbox = { ...c.tr.bbox }, frameT = c.t.frameT;
-    const fallback = c.t.mode === 'tower' || !!c.t.fallbackActive;
+    this.cameraAttempts.set(c.t.cameraId, now);
     this.busy = true;
     this.setStatus(`Checking ${c.t.cameraId} · object ${c.tr.id}…`, 'checking');
     try {
-      let r = await this.verifier.classifyBox(c.t.video, bbox);
-      this.verifier.adapt(r.ms);
-      // Second opinion: COCO-SSD is weak on small, distant birds. If it is unsure (no label, a non-bird
-      // label, or a low bird score), send the same 300 px crop to the strict Gemini bird judge.
-      if (!this.judgeOff && !(r.label === 'bird' && r.score >= 0.6)) {
-        try {
-          const v = await this.judge(this.verifier.canvas.toDataURL('image/jpeg', 0.85), `on-device model said ${r.label || 'nothing'} ${Math.round((r.score || 0) * 100)}%`);
-          if (v?.source === 'fallback' && /not configured/i.test(v.evidence || '')) this.judgeOff = true;   // no key: stop asking
-          else if (v && v.verdict !== 'uncertain') { this.judged++; r = { ...r, label: v.isBird ? 'bird' : /plane|jet|heli|aircraft/i.test(v.object || '') ? 'airplane' : 'kite', score: v.confidence, judge: 'gemini', object: v.object }; }
-        } catch { /* rate-limited or offline: keep the on-device answer */ }
-      }
-      if (!this.enabled || generation !== this.generation) return;
-      // Always show the answer, so a slow machine still visibly works; only the label is withheld when stale.
-      const answer = r.label ? `${r.judge ? (r.label === 'bird' ? 'bird' : `not a bird (${r.object || r.label})`) : r.label} ${Math.round(r.score * 100)}%` : 'no clear label';
-      const result = `Latest: ${answer}${r.judge ? ' (Gemini judge)' : ''} · ${r.ms} ms.`;
-      const state = fallback ? c.t.fallbackState : c.t.botState;
-      if (c.t.offline || Date.now() - now > MAX_FRAME_AGE || fallback !== (c.t.mode === 'tower' || !!c.t.fallbackActive) ||
-          !state?.tracks?.some(tr => tr.id === c.tr.id)) {
-        this.setStatus(`Bird check active · ${this.checks} checks. ${result} The object moved on before the answer, so the label was not applied.`, 'active');
+      const evidence = captureBirdEvidence(c, this.verifier.opts);
+      if (!evidence) {
+        this.setStatus('Bird check ready · no matching crop for this frame.', 'ready');
         return;
       }
+      const r = await this.verifier.classifyCaptured(evidence.canvas, evidence.bbox);
+      this.verifier.adapt(r.ms);
+      if (!this.enabled || generation !== this.generation) return;
+      const multiple = (r.relevant?.length || 0) > 1;
+      const answer = multiple ? 'uncertain (multiple detections in crop)' :
+        r.label ? `${r.label} ${Math.round(r.score * 100)}%` : 'no clear label';
       this.checks++;
-      this.birds += r.label === 'bird' && r.score >= .4 ? 1 : 0;
-      this.lastResult = result;
+      this.birds += !multiple && r.label === 'bird' && r.score >= .4 ? 1 : 0;
+      this.lastResult = `Latest local check: ${answer} · ${r.ms} ms. Advisory only.`;
       this.setStatus(`Bird check active · ${this.checks} checks. ${this.lastResult}`, 'active');
-      if (fallback) {
-        c.t.engine?.applyLabel(c.tr.id, r.label, r.score, r.judge === 'gemini' ? 'gemini' : 'coco');
-      } else if (this.socket.connected && !r.judge) {   // the server bot only trusts on-device COCO labels; Gemini verdicts stay on screen
-        this.socket.timeout(2500).emit('tower:label', {
-          cameraId: c.t.cameraId, trackId: c.tr.id, label: r.label, score: r.score,
-          bbox, frameT, source: 'coco',
-        }, (err, ack) => {
-          if (this.enabled && generation === this.generation && (err || !ack?.ok))
-            this.setStatus(`Bird check active · latest ${answer}; this label could not be applied to the live track.`, 'active');
-        });
-      }
+      if (!multiple && !(r.label === 'bird' && r.score >= .6)) void this.requestReview(c, generation);
     } catch (err) {
       if (!this.enabled || generation !== this.generation) return;
       this.setStatus('Bird check paused after an inference error. Motion detection stays active; another check will retry.', 'unavailable');
       console.warn('Bird verification could not check a crop:', err.message);
     } finally { this.busy = false; }
+  }
+
+  isLive(c) {
+    const t = this.feeds.get(c.t.cameraId), state = t?.botState;
+    return t === c.t && !t.offline && !t.fallbackActive && t.mode !== 'tower' &&
+      Number.isFinite(c.frameReceivedAt) && Math.abs(Date.now() - c.frameReceivedAt) <= MAX_FRAME_AGE &&
+      !state?.shake && !state?.learning &&
+      state?.tracks?.some(tr => tr.id === c.tr.id && !tr.missed && !tr.dense &&
+        tr.classification !== 'rejected' && tr.classification !== 'debris') &&
+      (t.birdStreamId ?? t.streamId) === c.streamId && !!c.generation && state.generation === c.generation;
+  }
+
+  async requestReview(c, generation) {
+    if (!this.judge || this.reviewPending || c.source !== 'server' || !c.streamId ||
+        !Number.isSafeInteger(c.frameId) || !this.isLive(c)) return;
+    const ref = { cameraId: c.t.cameraId, streamId: c.streamId, frameId: c.frameId, trackId: c.tr.id };
+    this.reviewPending = true;
+    this.review = { pending: true };
+    this.renderReview();
+    try {
+      const result = await this.judge(ref);
+      if (!this.enabled || generation !== this.generation) return;
+      const match = Object.keys(ref).every(key => result?.evidenceRef?.[key] === ref[key]) &&
+        result.evidenceRef.generation === c.generation && result.evidenceRef.t === c.frameT;
+      if (match && result.status === 'verified' && result.source === 'gemini' &&
+          ['bird', 'not_bird', 'uncertain'].includes(result.verdict)) {
+        this.review = { result, c };
+      } else this.review = { unavailable: true };
+    } catch (error) {
+      if (this.enabled && generation === this.generation) this.review = { unavailable: true };
+    } finally {
+      this.reviewPending = false;
+      this.renderReview();
+    }
+  }
+
+  renderReview() {
+    if (!this.reviewStatus) return;
+    const review = this.review;
+    if (!this.enabled || !this.judge || !review) this.reviewStatus.textContent = '';
+    else if (review.pending) this.reviewStatus.textContent = 'Cloud evidence review pending. Local checks continue.';
+    else if (review.unavailable) this.reviewStatus.textContent = 'Cloud evidence review unavailable. Local checks continue.';
+    else {
+      const { result, c } = review;
+      const verdict = { bird: 'bird', not_bird: 'not a bird', uncertain: 'uncertain' }[result.verdict];
+      const label = result.application === 'advisory' && this.isLive(c) ? 'Cloud advisory' : 'Earlier cloud review';
+      this.reviewStatus.textContent = `${label} · ${c.t.cameraId}, object ${c.tr.id}: ${verdict}. Not a clearance.`;
+    }
   }
 }

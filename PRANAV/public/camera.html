@@ -57,7 +57,7 @@
     <video id="video" playsinline muted aria-hidden="true"></video>
     <canvas id="src" aria-hidden="true"></canvas>
     <canvas id="overlay" role="img" aria-label="Camera view of the sky with the detector's boxes drawn over birds and drones"></canvas>
-    <div class="banner" id="banner" data-risk="green"><i></i><span id="bannerText">Ready</span></div>
+    <div class="banner" id="banner" data-risk="wait"><i></i><span id="bannerText">Ready</span></div>
     <div id="empty">Point the camera at the sky by the runway, then press Start.</div>
   </div>
   <div class="controls"><button id="start" type="button">Start</button><button class="ghost" id="upload" type="button">Upload a video</button><input id="uploadFile" type="file" accept="video/*" hidden></div>
@@ -75,26 +75,27 @@
     <label for="scenario" id="scenarioWrap">Synthetic scenario<select id="scenario"></select></label>
     <label for="clip" id="clipWrap" hidden>Video file<input id="clip" type="file" accept="video/*"></label>
     <label for="mode">Where the bot runs
-      <select id="mode"><option value="stream">Stream to the website (recommended)</option><option value="local">Detect on this phone (weak connection)</option></select></label>
+      <select id="mode"><option value="stream">Stream live camera to the tower</option><option value="local">Local preview and detection only</option></select></label>
     <label for="tuning">Detection tuning
       <select id="tuning"><option value="phone_15fps">Phone streaming (~15 fps)</option><option value="laptop_30fps">Laptop or clip (~30 fps)</option><option value="distant_birds">Distant birds (few pixels wide)</option><option value="noisy_camera">Grainy or low light</option></select></label>
-    <label for="cameraId">Camera ID<input id="cameraId" value="" placeholder="cam-…" maxlength="60"></label>
+    <label for="cameraId">Camera label<input id="cameraId" value="" placeholder="cam-…" maxlength="60"></label>
     <div class="two">
       <label for="heading">Faces (compass °)<input id="heading" type="number" min="0" max="359" value="90"></label>
       <label for="fov">Lens width (°)<input id="fov" type="number" min="20" max="140" value="65"></label>
+      <label for="pitch">Tilt above horizon (°)<input id="pitch" type="number" min="-90" max="90" value="20"></label>
       <label for="lat">Latitude<input id="lat" type="number" step="0.0001" value="40.3987"></label>
       <label for="lon">Longitude<input id="lon" type="number" step="0.0001" value="-74.6586"></label>
     </div>
-    <button class="ghost" id="drawCorridor" type="button">Draw runway corridor</button>
-    <p class="hint" id="corridorHint">The shaded area is the runway approach. Tap points around it, then double-tap to finish.</p>
+    <button class="ghost" id="drawCorridor" type="button">Draw draft mask</button>
+    <p class="hint" id="corridorHint">Draft masks do not affect alerts. Corridor timing requires a site-approved survey.</p>
   </details>
 
   <details class="card fold">
     <summary>Details</summary>
-    <section class="risk" id="risk" data-risk="green"><span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Not running</span><span class="why" id="riskWhy">—</span></section>
+    <section class="risk" id="risk" data-risk="wait"><span class="lvl" id="riskLvl">UNKNOWN</span><span class="what" id="riskWhat">Not running</span><span class="why" id="riskWhy">—</span></section>
     <div class="stats">
-      <div>Objects<b id="sObjects">0</b></div><div>Time to corridor<b id="sEta">—</b></div><div>Bearing<b id="sBearing">—</b></div>
-      <div>Wingbeat<b id="sFlap">—</b></div><div>Engine<b id="sFps">—</b></div><div>Events sent<b id="sSent">0</b></div>
+      <div>Objects<b id="sObjects">0</b></div><div>Projected image-mask entry<b id="sEta">—</b></div><div>Approx. bearing<b id="sBearing">—</b></div>
+      <div>Wingbeat<b id="sFlap">—</b></div><div>Engine<b id="sFps">—</b></div><div>Frames sent<b id="sSent">0</b></div>
     </div>
     <div class="row"><button class="ghost" id="coco" type="button" aria-pressed="false">COCO-SSD check</button><button class="ghost" id="mic" type="button" aria-pressed="false">Listen for drones</button><button class="ghost" id="fakeDrone" type="button" aria-pressed="false">Simulate drone sound</button></div>
     <p class="hint" id="aiStatus">COCO-SSD and the microphone work in “Detect on this phone” mode.</p>

@@ -70,10 +70,13 @@ async function switchSection(clerk, me) {
   const render = request => {
     if (request?.status === 'pending') {
       box.innerHTML = `<h3>Switch account type</h3><p>You asked to switch to <b>${esc(ROLE_LABEL[request.to])}</b>. Waiting for an admin.</p>
-        <div class="actions"><button class="ghost" id="cancelReq" type="button">Cancel request</button></div>`;
+        <div class="actions"><button class="ghost" id="cancelReq" type="button">Cancel request</button></div><p class="danger" id="reqErr"></p>`;
       $('cancelReq').onclick = async () => {
-        await fetch('/api/role-requests/mine', { method: 'DELETE', headers: await headers() }).catch(() => {});
-        render(null);
+        try {
+          const r = await fetch('/api/role-requests/mine', { method: 'DELETE', headers: { ...(await headers()), 'content-type': 'application/json' }, body: JSON.stringify({ revision: request.revision }) });
+          if (!r.ok) throw new Error((await r.json()).error || 'Could not cancel');
+          render(null);
+        } catch (err) { $('reqErr').textContent = err.message; }
       };
       return;
     }

@@ -45,13 +45,11 @@ final class StreamController: ObservableObject {
     @Published private(set) var status: ConnectionStatus = .idle
     @Published private(set) var state: BotState?
     @Published private(set) var bot: String?
-    /// True when the server's state doesn't belong to the frames being sent: the bot handed over to
-    /// the towers ("tower"), so the HTTP reply carries a frozen state, or its time is far from ours.
-    @Published private(set) var stateIsStale = false
+    @Published private(set) var stateIsStale = true
     @Published private(set) var framesSent = 0
     @Published private(set) var achievedFps: Double = 0
     @Published private(set) var frameSize: CGSize = .zero
-    @Published private(set) var source: ActiveSource = .demo
+    @Published private(set) var source: ActiveSource = .camera
     @Published private(set) var cameraDenied = false
     @Published var errorMessage: String?
 
@@ -75,21 +73,28 @@ final class StreamController: ObservableObject {
     private var startTime: CFTimeInterval = 0
     private var pauseUntil: CFTimeInterval = 0
     private var generation = 0
+    private var streamID: String?
+    private var configured = false
+    private var frameTask: URLSessionTask?
     private var settings = StreamSettings.load()
     private var lastSize: CGSize = .zero
 
     // Main-thread only.
     private var replyTimes: [CFTimeInterval] = []
+    private var sourceGeneration = 0
+    private var expiry: DispatchWorkItem?
 
     init() {
         camera.onFrame = { [weak self] image in self?.offer(image) }
-        clip.onFrame = { [weak self] image in self?.offer(image) }
-        clip.onError = { [weak self] message in self?.errorMessage = message }
-        camera.onError = { [weak self] message in self?.errorMessage = message }
+        clip.onError = { [weak self] message in if self?.source == .clip { self?.errorMessage = message } }
+        camera.onError = { [weak self] message in
+            guard let self, self.source == .camera else { return }
+            self.stopStreaming()
+            self.errorMessage = message
+        }
         demo.onFrame = { [weak self] cg in
             guard let self else { return }
-            DispatchQueue.main.async { self.demoFrames.image = cg }
-            self.offer(CIImage(cgImage: cg))
+            DispatchQueue.main.async { if self.source == .demo { self.demoFrames.image = cg } }
         }
     }
 
@@ -99,16 +104,19 @@ final class StreamController: ObservableObject {
     /// frames are only uploaded while streaming.
     func activate(_ preference: SourcePreference) {
         if preference == .clip { switchTo(.clip); return }
-        let useDemo = preference == .demo || !CameraSource.isAvailable
-        switchTo(useDemo ? .demo : .camera)
+        switchTo(preference == .demo ? .demo : .camera)
     }
 
     func switchTo(_ newSource: ActiveSource) {
+        stopStreaming()
+        sourceGeneration += 1
+        let gen = sourceGeneration
         camera.stop()
         demo.stop()
         clip.stop()
         source = newSource
         cameraDenied = false
+        errorMessage = nil
         if newSource == .clip {
             let s = StreamSettings.load()
             let file = UserDefaults.standard.string(forKey: SettingKey.demoClip) ?? SettingDefaults.demoClip
@@ -123,13 +131,18 @@ final class StreamController: ObservableObject {
             demo.start()
             return
         }
+        guard CameraSource.isAvailable else {
+            cameraDenied = true
+            errorMessage = "No rear camera is available. You can choose a local demo preview."
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             camera.start()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
                 DispatchQueue.main.async {
-                    guard self.source == .camera else { return }
+                    guard self.source == .camera, gen == self.sourceGeneration else { return }
                     if granted { self.camera.start() } else { self.cameraWasDenied() }
                 }
             }
@@ -148,6 +161,7 @@ final class StreamController: ObservableObject {
     /// Camera screen closed: stop everything.
     func shutdown() {
         stopStreaming()
+        sourceGeneration += 1
         camera.stop()
         demo.stop()
         clip.stop()
@@ -156,15 +170,25 @@ final class StreamController: ObservableObject {
     // MARK: Streaming
 
     func startStreaming() {
+        guard !streaming else { return }
+        guard source == .camera else {
+            errorMessage = "Demo previews are local only and cannot be streamed to the tower."
+            return
+        }
         let s = StreamSettings.load()
         guard SkyAPI.baseURL(s.serverURL) != nil else {
             errorMessage = APIError.badURL.message(server: s.serverURL)
             return
         }
-        if source == .camera && cameraDenied {
-            cameraWasDenied()
+        guard s.deviceId != nil else {
+            errorMessage = APIError.deviceIdentity.message(server: s.serverURL)
             return
         }
+        guard CameraSource.isAvailable, !cameraDenied, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+            errorMessage = "A rear camera with camera access is required to stream."
+            return
+        }
+        let id = UUID().uuidString.lowercased()
         lock.lock()
         active = true
         inFlight = false
@@ -172,6 +196,8 @@ final class StreamController: ObservableObject {
         pauseUntil = 0
         startTime = CACurrentMediaTime()
         generation += 1
+        streamID = id
+        configured = false
         settings = s
         let gen = generation
         lock.unlock()
@@ -182,35 +208,42 @@ final class StreamController: ObservableObject {
         achievedFps = 0
         replyTimes = []
         state = nil
-        bot = nil
-        stateIsStale = false
+        bot = "starting"
+        stateIsStale = true
         errorMessage = nil
         UIApplication.shared.isIdleTimerDisabled = true
-        sendConfig(s, gen: gen)
+        sendConfig(s, id: id, gen: gen)
     }
 
     func stopStreaming() {
         lock.lock()
+        let id = streamID
+        let s = settings
+        streamID = nil
         active = false
         generation += 1
+        configured = false
+        frameTask?.cancel()
+        frameTask = nil
         lock.unlock()
+        if let id { api.sendStop(s, streamID: id) }
         if streaming { status = .idle }
         streaming = false
         achievedFps = 0
+        expiry?.cancel()
+        state = nil
+        bot = nil
+        stateIsStale = true
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
     /// Settings were edited: pick them up and tell the server.
     func settingsChanged() {
-        let s = StreamSettings.load()
-        lock.lock()
-        settings = s
-        let gen = generation
-        lock.unlock()
         let preference = SourcePreference(rawValue: UserDefaults.standard.string(forKey: SettingKey.sourcePref) ?? "auto") ?? .auto
-        let desired: ActiveSource = preference == .clip ? .clip : preference == .demo || !CameraSource.isAvailable ? .demo : .camera
-        if desired != source { switchTo(desired) }
-        if streaming { sendConfig(s, gen: gen) }
+        let desired: ActiveSource = preference == .clip ? .clip : preference == .demo ? .demo : .camera
+        if desired != source || desired == .clip { switchTo(desired) }
+        // Settings, including credentials and airport, are fixed for the duration of a stream.
+        if streaming { stopStreaming() }
     }
 
     private func isCurrent(_ gen: Int) -> Bool {
@@ -218,16 +251,31 @@ final class StreamController: ObservableObject {
         return gen == generation && active
     }
 
-    private func sendConfig(_ s: StreamSettings, gen: Int) {
-        api.sendConfig(s) { [weak self] result in
+    private func sendConfig(_ s: StreamSettings, id: String, gen: Int) {
+        let api = self.api
+        api.sendConfig(s, streamID: id) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self, self.isCurrent(gen) else { return }
-                if case .failure(let e) = result { self.fail(e, server: s.serverURL) }
+                guard let self, self.isCurrent(gen) else {
+                    if case .success = result { api.sendStop(s, streamID: id) }
+                    return
+                }
+                switch result {
+                case .success:
+                    self.lock.lock()
+                    self.configured = true
+                    self.lock.unlock()
+                case .failure(let e):
+                    self.fail(e, server: s.serverURL)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                        guard let self, self.isCurrent(gen) else { return }
+                        self.sendConfig(s, id: id, gen: gen)
+                    }
+                }
             }
         }
     }
 
-    /// Called on a background queue for every frame from either source.
+    /// Called on the rear-camera background queue; demo frames never enter the uploader.
     private func offer(_ image: CIImage) {
         let now = CACurrentMediaTime()
         let extent = image.extent
@@ -241,7 +289,7 @@ final class StreamController: ObservableObject {
             lastSize = outSize
             DispatchQueue.main.async { self.frameSize = outSize }
         }
-        guard active, !inFlight, now - lastSend >= Self.minInterval, now >= pauseUntil else {
+        guard active, configured, let id = streamID, !inFlight, now - lastSend >= Self.minInterval, now >= pauseUntil else {
             lock.unlock()
             return
         }
@@ -256,8 +304,11 @@ final class StreamController: ObservableObject {
             lock.lock(); if gen == generation { inFlight = false }; lock.unlock()
             return
         }
-        api.sendFrame(jpeg, time: t, settings: s) { [weak self] result in
-            self?.handle(result, gen: gen, server: s.serverURL, sentTime: t)
+        lock.lock()
+        defer { lock.unlock() }
+        guard active, gen == generation else { return }
+        frameTask = api.sendFrame(jpeg, time: t, settings: s, streamID: id) { [weak self] result in
+            self?.handle(result, gen: gen, settings: s, id: id, sentTime: t)
         }
     }
 
@@ -270,18 +321,20 @@ final class StreamController: ObservableObject {
         return ciContext.jpegRepresentation(of: img, colorSpace: colorSpace, options: [quality: Self.jpegQuality])
     }
 
-    private func handle(_ result: Result<FrameReply, APIError>, gen: Int, server: String, sentTime: Double) {
+    private func handle(_ result: Result<FrameReply, APIError>, gen: Int, settings s: StreamSettings, id: String, sentTime: Double) {
         let now = CACurrentMediaTime()
         lock.lock()
         guard gen == generation else { lock.unlock(); return }
         inFlight = false
+        frameTask = nil
         if case .failure(let e) = result {
-            if case .unauthorized = e { active = false } else { pauseUntil = now + 1.0 }
+            if case .http(409, _) = e { configured = false }
+            pauseUntil = now + 1.0
         }
         lock.unlock()
 
         DispatchQueue.main.async {
-            guard self.streaming else { return }
+            guard self.isCurrent(gen) else { return }
             switch result {
             case .success(let reply):
                 self.framesSent += 1
@@ -290,14 +343,39 @@ final class StreamController: ObservableObject {
                 if self.replyTimes.count >= 2, let first = self.replyTimes.first, now > first {
                     self.achievedFps = Double(self.replyTimes.count - 1) / (now - first)
                 }
-                self.state = reply.state
-                self.bot = reply.bot
-                let stateTime = reply.state?.t ?? sentTime
-                self.stateIsStale = reply.bot == "tower" || abs(sentTime - stateTime) > 3.0
+                self.expiry?.cancel()
+                let bot = reply.bot ?? "starting"
+                self.bot = ["starting", "server"].contains(bot) ? bot : "unavailable"
+                let age = Date().timeIntervalSince1970 * 1000 - (reply.at ?? .infinity)
+                if bot == "server", let state = reply.state, let stateTime = state.t,
+                   let remaining = reply.remaining_ms, remaining.isFinite,
+                   age >= 0, min(3000, remaining) > age, stateTime <= sentTime {
+                    self.state = state
+                    self.stateIsStale = false
+                    let expiry = DispatchWorkItem { [weak self] in
+                        guard let self, self.isCurrent(gen) else { return }
+                        self.state = nil
+                        self.stateIsStale = true
+                    }
+                    self.expiry = expiry
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (min(3000, remaining) - age) / 1000, execute: expiry)
+                } else {
+                    self.state = nil
+                    self.stateIsStale = true
+                }
                 self.status = .live
                 self.errorMessage = nil
             case .failure(let e):
-                self.fail(e, server: server)
+                self.expiry?.cancel()
+                self.state = nil
+                self.stateIsStale = true
+                if case .http(409, _) = e {
+                    self.bot = "starting"
+                    self.status = .connecting
+                    self.sendConfig(s, id: id, gen: gen)
+                } else {
+                    self.fail(e, server: s.serverURL)
+                }
             }
         }
     }
@@ -305,7 +383,7 @@ final class StreamController: ObservableObject {
     private func fail(_ e: APIError, server: String) {
         errorMessage = e.message(server: server)
         switch e {
-        case .unauthorized, .badURL, .insecure:
+        case .unauthorized, .badURL, .insecure, .deviceIdentity:
             stopStreaming()
             status = .stopped
         default:

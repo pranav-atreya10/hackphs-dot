@@ -3,6 +3,10 @@ import SwiftUI
 @main
 struct SkySentryCamApp: App {
     init() {
+        CameraCredentials.migrate()
+        if UserDefaults.standard.string(forKey: SettingKey.cameraId) == "iphone-1" {
+            UserDefaults.standard.removeObject(forKey: SettingKey.cameraId)
+        }
         UserDefaults.standard.register(defaults: SettingDefaults.all)
     }
 

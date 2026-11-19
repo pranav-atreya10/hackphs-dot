@@ -31,8 +31,9 @@ test('local judge copes with chatty replies and still applies the confidence flo
   const reply = (content) => async () => new Response(JSON.stringify({ choices: [{ message: { content } }] }));
   const fenced = await judge.askLocalIsBird('AAAA', '', { url: 'http://x/v1', model: 'm', fetchImpl: reply('Sure!\n```json\n{"verdict":"not_bird","confidence":0.9,"object":"drone","evidence":"rotors"}\n```') });
   assert.equal(fenced.verdict, 'not_bird');
-  const unsure = await judge.askLocalIsBird('AAAA', '', { url: 'http://x/v1', model: 'm', fetchImpl: reply('{"verdict":"bird","confidence":0.4}') });
-  assert.equal(unsure.verdict, 'uncertain');
+  const unsure = await judge.askLocalIsBird('AAAA', '', { url: 'http://x/v1', model: 'm', fetchImpl: reply('{"verdict":"bird","confidence":0.4,"object":"speck","evidence":"too small"}') });
+  assert.equal(unsure.verdict, 'uncertain'); assert.equal(unsure.isBird, null); assert.equal(unsure.status, 'verified');
+  await assert.rejects(judge.askLocalIsBird('AAAA', '', { url: 'http://x/v1', model: 'm', fetchImpl: reply('{"verdict":"bird","confidence":0.9}') }), { reason: 'invalid_response' });
 });
 
 test('local judge errors are thrown, not turned into a made-up answer', async () => {

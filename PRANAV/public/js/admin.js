@@ -53,10 +53,10 @@ function requestRow(r) {
   li.innerHTML = `<div><b>${esc(r.name || r.email || 'Unknown user')}</b>
       <span>${esc(r.email && r.name ? `${r.email} · ` : '')}${esc(r.airport)} · ${LABEL[r.from] || esc(r.from)} → <b>${LABEL[r.to] || esc(r.to)}</b> · ${ago(r.createdAt)}</span>
       ${r.note ? `<q>${esc(r.note)}</q>` : ''}</div>
-    <div class="acts"><button data-act="approve" type="button">Approve</button><button class="ghost" data-act="deny" type="button">Deny</button></div>`;
+    <div class="acts"><button data-act="approve" type="button">${r.status === 'applying' ? 'Reconcile' : 'Approve'}</button>${r.status === 'applying' ? '' : '<button class="ghost" data-act="deny" type="button">Deny</button>'}</div>`;
   for (const b of li.querySelectorAll('button')) b.onclick = async () => {
     li.querySelectorAll('button').forEach(x => (x.disabled = true));
-    try { await api(`/api/admin/role-requests/${encodeURIComponent(r._id)}/${b.dataset.act}`, { method: 'POST' }); li.remove(); showRequestCount(); $('reqErr').textContent = ''; }
+    try { await api(`/api/admin/role-requests/${encodeURIComponent(r._id)}/${b.dataset.act}`, { method: 'POST', body: JSON.stringify({ revision: r.revision }) }); li.remove(); showRequestCount(); $('reqErr').textContent = ''; }
     catch (err) { $('reqErr').textContent = err.message; li.querySelectorAll('button').forEach(x => (x.disabled = false)); }
   };
   return li;

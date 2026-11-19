@@ -59,7 +59,7 @@ function createSolana({ settings = config, web3: suppliedWeb3, connection: suppl
     if (network !== DEVNET_GENESIS) throw new Error('Solana RPC must connect to devnet');
   }
   function terminal(message) { const err = new Error(message); err.code = 'SOLANA_FAILED'; return err; }
-  async function stampReport(text) {
+  async function stampReport(text, { beforeSubmit } = {}) {
     const hash = hashReport(text);
     if (!settings.SOLANA_SECRET_KEY) return { hash, tx: null, status: 'hash only', error: null };
     let signature = null, submitted = false;
@@ -78,6 +78,10 @@ function createSolana({ settings = config, web3: suppliedWeb3, connection: suppl
         if (balance < fee) throw new Error('Wallet needs devnet SOL for memo fees; fund the public wallet using the Solana faucet');
         tx.sign(signer);
         signature = tx.signature ? encode58(tx.signature) : null;
+        if (beforeSubmit) {
+          signal.throwIfAborted();
+          await beforeSubmit({ signature, hash });
+        }
         signal.throwIfAborted(); submitted = true;
         const returned = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 1 }); signal.throwIfAborted();
         if (signature && returned !== signature) throw terminal('Solana returned a different transaction signature');

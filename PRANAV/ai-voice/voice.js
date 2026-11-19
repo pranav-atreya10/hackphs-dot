@@ -9,12 +9,8 @@ function buildAlertText(event) {
   const n = Math.max(1, Math.round(Number(event.flock_size || event.object_count) || 1));
   const kind = event.type === 'unknown' ? 'object' : 'bird';
   const objects = n > 1 ? `${n >= 5 ? 'flock of ' : ''}${numberWords(n)} ${kind}s` : `one ${kind}`;
-  const direction = String(event.direction || '');
-  const toward = direction.includes('toward') && !direction.includes('not toward');
-  const phrase = toward ? 'heading toward the runway' : directionPhrase(direction);
-  const eta = Number.isFinite(event.eta_seconds) && event.eta_seconds > 0
-    ? `, ${numberWords(event.eta_seconds)} seconds out` : '';
-  return `${event.risk === 'yellow' ? 'Advisory' : 'Caution'}, ${objects} ${phrase}${eta}.`;
+  const phrase = directionPhrase(event.direction);
+  return `${event.risk === 'yellow' ? 'Advisory' : 'Caution'}, ${objects} ${phrase}.`;
 }
 function createRateLimit() {
   const previous = new Map();

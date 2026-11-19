@@ -26,11 +26,19 @@ Matches Pranav's server: with Clerk configured, people sign in and finish sign-u
 ### Keeping copies in sync
 DigitalOcean only deploys `PRANAV/`, so Vivan's engine and the film are copied into `PRANAV/public` by `npm run sync-web` (`PRANAV/scripts/sync-web.mjs`). Edit them in `VIVAN/` and `ATHARV/`, then run the sync.
 
+The homepage shows a static film poster until Play is selected. The standalone film starts from generated scenery while the optional world, cinematic and model passes load concurrently. Nature patches the assembled materials before the optimizer batches geometry. The aircraft and environment use the original GLB and HDR files; the smaller decimated versions of the scanned props are retained.
+
 ### Phones need https
 Browsers only give a page the camera on `https://` (or `localhost`). Use the deployed DigitalOcean URL, or a temporary https tunnel to a laptop, for the phone camera.
 
 ### Tested
 Ran the server locally with a test camera key: every page loads; the camera page ran Vivan's synthetic flock scenario (6 birds, 2 s to corridor, 4 Hz, RED) and sent events; a scripted camera + tower confirmed the relay, the incident report and the spoken alert sentence end to end.
+
+## iPhone camera source and credential migration
+
+The native uploader now sends only the authorized rear camera. Demo sky and bundled video stay in local preview; a missing or denied camera is shown as an error instead of being replaced. The app migrates the old camera API key to this device's Keychain, removes the old preference only after successful storage, and replaces the shared `iphone-1` default with a device-specific label. Custom labels are preserved and do not determine the wire identity.
+
+The upgraded app sends source, device and session headers. The server requires these, so upgrade the camera app and service together. The uploader waits for configuration before sending frames, sends Stop for the current session, and drops cached risk if fresh server evidence is missing. Verify upgrade with an existing key on a physical iPhone, including permission denial, backgrounding, a network outage and resume; the production service and a device were not exercised in this change.
 
 ## iPhone app (ATHARV/ios)
 
