@@ -6,15 +6,14 @@ struct SetupView: View {
     var onOpenCamera: (() -> Void)?
 
     @AppStorage(SettingKey.serverURL) private var serverURL = SettingDefaults.serverURL
-    @AppStorage(SettingKey.apiKey) private var apiKey = ""
+    @State private var apiKey = CameraCredentials.apiKey
+    @State private var keySaveFailed = false
     @AppStorage(SettingKey.airport) private var airport = ""
     @AppStorage(SettingKey.cameraId) private var cameraId = SettingDefaults.cameraId
     @AppStorage(SettingKey.heading) private var heading = SettingDefaults.heading
     @AppStorage(SettingKey.hfov) private var hfov = SettingDefaults.hfov
     @AppStorage(SettingKey.lat) private var lat = SettingDefaults.lat
     @AppStorage(SettingKey.lon) private var lon = SettingDefaults.lon
-    @AppStorage(SettingKey.corridorSide) private var corridorSide = SettingDefaults.corridorSide
-    @AppStorage(SettingKey.corridorWidth) private var corridorWidth = SettingDefaults.corridorWidth
     @AppStorage(SettingKey.sourcePref) private var sourcePref = SourcePreference.auto.rawValue
 
     @StateObject private var location = LocationHelper()
@@ -39,13 +38,15 @@ struct SetupView: View {
                 field("Camera key", systemImage: "key") {
                     SecureField("from the team", text: $apiKey)
                         .textContentType(.password)
+                        .onChange(of: apiKey) { _, value in keySaveFailed = !CameraCredentials.saveAPIKey(value) }
+                    if keySaveFailed { Text("Camera key was not saved to Keychain. Please re-enter it.").foregroundStyle(Theme.riskRed) }
                 }
                 field("Airport", systemImage: "airplane") {
                     TextField("optional, e.g. KPCT", text: $airport)
                         .textInputAutocapitalization(.characters)
                 }
-                field("Camera ID", systemImage: "camera") {
-                    TextField("iphone-1", text: $cameraId)
+                field("Camera label", systemImage: "camera") {
+                    TextField(SettingDefaults.cameraId, text: $cameraId)
                 }
             } header: {
                 sectionHeader("Server")
@@ -79,30 +80,6 @@ struct SetupView: View {
                 sectionHeader("Where the camera points")
             } footer: {
                 Text("Mount the phone, point the back camera at the runway approach, then tap the button to fill these in.")
-            }
-
-            Section {
-                Picker("Runway side of the picture", selection: $corridorSide) {
-                    Text("Left").tag("left")
-                    Text("Right").tag("right")
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Theme.card)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Corridor width")
-                        Spacer()
-                        Text("\(Int((corridorWidth * 100).rounded())) % of the frame")
-                            .foregroundStyle(Theme.muted)
-                            .monospacedDigit()
-                    }
-                    Slider(value: $corridorWidth, in: 0.1...0.6, step: 0.05)
-                }
-                .listRowBackground(Theme.card)
-            } header: {
-                sectionHeader("Runway corridor")
-            } footer: {
-                Text("The approach area the bot watches. Anything flying into it raises the risk level.")
             }
 
             Section {
@@ -161,7 +138,7 @@ struct SetupView: View {
             Text("SkySentry Camera")
                 .font(Theme.serif(.largeTitle, weight: .bold))
                 .foregroundStyle(Theme.ink)
-            Text("Turns this iPhone into a runway camera. It streams live video to the SkySentry server, whose bot looks for birds and drones and sends the boxes back.")
+            Text("Streams live video to the SkySentry server for motion detection. Drone audio is not monitored. This is not a clearance tool.")
                 .font(.subheadline)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)

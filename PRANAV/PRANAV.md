@@ -50,6 +50,12 @@ Started the server locally, confirmed `/health` returns ok, the demo page return
 - Scaling past 1 instance needs a shared adapter (e.g. `@socket.io/redis-adapter`) so messages reach clients on every instance.
 - Add rooms (`socket.join(room)`) for per-team or per-game channels.
 
+## Live camera ingress contract (current)
+
+The camera station sends only a webcam in **Stream live camera** mode. Demos, synthetic video, uploads and local detection never enter the tower feed. Socket clients send a persistent UUIDv4 as `auth.deviceId` and explicit `source: "live"` on configuration and frames. Native HTTP clients send `x-camera-source: live`, a persistent UUIDv4 `x-camera-device`, and a fresh UUIDv4 `x-camera-session` per Start; `x-camera-id` is a display label. Send `POST /api/camera-config` first, then JPEGs, and call `POST /api/camera-stop` with the same scope and session. A 409 frame response requires reconfiguration.
+
+This replaces the historical event-only relay described below: only the server detector can publish operational detections. Camera clients can submit frames, not risk events or labels. Camera IDs are scoped to the authorized airport and credential principal. A shared key is not per-device attestation: operators must protect it, and each deployment must provision authorized airport access and upgrade publishers that omit the new fields. Presence begins at an accepted live frame, clears on Stop/disconnect, and expires after 10 seconds without frames. A presence indication is not a detection-health indication.
+
 ## Camera → Tower relay (API keys from env vars)
 
 ### What was built
@@ -308,6 +314,12 @@ It checks free disk space before starting and every second while rendering, and 
 
 **Checked:** headless Chrome on a local server with `SERVER_BOT=off` shows boxes and a red risk after 3 s. With the bot on, the server's results are used as before. Tests: 74/74.
 
+### Streamed detection status (supersedes the fallback behavior above)
+
+The server is the sole detector for streamed JPEGs. Towers display results, but never take over detection or submit authoritative labels. Startup, camera movement, processing failures, and stale results show detection as not ready or unavailable; a recovery is active only after a fresh, usable result. The server retries on incoming frames after a processing failure. Video can still be displayed without detection.
+
+Streamed JPEGs contain no audio, so acoustic drone detection is unavailable for those feeds. A steady unknown object or possible debris is an advisory, not a confirmed drone or a clear-sky result.
+
 ## Clerk not loading, and an "Upload a video" button for the demo
 **Why Clerk fails on the live site:** the site uses a *production* Clerk key (`pk_live_…`). Production Clerk loads from `clerk.<your domain>`, which needs DNS records on a domain you own. `lancerhacks-rvs8r.ondigitalocean.app` belongs to DigitalOcean, so `clerk.lancerhacks-rvs8r.ondigitalocean.app` doesn't exist and Clerk's script never loads. **Fix (no code):** in the Clerk dashboard, switch to the **Development** instance and copy its `pk_test_…` / `sk_test_…` keys into DigitalOcean's `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY`. Development keys work on any domain. It's a separate set of users, so people sign up again and re-enter the airport join code. The other option is buying a domain and adding Clerk's DNS records.
 
@@ -422,6 +434,10 @@ Everyone else still has exactly one account type (no switching).
 In the "demos for every account" change I put a `// comment` partway through a line of `demo.js`. JavaScript treats everything after `//` as comment, so it commented out the rest of the line: each button's link and its "Use this demo →" text. The buttons showed as empty white bars and went nowhere. The comment now sits on its own line. I also scanned every file I'd edited for the same mistake and found no others. **Checked:** the button reads "Use this demo →" and links to `/camera.html?demo=gulls-sky.mp4`. Tests: 83/83.
 
 ## Fix: incident reports (empty duplicates, and seeing why Gemini fails)
+
+The tower waits for server authorization before showing the dashboard. The airport picker no longer gates an unfiltered connection; requests for a particular airport still require validation. Map, QR code, feed rendering, charts, beacon, and the walkthrough load separately from the live status and alert connection.
+
+Incident lists and live metadata omit camera snapshots. Opening a report fetches its JPEG separately from `/api/incidents/:id/snapshot?airport=...`. The route requires a matching airport and dashboard authorization (a tower key is required when Clerk is off); legacy records without an airport do not serve evidence. A failed evidence load leaves the report readable. Reconnect history backfills by incident ID and cannot replace a newer persisted revision already received live.
 **What was wrong (from the live MongoDB data):** 75 incidents, all real (Demo Airport, ATR), from testing. 53 had no report at all, and the other 22 used the template report even though 21 of them had snapshots.
 - **No report:** while birds are in view, a camera repeats its yellow/red alert every 2 seconds, and *every* repeat was saved as a new incident. Reports and voice alerts are rate-limited (12 s per camera and type, unless the risk goes up), so only the first got a report and the rest stayed empty.
 - **Template instead of Gemini:** Gemini calls were failing, but `/health` only said "configured" (that just means a key is set). The reason was only in DigitalOcean's logs.
@@ -435,6 +451,19 @@ In the "demos for every account" change I put a `// comment` partway through a l
 **Checked:** 2 new tests (repeats aren't stored and an escalation is; health shows a failing Gemini); the suite is 85/85. On a local server (with MongoDB off, so real data wasn't touched), 3 repeated yellow alerts and a red one showed 4 rows in the live feed but 2 incidents (yellow, then red), both with reports.
 
 ## Tower: current risk in the sidebar
+
+The tower risk card, sidebar and full-screen software beacon use one operational snapshot. Only fresh,
+ready detector readings from all cameras known to the tower can show **GREEN / No detections**. Lost,
+warming or timed-out coverage stays visibly unavailable or degraded; a fresh warning still takes priority
+while showing the coverage gap. An event-only clear cannot override a fresh detector warning. Detector
+readings expire at the earlier of the producer's deadline and 3 seconds; a detector generation change
+invalidates the previous reading immediately. Camera
+presence and warning heartbeats expire after 10 seconds. Known offline cameras remain part of the coverage
+count for this page session; this is not a configured inventory of every camera that should cover a runway.
+
+The **Preview recorded footage (demo)** panel is opt-in and does not feed the detector, alert channels or
+beacon. The map reuses live camera layers. Legacy estimated target coordinates and paths are suppressed,
+and ETA appears only when labeled as projected image-mask entry, not time to runway arrival.
 The tower sidebar's Status section now starts with the current risk, e.g. **RED · Flock of 6 birds · toward runway**, so it's visible while scrolling. It has a green, yellow or red dot. At red the line gets a red tint and a pulsing dot (no pulse with reduce motion). Clicking it jumps to the big risk card. It comes from `refreshRisk()` in `js/tower.js`, so it always matches the risk card (the highest risk from any camera in the last 10 seconds).
 
 **Checked:** headless Chrome on a local server: green, then a yellow alert, then a red alert; the sidebar line matched the risk card each time. Tests: 83/83.
@@ -537,3 +566,34 @@ Only the bird judge moves; the OpenAI assistant and the Gemini incident reports 
   agrees with Gemini on the test split, per label, plus how many real birds it called "not_bird" (the dangerous mistake).
 - Tests: 4 new (local request format, chatty replies, confidence floor, errors), 95/95 pass. Not tried against a
   real local model here (none can run in this environment).
+
+## Gemini reliability and camera evidence policy
+
+Gemini health now identifies authentication, quota, timeout and other provider
+failures, without exposing provider response details. Incident details show the
+stored Gemini bird verdict separately from a skipped or failed image check.
+Camera image processing by Gemini requires explicit deployment opt-in; see
+the [AI operator runbook](ai-voice/README.md#gemini-image-privacy-and-operator-runbook).
+
+## Tower bird-check evidence
+
+The optional bird check samples eligible motion tracks, not all birds in view. A merged dense-flock blob or missed track is not single-object evidence, but an individually visible flock member can still be checked. Cameras and their eligible tracks are selected by least recent attempt.
+
+The tower pairs the detector state and decoded image by stream, sequence, and exact time. Unmatched frames remain usable for video playback, but do not receive a box from another frame or become verifier evidence. The verifier copies a bounded padded crop from the matched source; object size refers to the decoded JPEG or demo video, not the camera sensor or the resized model input. These changes do not alter model thresholds or establish an accuracy gain.
+
+## Site readiness and alert recovery
+
+The public copy and guide distinguish server-assigned video risk, coverage
+gaps and advisory reports. `/health` is liveness; `/ready` checks the detector,
+airport access, majority Mongo receipt/report storage and configured restart
+recovery. An explicitly provisioned private receipt file buffers incident
+metadata only. App Platform's ephemeral filesystem is not a supported spool.
+Fresh live warnings stay immediate; retries and replay stay visible but silent.
+ACK requires a majority-stored alert in the selected airport and preserves the
+first operator. See [the runbook](OPERATIONS.md) for the precise failure modes.
+
+## Airport-scoped access and account transitions
+
+The tower HTTP data APIs and live rooms use the same airport access policy. Credentials cannot open a global view; operators select one authorized airport at a time. Mongo incident history, hourly detections and both chat providers use that scope. Rows with missing, null, or nonscalar airport ownership are excluded, not assigned to a default tenant.
+
+Initial Clerk setup reserves one assignment per account in Mongo before sending the Clerk update. Role requests compare an immutable revision and expected state; approval disconnects existing sockets and suspends the account until Clerk confirms the persisted transition ID. See `OPERATIONS.md` for configuration and recovery.

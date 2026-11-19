@@ -4,9 +4,10 @@ The film's styles, stage markup and scripts are taken from dist/index.html so th
 site always plays the current film. Run: python3 tools/build_site.py
 """
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent / "dist"
-film = (ROOT / "index.html").read_text()
+film = (ROOT / "index.html").read_text(encoding="utf-8")
 
 body = film[film.index("<body>") + len("<body>"):] if "<body>" in film else film
 body = body.replace("</body>\n</html>", "").replace("</body></html>", "")
@@ -16,10 +17,45 @@ film_head = body[:head_end].replace("<title>SkySentry in Motion</title>", "")
 film_stage = body[head_end:script_start]
 film_scripts = body[script_start:]
 
+stage_tag = '<div class="stage" id="stage">'
+assert stage_tag in film_stage
+film_stage = film_stage.replace(stage_tag, stage_tag + """
+      <div class="film-poster" id="filmPoster">
+        <img src="./film-poster.svg" alt="" width="1280" height="720">
+        <a class="btn-s primary" id="filmLaunch" href="./index.html">Play the 100-second film</a>
+        <span id="filmLaunchStatus" role="status"></span>
+      </div>""", 1)
+
 # On a long page, Space should scroll unless the film is on screen.
 key_guard = 'document.addEventListener("keydown", e => {\n'
 assert key_guard in film_scripts
 film_scripts = film_scripts.replace(key_guard, key_guard + '    { const r = stage.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return; }\n', 1)
+
+launch = 'startFilm().catch(showFilmError);'
+assert launch in film_scripts
+film_scripts = film_scripts.replace(launch, """
+const film = document.getElementById("film");
+const launch = document.getElementById("filmLaunch");
+const status = document.getElementById("filmLaunchStatus");
+let launching = false, failed = false;
+launch.addEventListener("click", async event => {
+  if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  if (launching) return;
+  launching = true;
+  status.textContent = "Starting film…";
+  try {
+    await startFilm({userInitiated: true});
+    film.classList.add("film-started");
+    if (document.activeElement === launch) document.getElementById("play").focus();
+    document.getElementById("filmPoster").remove();
+  } catch (error) {
+    showFilmError(error);
+    failed = true;
+    status.textContent = "The embedded film could not start.";
+    launch.textContent = "Try the standalone film";
+  }
+});""", 1)
 
 SITE_HEAD = """<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -71,6 +107,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 #film .glass,#film .callout .lb{background:rgba(251,248,242,.96)}
 #film .dash{background:rgba(14,28,46,.97)}
 #film .stage{border-radius:16px;box-shadow:0 1px 0 var(--line-s),0 24px 60px -24px rgba(60,40,20,.35)}
+#film:not(.film-started) :is(.caption,.transport,.bar,.hint,#assetLoader){display:none}
+.film-poster{position:absolute;inset:0;z-index:25;display:grid;align-content:center;justify-items:center;gap:14px;background:#13283d;color:white;text-align:center;padding:16px}
+.film-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.film-poster :is(a,span){position:relative}
+.film-poster span:not(:empty){padding:4px 8px;background:#13283d;border-radius:4px}
 #film .caption{font-family:var(--serif);font-size:clamp(1.05rem,2vw,1.3rem);color:var(--ink-s)}
 #film .btn{background:var(--card);border-color:var(--line-s);color:var(--ink-s);border-radius:99px}
 #film .btn.primary{background:var(--ink-s);border-color:var(--ink-s);color:var(--paper)}
@@ -114,7 +155,10 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 .lvl i{width:10px;height:10px;border-radius:50%}
 .risk-row p{margin:0;font:400 .99rem/1.55 var(--sans);color:var(--ink-s)}
 .risk-row p + p{color:var(--mute-s)}
-@media (max-width:720px){.risk-row{grid-template-columns:1fr;gap:6px}.risk-row.head{display:none}}
+@media (max-width:720px){
+  .risk-row{grid-template-columns:1fr;gap:6px}
+  .risk-row.head{position:absolute;width:1px;height:1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
 
 .journey{list-style:none;padding:0;display:grid;counter-reset:j;border-left:1px solid var(--line-s);margin:0 0 0 15px}
 .journey li{counter-increment:j;position:relative;padding:0 0 24px 36px;display:grid;gap:4px}
@@ -152,7 +196,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 
 ICON = {
   "eye": '<svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2"><path d="M3 18s5.5-9 15-9 15 9 15 9-5.5 9-15 9S3 18 3 18Z"/><circle cx="18" cy="18" r="4.5"/></svg>',
-  "ear": '<svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linecap="round"><path d="M6 18h2M11 12v12M16 8v20M21 13v10M26 10v16M31 16v4"/></svg>',
+  "server": '<svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linecap="round"><rect x="5" y="6" width="26" height="10" rx="2"/><rect x="5" y="20" width="26" height="10" rx="2"/><path d="M10 11h2M10 25h2"/></svg>',
   "tower": '<svg viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linejoin="round"><path d="M11 9h14l-2 7H13Z"/><path d="M15 16v15h6V16M10 31h16"/><path d="M27 6c2 1.5 3 3.3 3 5.5M30 3c3 2.3 4.5 5 4.5 8.5" stroke-linecap="round"/></svg>',
 }
 
@@ -170,14 +214,14 @@ SITE_BODY = f"""
     <div>
       <span class="eyebrow-s">Into the skies · Small-airport safety</span>
       <h1>An early-warning system for <em>birds and drones</em> near runways</h1>
-      <p>SkySentry turns an ordinary phone into a lookout that spots birds and drones near a runway and alerts the control tower, out loud and on screen, before a plane takes off into danger.</p>
+      <p>SkySentry is a prototype that sends camera video to a server and shows potential hazards on a tower dashboard. It is advisory only, not a source of runway clearance.</p>
       <div class="cta"><a class="btn-s primary" href="#film">Watch the 100-second film</a><a class="btn-s" href="#how">How it works</a></div>
     </div>
     <dl class="sheet" aria-label="At a glance">
-      <div><dt>Detects</dt><dd>Birds with the camera, drones with the microphone</dd></div>
-      <div><dt>Alerts</dt><dd>Spoken and on-screen alerts in the tower within seconds</dd></div>
-      <div><dt>Built for</dt><dd>Small airports that can’t afford bird radar</dd></div>
-      <div><dt>Costs</dt><dd>A phone per runway plus free-tier cloud tools</dd></div>
+      <div><dt>Coverage</dt><dd>Monitored video only; streamed JPEGs have no drone audio</dd></div>
+      <div><dt>Alerts</dt><dd>On-screen warnings; optional speech for fresh alerts</dd></div>
+      <div><dt>Built for</dt><dd>Exploring supplemental monitoring at small airports</dd></div>
+      <div><dt>Readiness</dt><dd>Prototype, not qualified for airport operations</dd></div>
     </dl>
   </section>
 
@@ -188,32 +232,33 @@ SITE_BODY = f"""
 
   <section class="sec" id="why">
     <div class="sec-head"><span class="eyebrow-s">Why it matters</span><h2>The sky over a runway is crowded</h2>
-      <p>Birds and drones share the same low airspace that every departing aircraft climbs through. Big airports pay for radar to watch it. Most small airports watch it by eye.</p></div>
+      <p>Birds and drones can share the low airspace that departing aircraft climb through. A video feed covers only part of that space.</p></div>
     <div class="facts">
       <div class="fact"><span>Jan 15, 2009 · LaGuardia</span><b>2 of 2</b><p>engines lost when geese struck US Airways Flight 1549 minutes after takeoff, forcing the “Miracle on the Hudson” landing.</p></div>
       <div class="fact"><span>December 2018 · Gatwick</span><b>≈1,000</b><p>flights disrupted when repeated drone sightings shut down London’s Gatwick Airport over three days.</p></div>
-      <div class="fact"><span>The gap</span><b class="warn">No radar</b><p>at small airports like Princeton and Trenton-Mercer, which usually can’t buy bird radar or counter-drone systems.</p></div>
+      <div class="fact"><span>Prototype scope</span><b class="warn">Video only</b><p>SkySentry supplements observation. It is not radar and does not detect every hazard.</p></div>
     </div>
   </section>
 
   <section class="sec" id="how">
-    <div class="sec-head"><span class="eyebrow-s">How it works</span><h2>It sees, it hears, it speaks up</h2>
-      <p>One phone on a tripod at the runway edge does the watching. A second laptop in the tower shows and speaks the alerts.</p></div>
+    <div class="sec-head"><span class="eyebrow-s">How it works</span><h2>From camera frames to tower warnings</h2>
+      <p>An authorized camera sends live JPEG frames. The server runs the video detector and assigns risk for that airport.</p></div>
     <div class="steps3">
-      <div class="step3">{ICON["eye"]}<h3>Sees birds</h3><p>A ready-made AI model runs in the phone’s browser and boxes every bird. Tracking counts them and shows which way each one is heading.</p><code>TensorFlow.js · COCO-SSD</code></div>
-      <div class="step3">{ICON["ear"]}<h3>Hears drones</h3><p>Drones are hard to see but easy to hear. A sound model trained on background noise, drones and birds listens for the buzz.</p><code>Teachable Machine audio</code></div>
-      <div class="step3">{ICON["tower"]}<h3>Tells the tower</h3><p>Risky events reach the tower screen in seconds with a spoken alert, an AI-written incident report and a pin on the airport map.</p><code>Socket.IO · ElevenLabs · Gemini</code></div>
+      <div class="step3">{ICON["eye"]}<h3>Streams video</h3><p>The camera sends images, not risk decisions. Recorded uploads and synthetic scenes stay in the local preview.</p><code>Live JPEG · no audio</code></div>
+      <div class="step3">{ICON["server"]}<h3>Evaluates video on the server</h3><p>The detector tracks motion and estimates risk. An optional image review is advisory and does not change server-assigned risk.</p><code>Motion · tracking · risk</code></div>
+      <div class="step3">{ICON["tower"]}<h3>Warns the tower</h3><p>The dashboard shows warnings and coverage gaps. Voice is opt-in for fresh alerts; replay is silent. Map coverage isn’t a measured object location.</p><code>Socket.IO · browser voice</code></div>
     </div>
   </section>
 
   <section class="sec" id="risk">
-    <div class="sec-head"><span class="eyebrow-s">Risk levels</span><h2>Three levels, one clear rule each</h2>
-      <p>The phone scores every moment as green, yellow or red, so the tower only hears about what matters.</p></div>
+    <div class="sec-head"><span class="eyebrow-s">Risk levels</span><h2>What each dashboard state means</h2>
+      <p>Risk comes from the live server detector. No detections in monitored video, degraded coverage and unavailable monitoring are not clearance.</p></div>
     <div class="risk" role="table" aria-label="Risk levels">
       <div class="risk-row head" role="row"><span role="columnheader">Level</span><span role="columnheader">When</span><span role="columnheader">What happens</span></div>
-      <div class="risk-row r-go" role="row"><span class="lvl" style="color:#2f7a4d"><i style="background:var(--go)"></i>GREEN</span><p>No birds, no drone sound</p><p>Quiet status update every few seconds</p></div>
-      <div class="risk-row r-warn" role="row"><span class="lvl" style="color:#9a6a00"><i style="background:var(--warn)"></i>YELLOW</span><p>1 to 4 birds, not heading toward the runway</p><p>On-screen caution, snapshot checked by Gemini, logged</p></div>
-      <div class="risk-row r-stop" role="row"><span class="lvl" style="color:#b23a2c"><i style="background:var(--stop)"></i>RED</span><p>5 or more birds, any bird heading toward the runway, or any drone sound</p><p>Alarm, spoken alert, Gemini report and map pin; drone reports also get a Solana stamp</p></div>
+      <div class="risk-row r-go" role="row"><span class="lvl" role="rowheader"><i style="background:var(--go)" aria-hidden="true"></i>GREEN</span><p role="cell">No detections in monitored video</p><p role="cell">Status only, not evidence that the airspace is clear</p></div>
+      <div class="risk-row r-warn" role="row"><span class="lvl" role="rowheader"><i style="background:var(--warn)" aria-hidden="true"></i>YELLOW</span><p role="cell">Video detection warrants caution</p><p role="cell">On-screen caution; a report may follow</p></div>
+      <div class="risk-row r-stop" role="row"><span class="lvl" role="rowheader"><i style="background:var(--stop)" aria-hidden="true"></i>RED</span><p role="cell">Higher-risk video detection</p><p role="cell">On-screen warning; sound only if enabled</p></div>
+      <div class="risk-row" role="row"><span class="lvl" role="rowheader">DEGRADED / UNAVAILABLE</span><p role="cell">Monitoring is limited or lacks usable data</p><p role="cell">Existing warnings may remain; missing data is not a green result</p></div>
     </div>
   </section>
 
@@ -221,50 +266,46 @@ SITE_BODY = f"""
     <div class="split2">
       <div>
         <div class="sec-head"><span class="eyebrow-s">The system</span><h2>How one alert travels</h2>
-          <p>Every alert follows the same seven steps from the runway to the tower. Each service does one job.</p></div>
+          <p>Live warnings can appear before storage confirms them. Network or service failure can delay delivery, leave an alert unconfirmed, or leave a report incomplete.</p></div>
         <div class="limits">
           <h3>What it can’t do yet</h3>
           <ul>
-            <li>It works in daylight only. Night would need a thermal camera.</li>
-            <li>The off-the-shelf model works best when birds are reasonably large in the frame.</li>
-            <li>It is an extra set of eyes for the tower, not a replacement for radar.</li>
+            <li>The JPEG stream carries no microphone signal. Small or distant objects and poor visibility can limit detection.</li>
+            <li>Projected entry into a surveyed image mask is not a runway arrival time.</li>
+            <li>This prototype does not replace radar, approved procedures or human judgment.</li>
           </ul>
         </div>
       </div>
       <ol class="journey">
-        <li><em>Camera station</em><b>Detect and send</b><span>The phone spots birds or a drone, scores the risk and sends an event with type, count, direction and confidence.</span></li>
-        <li><em>Tiger Data</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
-        <li><em>Gemini</em><b>Verify with AI</b><span>For yellow and red events, Gemini checks the snapshot and writes a short incident report.</span></li>
-        <li><em>MongoDB Atlas</em><b>Store the report</b><span>The report, snapshot and Gemini’s label are saved together.</span></li>
-        <li><em>Solana devnet</em><b>Stamp drone reports</b><span>A hash of each drone report goes on chain, so nobody can quietly edit it later.</span></li>
-        <li><em>ElevenLabs</em><b>Give it a voice</b><span>The alert sentence becomes a spoken tower announcement.</span></li>
-        <li><em>Socket.IO</em><b>Tell the tower</b><span>The alert, report and audio arrive on the tower dashboard instantly.</span></li>
+        <li><em>Camera station</em><b>Send live frames</b><span>The server associates each stream with an authorized airport and assigns risk from video.</span></li>
+        <li><em>Socket.IO</em><b>Show the warning</b><span>An in-session warning can arrive before storage confirms it.</span></li>
+        <li><em>Browser voice</em><b>Speak fresh alerts only</b><span>Operators can turn sound on. Acknowledgment and replay do not trigger speech.</span></li>
+        <li><em>MongoDB Atlas</em><b>Confirm storage</b><span>Stored receipts support acknowledgment and replay. The hourly chart counts stored detections.</span></li>
+        <li><em>Gemini</em><b>Optionally review evidence</b><span>Reports use detector readings. Cloud image review requires separate opt-in and does not change warnings.</span></li>
+        <li><em>MongoDB Atlas</em><b>Save the report when available</b><span>Report work can be delayed or incomplete; incident snapshot retention is off unless separately enabled.</span></li>
+        <li><em>Solana devnet</em><b>Optionally verify a report hash</b><span>A confirmed hash can be compared with the exact report text. It does not protect stored records from edits or prove the report accurate.</span></li>
       </ol>
     </div>
   </section>
 
   <section class="sec" id="stack">
-    <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>Free tools, each doing a real job</h2></div>
+    <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>The services behind the prototype</h2></div>
     <div class="stack">
-      <div><b>ElevenLabs</b><span>Speaks every alert in the tower</span></div>
-      <div><b>Gemini</b><span>Verifies snapshots, writes reports, answers questions</span></div>
-      <div><b>Tiger Data</b><span>Time-stamped detections and hourly charts</span></div>
+      <div><b>Browser voice</b><span>Opt-in speech for new alerts</span></div>
+      <div><b>Gemini</b><span>Optional image review and text assistance</span></div>
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
-      <div><b>MongoDB Atlas</b><span>Incident reports with snapshots</span></div>
-      <div><b>Solana</b><span>Tamper-proof stamps on drone reports</span></div>
+      <div><b>MongoDB Atlas</b><span>Alert receipts, incident reports and hourly charts</span></div>
+      <div><b>Solana devnet</b><span>Optional drone-report hash comparison</span></div>
     </div>
   </section>
 
   <section class="sec" id="faq">
     <div class="sec-head"><span class="eyebrow-s">Questions</span><h2>What people ask</h2></div>
     <div class="faq">
-      <details><summary>How accurate is it?</summary><p>The team measures it on a set of test clips before judging and reports the result, for example how many of 20 clips it caught. Treat it as an extra set of eyes, not a replacement for radar.</p></details>
-      <details><summary>Can it see small, far-away birds?</summary><p>The free model works best when birds are reasonably large in the frame. A zoom lens or a model trained on sky footage would improve that.</p></details>
-      <details><summary>Does it work at night?</summary><p>Not yet. Night detection would need a thermal camera, which is a natural next step.</p></details>
-      <details><summary>What about privacy?</summary><p>The camera points at the sky, and snapshots are saved only when there’s an alert.</p></details>
-      <details><summary>Why use a blockchain?</summary><p>So drone incident records can’t be quietly changed later, which matters if they are used as evidence for police or the FAA.</p></details>
-      <details><summary>Isn’t this already done?</summary><p>Big airports use radar and commercial counter-drone systems. SkySentry is a low-cost version for the small airports that can’t afford those.</p></details>
-      <details><summary>What would it cost a real airport?</summary><p>A phone or cheap camera per runway, plus small cloud bills.</p></details>
+      <details><summary>How accurate is it?</summary><p>The film and synthetic scenarios illustrate the software; they do not establish field accuracy or airport qualification.</p></details>
+      <details><summary>Can it monitor the whole airport?</summary><p>No. It can only assess usable video in view. Poor visibility, distance or a stalled detector can leave coverage gaps. Night performance is not established.</p></details>
+      <details><summary>What about privacy?</summary><p>Live video goes to the SkySentry server. Incident snapshot retention and sending eligible camera images to Google Gemini are separate settings, both off by default. Enabling one does not authorize the other.</p></details>
+      <details><summary>What does a devnet hash prove?</summary><p>It lets someone compare the fingerprint of exact report text against a confirmed memo. It is not tamper-proof storage, proof of accuracy, or a chain of custody.</p></details>
     </div>
   </section>
 
@@ -282,13 +323,22 @@ AUTOPAUSE = """
   const stage = document.getElementById("stage"), btn = document.getElementById("play");
   let autoPaused = false;
   new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
-    else if (e.isIntersecting && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
+    if (!stage.closest(".film-started")) return;
+    if (e.intersectionRatio < .25 && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
+    else if (e.intersectionRatio >= .25 && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
   }, {threshold: .25}).observe(stage);
   btn.addEventListener("click", e => { if (e.isTrusted) autoPaused = false; });
 })();
 </script>
 """
 
-(ROOT / "site.html").write_text("<title>SkySentry</title>\n" + film_head + SITE_HEAD + SITE_BODY + film_scripts + AUTOPAUSE)
-print("wrote", ROOT / "site.html")
+site = ROOT / "site.html"
+output = "<title>SkySentry</title>\n" + film_head + SITE_HEAD + SITE_BODY + film_scripts + AUTOPAUSE
+if sys.argv[1:] == ["--check"]:
+    if not site.exists() or site.read_text(encoding="utf-8") != output:
+        sys.exit("dist/site.html is stale; run python ATHARV/skysentry/tools/build_site.py")
+elif not sys.argv[1:]:
+    site.write_text(output, encoding="utf-8", newline="\n")
+    print("wrote", site)
+else:
+    sys.exit("Usage: build_site.py [--check]")

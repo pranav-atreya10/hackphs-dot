@@ -1,10 +1,10 @@
 # SkySentry Camera (iPhone)
 
-A native iPhone app that turns the phone into a runway camera. It streams its live rear-camera video to the SkySentry server (`PRANAV/server.js`). The server's detection bot looks for birds and drones and sends back tracks, flocks and a risk level, which the app draws over the video. The phone does no detection itself.
+A native iPhone app that streams rear-camera JPEGs to the SkySentry server (`PRANAV/server.js`). The server evaluates video and returns tracks, flocks and an advisory risk level when results are usable. The JPEG stream carries no drone audio. The app does not give clearance.
 
 SwiftUI + AVFoundation + URLSession only. There are no third-party packages, so it builds offline. iOS 17+, bundle id `com.skysentry.camera`.
 
-| Setup | Streaming the demo sky to a local server |
+| Setup | Illustrated sky preview |
 |---|---|
 | ![Setup](screenshots/setup.png) | ![Camera](screenshots/camera-streaming.png) |
 
@@ -13,7 +13,7 @@ SwiftUI + AVFoundation + URLSession only. There are no third-party packages, so 
 2. Pick the **SkySentryCam** scheme and an iPhone simulator, then press Run.
 3. In Setup, enter the server URL and camera key, then tap **Open camera** and **Start streaming**.
 
-The simulator has no camera, so the app streams the **Demo sky** instead: a light-blue sky with a V of six birds flying right to left, wings beating about 4 times a second. The model is copied from Vivan's `synthetic.js`. You can also choose Demo sky on a real phone (Setup › Video source, or the cloud button on the camera screen).
+The simulator has no rear camera. Use **Demo sky** to preview a synthetic flock locally. Demo sky and downloaded clips never enter the live uploader or test the tower's detector, reports or alert sound.
 
 From the command line:
 ```sh
@@ -28,14 +28,15 @@ Testing hooks (launch arguments, not saved):
 - **Setup** (saved with `@AppStorage`): server URL, camera key, airport code, camera ID, compass heading and lens width, latitude/longitude ("Use my location & compass" fills them), runway corridor side and width, and video source.
 - **Camera**: full-screen 1280x720 rear camera (or demo sky). Frames are scaled to 640 px wide, JPEG quality 0.6, and encoded off the main thread. They are POSTed at most about 15 fps with **only one request in flight**: frames that arrive while a request is pending are dropped, so a slow link lowers the frame rate instead of adding delay.
 - **Overlay**: corridor (terracotta), track boxes (bird blue, drone red, unknown amber), trails, and flock boxes with "flock of N · Xs" labels. Everything is mapped to the visible video area for both Fill and Fit (button at bottom right).
-- **Banner**: risk colour (green/yellow/red) plus a line such as "Flock of 6 birds · heading south · 9 s to runway". Stats: status, frames sent, fps achieved, server/tower bot, and bot processing ms.
-- Keeps the screen awake while streaming. Errors are explained clearly: wrong key (401) stops streaming; an unreachable server retries every second; denied camera access shows an **Open Settings** button.
-- If the server bot hands over to the towers (`"bot":"tower"`), the server's HTTP state stops updating. The app then hides the old boxes and says the tower is detecting.
+- **Banner**: server-assigned risk and coverage. Green indicates no detections in monitored video, not clearance. An estimate for a surveyed image mask is not time to runway arrival.
+- Keeps the screen awake while streaming. Unauthorized access stops streaming; a connection failure can retry; denied camera access shows an **Open Settings** button.
+- If usable server results expire, the app hides stale annotations. The tower does not take over detection.
 
 ## API used
-Headers on every call: `x-api-key`, `x-camera-id`, and optionally `x-airport`.
-- `POST /api/camera-config` with `{camera:{lat,lon,heading_deg,hfov_deg}, corridor:[[x,y],…]}`. Sent on Start and whenever settings change.
-- `POST /api/camera-frame` with raw JPEG, `Content-Type: image/jpeg`, and `x-frame-time: <seconds since Start>`. Returns `{ok, bot, state}`.
+Live requests use `x-api-key`, the matching `x-airport`, a persistent `x-camera-device`, the current `x-camera-session`, and `x-camera-source: live`. `x-camera-id` is an optional label, not identity.
+- `POST /api/camera-config` with `source: live` and camera pose. Only server-configured survey data can activate a corridor.
+- `POST /api/camera-frame` with raw JPEG, `Content-Type: image/jpeg`, and `x-frame-time: <seconds since Start>`. `bot`, detector status, `at` and `remaining_ms` describe the usability of the returned state.
+- `POST /api/camera-stop` ends the matching stream.
 
 ## Real iPhone (free Apple ID)
 1. Plug the iPhone into the Mac and tap **Trust**. On iOS 16+, turn on **Settings › Privacy & Security › Developer Mode** and restart when asked.
@@ -45,4 +46,4 @@ Headers on every call: `x-api-key`, `x-camera-id`, and optionally `x-airport`.
 5. The first launch says "Untrusted Developer". On the phone, open **Settings › General › VPN & Device Management**, tap your Apple ID, then **Trust**. Launch again.
 6. Allow camera access. Apps signed with a free account expire after **7 days**; run again from Xcode to refresh.
 
-Server address on the phone: `localhost` means the phone itself. Use the deployed `https://…ondigitalocean.app` URL, or your Mac's Wi-Fi address (`http://192.168.x.x:8095`, from `ipconfig getifaddr en0`) with the phone on the same Wi-Fi. Allow the "local network" prompt. Plain `http://` only works for local addresses (ATS `NSAllowsLocalNetworking`); everything else must be `https://`.
+Server address on the phone: `localhost` means the phone itself. For approved development use an isolated server, such as the Mac's Wi-Fi address on the same network. Allow the local network prompt. Plain `http://` only works for local addresses (ATS `NSAllowsLocalNetworking`); other addresses must use HTTPS. Do not send test frames to the public deployment.

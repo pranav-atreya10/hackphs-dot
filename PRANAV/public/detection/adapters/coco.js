@@ -130,11 +130,21 @@ export class CocoVerifier {
     const o = this.opts;
     const crop = cropRect(bbox, dims, o.pad, o.minCropPx);
     this.ctx.drawImage(source, crop.sx, crop.sy, crop.side, crop.side, 0, 0, o.cropSize, o.cropSize);
+    return { ...await this.classifyInput(crop.obj), crop };
+  }
+
+  async classifyCaptured(source, obj) {
+    const size = this.opts.cropSize;
+    this.ctx.drawImage(source, 0, 0, size, size);
+    return this.classifyInput(obj);
+  }
+
+  async classifyInput(obj) {
+    const o = this.opts;
     const t0 = performance.now();
     const preds = await this.model.detect(this.canvas, o.maxBoxes, o.minScore);
     const ms = performance.now() - t0;
-    const r = interpretPredictions(preds, crop.obj, o.cropSize, o.centerTolerance);
-    return { ...r, ms: Math.round(ms), crop };
+    return { ...interpretPredictions(preds, obj, o.cropSize, o.centerTolerance), ms: Math.round(ms) };
   }
 
   // Keep the checks inside the time budget so COCO never starves the main loop.

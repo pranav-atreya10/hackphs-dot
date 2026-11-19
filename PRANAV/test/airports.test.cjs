@@ -62,6 +62,9 @@ test('a new join code replaces the old one; deleting removes the airport', async
   await airports.remove('KTTN');
   assert.equal(airports.has('KTTN'), false);
   await assert.rejects(airports.remove('KTTN'), e => e.status === 404);
+  await airports.load();
+  assert.equal(airports.has('KTTN'), false);
+  await assert.rejects(airports.create({ code: 'KTTN' }), e => e.status === 409);
 });
 
 test('without MongoDB, env airports still work and creating says why it cannot', async () => {

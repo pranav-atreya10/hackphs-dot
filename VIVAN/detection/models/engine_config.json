@@ -1,7 +1,7 @@
 {
  "name": "skysentry-engine-config",
  "about": "All settings of the motion/flock/forecast detection engine (VIVAN/detection). Generated from src/config.js and src/params.js; regenerate after changing them. A preset is a partial override, deep-merged onto defaults.",
- "sha256": "e56ac13e57f01de749e2d4f46618c8aec2e495a58e85e163d7219d42b3003162",
+ "sha256": "d147dc6b708b09af6b7af51771fc0c39bf2e7e21e87567c6bf09de2dd656dc29",
  "defaults": {
   "camera_id": "runway-east",
   "camera": {
@@ -9,8 +9,7 @@
    "lon": -74.6586,
    "heading_deg": 90,
    "hfov_deg": 65,
-   "pitch_deg": 20,
-   "assumed_range_m": 400
+   "pitch_deg": 20
   },
   "motion": {
    "threshold": 20,
@@ -99,6 +98,8 @@
   },
   "corridor": {
    "polygon": [],
+   "surveyId": null,
+   "demo": false,
    "horizonSec": 60,
    "etaSigma": 2
   },
@@ -136,8 +137,7 @@
   "risk": {
    "flockRed": 5,
    "etaRedSec": 30,
-   "holdSec": 3,
-   "unknownCountsYellow": true
+   "holdSec": 3
   },
   "audio": {
    "highProb": 0.8,

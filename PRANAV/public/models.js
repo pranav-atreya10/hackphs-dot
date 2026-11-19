@@ -2,7 +2,7 @@ import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { loadGltfJson } from './assetload.js';
 
 // Model pass: places scanned CC0 props from Poly Haven around the airfield, and rebuilds
-// the geese, parked light aircraft and tower roof in more detail. Runs after cinema.js.
+// the geese, parked light aircraft and tower roof in more detail.
 export async function enhanceModels({T, scene, W, rnd}) {
   const D = new T.Group(); D.name = 'Scanned props and rebuilt models'; scene.add(D);
   const heightAt = (x, z) => { const d = Math.hypot(Math.max(0, Math.abs(x) - 540), Math.max(0, Math.abs(z) - 250)); const n = Math.sin(x*.004)*Math.cos(z*.005) + .5*Math.sin(x*.011 + z*.007); return d > 0 ? (n + 1.3)*Math.min(1, d/420)*34 : 0; };
@@ -136,12 +136,13 @@ export async function enhanceModels({T, scene, W, rnd}) {
   for (const [x, z, h] of [[-5, -3, 6], [-3, 4, 5], [5, -4, 7]]) { add(new T.CylinderGeometry(.05, .07, h, 6), steel, x, h/2, z, roof); add(new T.SphereGeometry(.12, 8, 6), new T.MeshBasicMaterial({color:0xff2a1a}), x, h + .1, z, roof, false); }
   add(new T.BoxGeometry(1.6, .9, 1.2), std(0xdfe2de), -1, .45, -5, roof);
 
-  await Promise.allSettled(loads).then(r => r.filter(x => x.status === 'rejected').forEach(x => console.warn('Model failed', x.reason)));
-
   W.modelsUpdate = (id, t, gt) => {
     // Outer wing lags the inner wing, so each beat bends at the wrist.
     W.gooseOuter.forEach(({outer, wing, sign}) => { outer.rotation.x = wing.rotation.x*.75*sign; });
     if (W.anemo) W.anemo.rotation.y = gt*5.5;
     if (W.vane) W.vane.rotation.y = .4 + Math.sin(gt*.6)*.15;
   };
+  const failed = (await Promise.allSettled(loads)).filter(result => result.status === 'rejected');
+  failed.forEach(result => console.warn('Model failed', result.reason));
+  return failed.length === 0;
 }

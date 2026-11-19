@@ -10,6 +10,29 @@ const AIRPORT = config.AIRPORT_NAME;
 
 // One shared Gemini client. Without a key we skip Gemini and use the fallback report.
 const gemini = Boolean(config.GEMINI_API_KEY);
+const cloudEvidenceEnabled = process.env.GEMINI_CLOUD_EVIDENCE_ENABLED === 'true';
+const failureMessages = {
+  policy_disabled: 'Gemini image uploads are disabled by the deployment policy.',
+  not_configured: 'Configure GEMINI_API_KEY in the backend runtime secret store.',
+  no_image: 'No camera image was provided.',
+  auth: 'Check the deployed Gemini credential and Google project API permissions.',
+  quota: 'Check Gemini project quota and billing; wait for rate limits to clear.',
+  timeout: 'Gemini timed out; check provider status and deployment connectivity.',
+  network: 'Gemini could not be reached; check deployment connectivity.',
+  service: 'Gemini is temporarily unavailable; check provider status.',
+  model: 'Check the configured Gemini model IDs and project availability.',
+  invalid_response: 'Gemini did not return a usable result.',
+  request: 'Gemini rejected the request; check the provider configuration.',
+  judge_off: 'Bird judge is turned off (BIRD_JUDGE=off); detector result only.',
+  local_failed: 'The local bird-judge model could not be reached; check LOCAL_JUDGE_URL and that the model is running.',
+  local_timeout: 'The local bird-judge model did not answer in time.',
+  local_invalid: 'The local bird-judge model did not return a usable result.',
+};
+const retryable = new Set(['timeout', 'network', 'service', 'model']);
+
+function providerFailure(reason, httpStatus = null) {
+  return Object.assign(new Error(failureMessages[reason]), { reason, httpStatus });
+}
 
 // Gemini must answer with exactly this JSON shape: { label, report }.
 const REPORT_SCHEMA = {
@@ -64,7 +87,7 @@ function buildPrompt(event) {
     `- local time: ${localTime(event)}`,
     `- type: ${event.type} (${heardOrSeen})`,
     `- count: ${event.object_count}`,
-    `- direction relative to the runway: ${event.direction}`,
+    `- observed image motion: ${event.direction}`,
     `- detector confidence: ${percent(event.confidence)}`,
     `- risk level: ${event.risk}`,
     '',
@@ -72,7 +95,7 @@ function buildPrompt(event) {
     '- label: a few words naming the flying objects you can actually see, for example "flock of geese" or',
     '  "small quadcopter drone". If you cannot see any, use "nothing visible in snapshot".',
     '- report: exactly three plain sentences for the control tower incident log:',
-    '  1. What was detected: the local time, the type, the count, and the direction relative to the runway.',
+    '  1. What was detected: local time, type, count, and image motion. An image-mask projection is not a physical position or runway arrival; do not infer either.',
     '  2. The risk level and the detector confidence.',
     '  3. Whether the image confirms the detection, and what is visible in it.',
     '  Use only facts from the image and the readings. Do not mention actions, notifications, or advice.'
@@ -85,8 +108,22 @@ async function generate(model, contents, generationConfig, timeoutMs) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': config.GEMINI_API_KEY },
     body: JSON.stringify({ contents, generationConfig }), signal: AbortSignal.timeout(timeoutMs),
+  }).catch(err => {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') throw err;
+    throw providerFailure('network');
   });
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+  if (!res.ok) {
+    const status = res.status;
+    let reason = status === 401 || status === 403 ? 'auth' : status === 429 ? 'quota'
+      : status === 408 ? 'timeout' : status === 404 ? 'model'
+        : status >= 500 ? 'service' : 'request';
+    if (status === 400) {
+      const body = await res.json().catch(() => null);
+      const details = body?.error?.details;
+      if (Array.isArray(details) && details.some(d => d?.reason === 'API_KEY_INVALID' || d?.reason === 'API_KEY_EXPIRED')) reason = 'auth';
+    }
+    throw providerFailure(reason, status);
+  }
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('') || '';
   if (!text.trim()) throw new Error('Gemini returned no text');
@@ -108,14 +145,15 @@ async function askGeminiForReport(model, event, image, timeLimitMs) {
 
 /**
  * Runs `ask(model, timeLimitMs)` with the main model, then the backup model, inside one 10 second budget.
- * Returns the first successful answer, or null if every model failed (busy, quota, timeout, bad reply).
+ * Retries only transient errors or model unavailability, never credential or quota failures.
  */
 // Last Gemini outcome, so /health can say "failing (HTTP 404)" instead of just "configured".
-const geminiState = { lastError: null, lastErrorAt: 0, lastSuccessAt: 0 };
+const geminiState = { lastError: null, lastFailure: null, lastErrorAt: 0, lastSuccessAt: 0 };
 async function tryModels(task, ask) {
   const models = [...new Set([config.GEMINI_MODEL, BACKUP_MODEL])];
   const deadline = Date.now() + TIMEOUT_MS;
 
+  let failure;
   for (const model of models) {
     const msLeft = deadline - Date.now();
     if (msLeft < 1000) break; // not enough time left to bother
@@ -123,42 +161,36 @@ async function tryModels(task, ask) {
     const limit = isLast ? msLeft : Math.min(msLeft, MAIN_MODEL_LIMIT_MS);
     try {
       const answer = await ask(model, limit);
-      geminiState.lastSuccessAt = Date.now();
-      return answer;
+      Object.assign(geminiState, { lastSuccessAt: Date.now(), lastError: null, lastFailure: null });
+      return { answer };
     } catch (err) {
-      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? `no reply within ${limit} ms` : err.message;
-      console.warn(`[ai] ${task}: Gemini (${model}) failed: ${config.redact(reason).slice(0, 160)}`);
-      Object.assign(geminiState, { lastError: `${model}: ${config.redact(reason).slice(0, 80)}`, lastErrorAt: Date.now() });
+      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? 'timeout' : (err.reason || 'invalid_response');
+      failure = { reason, httpStatus: err.httpStatus ?? null, action: failureMessages[reason] };
+      const diagnostic = `${failure.httpStatus ? `HTTP ${failure.httpStatus}: ` : ''}${failure.action}`;
+      console.warn(`[ai] ${task}: Gemini (${model}): ${diagnostic}`);
+      Object.assign(geminiState, { lastError: diagnostic, lastFailure: failure, lastErrorAt: Date.now() });
+      if (!retryable.has(reason)) break;
     }
   }
-  return null;
+  return { failure: failure || { reason: 'timeout', httpStatus: null, action: failureMessages.timeout } };
 }
 
 /**
- * Prompt A1: ask Gemini to check the snapshot and write a three-sentence incident report.
- * Tries the main model, then the backup model, all within 10 seconds.
- * Never throws: if both fail (or there is no key or snapshot) it returns the fallback report.
+ * Bird and unidentified-object reports use detector readings plus a separate advisory
+ * image verdict. Only drone reports can use the image report prompt instead.
  * @param {object} event  camera event (camera_id, type, object_count, direction, confidence, risk, snapshot)
  * @returns {Promise<{label: string, report: string, source: 'gemini'|'fallback', model?: string}>}
  */
 async function analyzeEvent(event) {
   const fallback = fallbackReport(event);
   const image = stripDataUrl(event.snapshot);
-  if (!image) return fallback;
-  if (!gemini) { // no report model, but a local judge can still check birds
-    if (JUDGE !== 'local' || event.type === 'drone') return fallback;
-    const v = await verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`).catch(() => null);
-    return v && v.source !== 'fallback' ? { ...fallback, bird_verdict: v } : fallback;
+  if (event.type !== 'drone') {
+    const bird_verdict = await verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`);
+    return { ...fallback, bird_verdict };
   }
-
-  // The report and the strict bird judge run in parallel, so the judge adds no extra wait.
-  const judging = event.type === 'drone' ? Promise.resolve(null)
-    : verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`).catch(() => null);
-  const [result, verdict] = await Promise.all([
-    tryModels('report', (model, limit) => askGeminiForReport(model, event, image, limit)), judging]);
-  if (!result) console.warn('[ai] using fallback report');
-  const out = result || fallback;
-  return verdict && verdict.source !== 'fallback' ? { ...out, bird_verdict: verdict } : out;
+  if (imageFailure(image)) return fallback;
+  const { answer } = await tryModels('report', (model, limit) => askGeminiForReport(model, event, image, limit));
+  return answer || fallback;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -178,34 +210,47 @@ async function askGeminiIsBird(model, image, context, timeLimitMs) {
   const parts = [{ inlineData: { mimeType: 'image/jpeg', data: image } }, { text: BIRD_RUBRIC + (hint ? `\n\n${hint}` : '') }];
   const text = await generate(model, [{ role: 'user', parts }],
     { responseMimeType: 'application/json', responseSchema: judge.GEMINI_SCHEMA, temperature: judge.spec.sampling.temperature, topP: judge.spec.sampling.top_p, candidateCount: 1 }, timeLimitMs);
-  return normalizeBirdVerdict(JSON.parse(text || '{}'), model);
+  return normalizeBirdVerdict(JSON.parse(text || '{}'), model, 'gemini');
+}
+
+// Image checks that never reach Gemini: the deployment policy, no key, or no image.
+function imageFailure(image) {
+  if (!cloudEvidenceEnabled) return 'policy_disabled';
+  if (!gemini) return 'not_configured';
+  return image ? null : 'no_image';
+}
+
+function unavailableBird(reason) {
+  return { status: 'unavailable', verdict: null, isBird: null, confidence: null,
+    object: '', evidence: failureMessages[reason], source: 'fallback', reason };
 }
 
 /**
- * Is this image a bird? Never throws. Without a key or image it returns an honest "uncertain".
+ * Is this image a bird? A missing or failed cloud check has no verdict.
  * @param {string} snapshot base64 JPEG or data URL
  * @param {string} [context] what the motion detector thought, passed as a hint Gemini may overrule
  */
 async function verifyBird(snapshot, context = '') {
   const image = stripDataUrl(snapshot);
-  const unsure = (evidence) => ({ ...normalizeBirdVerdict({ verdict: 'uncertain', confidence: 0, object: '', evidence }), source: 'fallback' });
-  if (!image) return unsure('No image was provided.');
-  if (JUDGE === 'off') return unsure('Bird judge is turned off (BIRD_JUDGE=off); detector result only.');
+  if (JUDGE === 'off') return unavailableBird('judge_off');
   if (JUDGE === 'local') {
+    // A local model runs on the operator's own machine, so the Gemini cloud-upload policy doesn't apply to it.
+    if (!image) return unavailableBird('no_image');
     try {
       const v = await judge.askLocalIsBird(image, context, { url: config.LOCAL_JUDGE_URL, model: config.LOCAL_JUDGE_MODEL, key: config.LOCAL_JUDGE_KEY, timeoutMs: TIMEOUT_MS });
-      judge.localState.lastSuccessAt = Date.now();
+      Object.assign(judge.localState, { lastSuccessAt: Date.now(), lastError: null });
       return v;
     } catch (err) {
-      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? `no reply within ${TIMEOUT_MS} ms` : err.message;
-      Object.assign(judge.localState, { lastError: config.redact(reason).slice(0, 80), lastErrorAt: Date.now() });
-      console.warn(`[ai] bird judge: local model (${config.LOCAL_JUDGE_MODEL}) failed: ${config.redact(reason).slice(0, 160)}`);
-      return unsure('The local model did not answer.');
+      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? 'local_timeout' : err.reason === 'invalid_response' ? 'local_invalid' : 'local_failed';
+      Object.assign(judge.localState, { lastError: failureMessages[reason], lastErrorAt: Date.now() });
+      console.warn(`[ai] bird judge: local model (${config.LOCAL_JUDGE_MODEL}): ${config.redact(err.message).slice(0, 160)}`);
+      return unavailableBird(reason);
     }
   }
-  if (!gemini) return unsure('Gemini key not configured; detector result only.');
-  const result = await tryModels('bird judge', (model, limit) => askGeminiIsBird(model, image, String(context).slice(0, 200), limit));
-  return result || unsure('Gemini did not answer in time.');
+  const skip = imageFailure(image);
+  if (skip) return unavailableBird(skip);
+  const { answer, failure } = await tryModels('bird judge', (model, limit) => askGeminiIsBird(model, image, String(context).slice(0, 200), limit));
+  return answer || unavailableBird(failure.reason);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -274,8 +319,8 @@ async function answerQuestion(question, hourlyRows) {
   if (!rows.length) return `${NO_DATA_ANSWER} No detections were recorded in the last seven days.`;
   if (!gemini) return 'The assistant is not set up yet, because the Gemini key is missing.';
 
-  const answer = await tryModels('question', (model, limit) => askGeminiToAnswer(model, q, rows, limit));
+  const { answer } = await tryModels('question', (model, limit) => askGeminiToAnswer(model, q, rows, limit));
   return answer || 'Sorry, the assistant is unavailable right now. Please try again in a moment.';
 }
 
-module.exports = { analyzeEvent, answerQuestion, geminiState, verifyBird, normalizeBirdVerdict, BIRD_RUBRIC };
+module.exports = { analyzeEvent, answerQuestion, geminiState, verifyBird, normalizeBirdVerdict, cloudEvidenceEnabled, failureMessages, BIRD_RUBRIC };

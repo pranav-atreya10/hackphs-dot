@@ -25,15 +25,20 @@ const GEMINI_SCHEMA = toGeminiSchema(spec.answer_schema);
 // The detector's one-line hint, appended to the user turn (the model may overrule it).
 const hintText = (context) => (context ? `${spec.hint_prefix}${String(context).slice(0, 200)}` : '');
 
-// Clamp and validate any model's answer; low-confidence answers become "uncertain".
-function normalizeBirdVerdict(parsed, model, source = model ? 'gemini' : 'fallback') {
-  let verdict = spec.labels.includes(parsed?.verdict) ? parsed.verdict : 'uncertain';
-  const confidence = Math.max(0, Math.min(1, Number(parsed?.confidence) || 0));
+// Check any model's answer strictly (wrong shape = invalid_response error, so it is never mistaken for a verdict),
+// then treat a low-confidence yes/no as "uncertain". Same rules for Gemini and local models.
+function normalizeBirdVerdict(parsed, model, source = 'gemini') {
+  if (!spec.labels.includes(parsed?.verdict) || !Number.isFinite(parsed.confidence)
+      || parsed.confidence < 0 || parsed.confidence > 1 || typeof parsed.object !== 'string'
+      || typeof parsed.evidence !== 'string') {
+    throw Object.assign(new Error('The model did not return a usable result.'), { reason: 'invalid_response' });
+  }
+  let verdict = parsed.verdict;
+  const confidence = parsed.confidence;
   if (verdict !== 'uncertain' && confidence < BIRD_CONFIDENCE_FLOOR) verdict = 'uncertain';
   return {
-    verdict, isBird: verdict === 'bird', confidence,
-    object: typeof parsed?.object === 'string' ? parsed.object.trim().slice(0, 80) : '',
-    evidence: typeof parsed?.evidence === 'string' ? parsed.evidence.trim().slice(0, 200) : '',
+    status: 'verified', verdict, isBird: verdict === 'uncertain' ? null : verdict === 'bird', confidence,
+    object: parsed.object.trim().slice(0, 80), evidence: parsed.evidence.trim().slice(0, 200),
     source, model,
   };
 }

@@ -12,7 +12,7 @@ import { PARAMS, patchFor, getParam } from './params.js';
 export function runScenario(name, { fps = 30, width = 320, seed = 7, config = {} } = {}) {
   const sky = new SyntheticSky({ width, height: Math.round(width * 0.75), scenario: name, seed });
   const engine = new DetectionEngine(config);
-  engine.setCorridor(sky.corridor);
+  engine.setCorridor(sky.corridor, { demo: true });
   const ev = new ClipEvaluator();
   const events = [];
   const batches = [];

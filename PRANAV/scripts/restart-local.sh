@@ -44,7 +44,7 @@ for TASK_PID in $LISTENERS; do
 done
 
 if [ "${1:-}" = "--check" ]; then
-  echo "SkySentry startup is ready on port $PORT_NUMBER. No process was changed."
+  echo "Port $PORT_NUMBER is available for this SkySentry checkout. No process was changed."
   exit 0
 elif [ "$#" -gt 0 ]; then
   echo "Usage: restart-local.sh [--check]"
@@ -91,7 +91,8 @@ if ! "$NODE_BIN" -e '
   })();
 '; then exit 1; fi
 
-echo "SkySentry is ready: http://localhost:$PORT_NUMBER/tower.html"
+echo "SkySentry is listening: http://localhost:$PORT_NUMBER/tower.html"
+echo "Software readiness (not camera coverage or clearance): http://localhost:$PORT_NUMBER/ready"
 echo "Keep this terminal open while using the iPhone. Press Control-C to stop."
 if command -v open >/dev/null 2>&1; then
   open "http://localhost:$PORT_NUMBER/tower.html" || true

@@ -114,6 +114,7 @@ const started = Date.now();
 for (;;) {
   const state = await evaluate(`(() => { window.__recStep && __recStep(0); const s = document.getElementById('stage');
     return { assets: s && s.dataset.assets, loader: !!document.getElementById('assetLoader'), time: document.getElementById('time')?.textContent || '' }; })()`).catch(() => null);
+  if (state?.assets === 'failed') throw new Error('Film could not initialize WebGL; check the browser log.');
   if (state && state.assets === 'ready' && !state.loader) { opt.total = state.time; break; }
   if (state && (state.assets === 'partial') && !state.loader) { console.warn('Some detail assets failed to load; recording the base scene.'); opt.total = state.time; break; }
   if (Date.now() - started > 180000) throw new Error(`film did not finish loading (assets: ${state?.assets})`);

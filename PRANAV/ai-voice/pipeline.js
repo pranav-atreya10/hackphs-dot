@@ -6,36 +6,44 @@ const { createSolana } = require('./solana');
 function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQuestion, solana = createSolana(), shouldAlert = createRateLimit(), settings = config } = {}) {
   // create() stores the incident; it's only called for a new alert. Cameras repeat a yellow/red event every couple
   // of seconds, and those repeats (inside the alert cooldown, same or lower risk) are not new incidents.
-  async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit }) {
+  async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit, allowImageReview = false }) {
     if (!ev || !['bird', 'drone', 'unknown'].includes(ev.type) || !['yellow', 'red'].includes(ev.risk) || !shouldAlert(ev)) return false;
     const send = (name, data) => { try { emit(name, data); } catch (err) { console.warn(`[pipeline] delivery failed: ${config.redact(err.message)}`); } };
-    const created = Promise.resolve().then(create).catch(err => console.warn(`[pipeline] store failed: ${config.redact(err.message)}`));
-    const persist = async fields => { try { await created; await save(fields); } catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); } };
     const alertText = buildAlertText(ev);
     const incident = {
       _id: ev.id, time: new Date(ev.receivedAt || Date.now()).toISOString(), camera_id: ev.cameraId || ev.camera_id,
       airport: ev.airport, type: ev.type, object_count: ev.flock_size || ev.object_count, direction: ev.direction,
-      confidence: ev.confidence, risk: ev.risk, snapshot: typeof ev.snapshot === 'string' ? ev.snapshot : null,
+      confidence: ev.confidence, risk: ev.risk,
       alert_text: alertText,
     };
     send('incident', incident);
+    const created = Promise.resolve().then(() => create({ revision: 1 })).then(() => {
+      send('incident', { ...incident, revision: 1 });
+      return true;
+    }).catch(err => { console.warn(`[pipeline] store failed: ${config.redact(err.message)}`); return false; });
+    const persist = async (fields, revision) => {
+      if (!await created) return false;
+      try { await save({ ...fields, revision }); return true; }
+      catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); return false; }
+    };
     // Visible warnings are emitted before the first await; provider latency cannot delay them.
     // The tower speaks alertText with the browser's voice straight away (no server audio).
     if (ev.risk === 'red') send('alert', { id: ev.id, incident_id: ev.id, text: alertText, audio: null,
       voice_pending: false, risk: ev.risk, type: ev.type, time: ev.receivedAt });
     const reportPromise = (async () => {
-      const report = await analyzeEvent({ ...ev, object_count: ev.flock_size || ev.object_count });
-      const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText,
-        ...(report.bird_verdict ? { bird_verdict: report.bird_verdict } : {}) }; // verdict + the stored snapshot = a training example
-      send('incident', { ...incident, ...fields });
+      const report = await analyzeEvent({ ...ev, snapshot: allowImageReview ? ev.snapshot : null,
+        object_count: ev.flock_size || ev.object_count });
+      const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
+      if (report.bird_verdict) fields.bird_verdict = report.bird_verdict; // verdict + the stored snapshot = a training example
       send('alert_update', { id: ev.id, incident_id: ev.id, label: report.label, report: report.report, report_source: report.source });
-      await persist(fields);
+      if (await persist(fields, 2)) send('incident', { ...incident, ...fields, revision: 2 });
       if (ev.type === 'drone') {
         const stamp = await solana.stampReport(report.report);
         const stampFields = { report_hash: stamp.hash, solana_tx: stamp.tx, solana_status: stamp.status, solana_error: stamp.error, solana_url: stamp.explorer || null };
-        send('incident', { ...incident, ...fields, ...stampFields });
         send('alert_update', { id: ev.id, incident_id: ev.id, ...stampFields });
-        await persist(stampFields);
+        if (await persist({ ...fields, ...stampFields }, 3)) {
+          send('incident', { ...incident, ...fields, ...stampFields, revision: 3 });
+        }
       }
     })();
     const result = await Promise.allSettled([reportPromise]);
@@ -47,8 +55,11 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   }
   function health() {
     const g = ai.geminiState || {};
-    return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
-        lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
+    const configured = Boolean(settings.GEMINI_API_KEY);
+    return { gemini: { configured, model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
+        state: !configured ? 'not_configured' : g.lastFailure ? 'unavailable' : g.lastSuccessAt ? 'available' : 'untested',
+        failure: !configured ? { reason: 'not_configured', httpStatus: null, action: ai.failureMessages.not_configured } : g.lastFailure,
+        lastError: g.lastError, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
       bird_judge: { provider: settings.BIRD_JUDGE || 'gemini', model: settings.BIRD_JUDGE === 'local' ? settings.LOCAL_JUDGE_MODEL : settings.GEMINI_MODEL, ...(require('./bird-judge').localState) },
       solana: solana.health() };
   }

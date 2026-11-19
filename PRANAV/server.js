@@ -1,6 +1,7 @@
 const path = require("path");
 const http = require("http");
-const crypto = require("crypto");
+const { randomUUID } = require("node:crypto");
+const { cameraIdentity, createCameraRegistry, isDeviceId, isJPEG, isLiveSource } = require("./camera-ingress");
 const express = require("express");
 const compression = require("compression");
 const { Server } = require("socket.io");
@@ -13,22 +14,35 @@ try {
 } catch {}
 
 // Provider and bot modules read configuration as they load.
-const ai = require("./ai");
+const { createPipeline } = require("./ai-voice/pipeline");
+const { analyzeEvent, verifyBird, cloudEvidenceEnabled } = require("./ai-voice/ai");
+const aiConfig = require("./ai-voice/config");
+const { buildAlertText, createRateLimit } = require("./ai-voice/voice");
+const { createSolana } = require("./ai-voice/solana");
+const { createEventJournal, checkReceiptStorage } = require("./durable-events");
+const { createReceiptSpool } = require("./receipt-spool");
+const { createReceiptRecovery } = require("./receipt-recovery");
+const { createReadiness } = require("./site-readiness");
+const { createIncidentJob, createEnrichmentWorker, CAP: EVIDENCE_CAP } = require("./incident-enrichment");
+const ledger = createSolana();
+const ai = createPipeline({ solana: ledger });
 const { createChat, createRequestLimit } = require("./ai-voice/chat");
-const { createAirports, AirportError } = require("./airports");
-const { createRoleRequests, RequestError } = require("./role-requests");
+const { createAirports, AirportError, parseEnv } = require("./airports");
+const { accessConfig, createAccess, createSocketAccess, keyMatches } = require("./access");
+const { airportFilter, hourlyPipeline } = require("./airport-history");
+const { assignInitialRole, createRoleRequests, RequestError } = require("./role-requests");
 const { localHourLabel } = require("./ai-voice/describe");
-const { CameraBot, BOT_ENABLED } = require("./bot");
+const { CameraBot, BOT_ENABLED, checkVideoDetector, cropBirdReview } = require("./bot");
+const { createBirdReview } = require("./bird-review");
 const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
 
 // DigitalOcean App Platform injects PORT; default to 8080 (its default http_port).
 const PORT = process.env.PORT || 8080;
-const HOST = "0.0.0.0";
 // Comma-separated list of allowed origins for cross-origin Socket.IO clients, or "*".
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 // Secret that cameras must present to send events. Required in production.
 const CAMERA_API_KEY = process.env.CAMERA_API_KEY || "";
-// Optional secret that tower dashboards must present to receive events. Unset = open.
+// Optional airport-bound dashboard credential.
 const TOWER_API_KEY = process.env.TOWER_API_KEY || "";
 // Clerk keys (dashboard.clerk.com → API keys). When set, people sign in as a "camera" or "dashboard" user.
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || "";
@@ -36,6 +50,9 @@ const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || "";
 // Join codes per airport, e.g. "KPCT=pct-sky-4821,KTTN=ttn-sky-9310". Signing up needs one of these codes,
 // and each user only sees their own airport's alerts. Admins can add more airports on admin.html (saved in MongoDB).
 const AIRPORT_CODES_ENV = process.env.AIRPORT_CODES || "";
+const fixedAirports = parseEnv(AIRPORT_CODES_ENV);
+const { demo } = accessConfig(process.env, fixedAirports);
+const HOST = demo ? "127.0.0.1" : "0.0.0.0";
 // Admin accounts, by verified email, e.g. "you@example.com,teammate@example.com". Admins create airports and
 // join codes on admin.html and see every airport in the tower.
 const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
@@ -45,6 +62,9 @@ const MONGODB_URI = process.env.MONGODB_URI || "";
 // Detections are deleted automatically after this many days (keeps the Atlas free tier from filling up;
 // the chart needs 24 h and the assistant looks back 7 days).
 const DETECTION_DAYS = 8;
+const RETENTION_SECONDS = DETECTION_DAYS * 86400;
+const spool = process.env.RECEIPT_SPOOL_FILE ? createReceiptSpool(process.env.RECEIPT_SPOOL_FILE) : null;
+let shuttingDown = false;
 
 if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections will not be stored");
 
@@ -54,13 +74,18 @@ if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections
 // A short server-selection timeout makes an unreachable cluster fail in 5s, before DigitalOcean's gateway gives up.
 let mongo = null;
 function newMongo() {
-  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000, timeoutMS: 5000 });
   const mdb = mongo.db("skysentry");
+  for (const name of ["incidents", "detections"]) {
+    mdb.collection(name).createIndex({ airport: 1, time: -1 })
+      .catch((err) => console.error(`failed to index ${name} by airport:`, err.message));
+  }
   mdb.collection("incidents").createIndex({ time: -1 })
     .catch((err) => console.error("failed to index incidents:", err.message));
-  // TTL index: MongoDB removes each detection DETECTION_DAYS after its time.
-  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: DETECTION_DAYS * 86400 })
-    .catch((err) => console.error("failed to index detections:", err.message));
+  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: RETENTION_SECONDS })
+    .catch((err) => console.error("failed to index detections for expiration:", err.message));
+  mdb.collection("detections").createIndex({ "enrichment.due_at": 1 }, { sparse: true })
+    .catch((err) => console.error("failed to index incident enrichment:", err.code || err.name));
 }
 if (MONGODB_URI) newMongo();
 
@@ -70,7 +95,7 @@ async function withMongo(fn) {
   try {
     return await fn(client.db("skysentry"));
   } catch (err) {
-    if (err.name !== "MongoTopologyClosedError") throw err;
+    if (err.name !== "MongoTopologyClosedError" || shuttingDown) throw err;
     if (mongo === client) newMongo();
     return fn(mongo.db("skysentry"));
   }
@@ -82,15 +107,21 @@ const airports = createAirports({
   collection: async () => (mongo ? withMongo(async (mdb) => mdb.collection("airports")) : null),
   matches: keyMatches,
 });
-airports.load().catch((err) => console.error("failed to load airports from MongoDB:", err.message));
+let registryLoaded = !mongo, registryLoad;
+function loadAirportRegistry() {
+  if (registryLoaded) return;
+  return registryLoad ??= airports.load().then(() => { registryLoaded = true; }).finally(() => { registryLoad = null; });
+}
+loadAirportRegistry()?.catch(err => console.warn("airport registry load failed:", err.code || err.name));
 
 // Account-type switch requests (camera station <-> tower dashboard), approved by admins on admin.html.
 const roleRequests = createRoleRequests({
   collection: async () => (mongo ? withMongo(async (mdb) => mdb.collection("role_requests")) : null),
-  setRole: async (userId, role, airport) => {
-    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role, airport } });
-    accessCache.delete(userId);
+  setRole: async (userId, role, airport, transitionId) => {
+    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role, airport, transitionId } });
   },
+  readRole: async (userId) => (await clerk.users.getUser(userId)).publicMetadata,
+  revoke: (userId) => revokeSockets((grant) => grant.principal === userId),
 });
 
 // Cameras send loosely-typed JSON; bad values become NULL instead of failing the whole insert.
@@ -103,14 +134,14 @@ const toNumber = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? 
 // demo. With MongoDB configured, the "detections" collection is the source of truth.
 const memDetections = [];
 function rememberDetection(event) {
-  memDetections.push({ t: Number(event.receivedAt) || Date.now(), type: toText(event.type), n: toNumber(event.object_count) || 0 });
+  memDetections.push({ airport: event.airport, t: Number(event.receivedAt) || Date.now(), type: toText(event.type), n: toNumber(event.object_count) || 0 });
   const cutoff = Date.now() - 24 * 3600_000;
   while (memDetections.length && (memDetections[0].t < cutoff || memDetections.length > 50_000)) memDetections.shift();
 }
-function memHourly() {
+function memHourly(airport, hours = 24, type = null) {
   const buckets = new Map();
   for (const d of memDetections) {
-    if (!d.type) continue;
+    if (d.airport !== airport || !d.type || (type && d.type !== type) || d.t <= Date.now() - hours * 3600_000) continue;
     const hour = new Date(Math.floor(d.t / 3600_000) * 3600_000).toISOString();
     const key = hour + "|" + d.type, b = buckets.get(key) || { hour, type: d.type, events: 0, total_objects: 0 };
     b.events++; b.total_objects += d.n; buckets.set(key, b);
@@ -127,96 +158,32 @@ async function logBirdVerdict(v, airport, image = null) {
   if (mongo) withMongo((mdb) => mdb.collection("bird_verdicts").insertOne(doc)).catch((err) => console.error("failed to store bird verdict:", err.message));
 }
 
-async function storeDetection(event) {
-  rememberDetection(event);
-  if (!mongo) return;
-  const count = toNumber(event.object_count);
-  try {
-    await withMongo((mdb) => mdb.collection("detections").insertOne({
-      time: new Date(Number(event.receivedAt) || Date.now()),
-      camera_id: toText(event.cameraId),
-      airport: toText(event.airport),
-      type: toText(event.type),
-      object_count: count === null ? null : Math.round(count),
-      direction: toText(event.direction),
-      confidence: toNumber(event.confidence),
-      risk: toText(event.risk),
-    }));
-  } catch (err) {
-    console.error(`failed to store event ${event.id}:`, err.message);
-  }
-}
-
-// Save a yellow/red event as an incident report (document shape per the team plan). The AI step fills
-// gemini_label, report, and solana_tx later by updating the document with _id = event.id.
-// Without MONGODB_URI the newest 50 incidents are kept in memory so the tower's report list still works.
+const journal = createEventJournal(MONGODB_URI ? withMongo : null);
 const memIncidents = [];
-async function storeIncident(event) {
-  if (!mongo) {
-    memIncidents.unshift({ _id: event.id, time: new Date(event.receivedAt), camera_id: event.cameraId, airport: event.airport,
-      type: toText(event.type), object_count: toNumber(event.object_count), direction: toText(event.direction),
-      confidence: toNumber(event.confidence), risk: event.risk, snapshot: typeof event.snapshot === "string" ? event.snapshot : null,
-      gemini_label: null, report: null, solana_tx: null });
-    memIncidents.length = Math.min(memIncidents.length, 50);
-    return;
-  }
-  try {
-    await withMongo((mdb) => mdb.collection("incidents").insertOne({
-      _id: event.id,
-      time: new Date(event.receivedAt),
-      camera_id: event.cameraId,
-      airport: event.airport,
-      type: toText(event.type),
-      object_count: toNumber(event.object_count),
-      direction: toText(event.direction),
-      confidence: toNumber(event.confidence),
-      risk: event.risk,
-      snapshot: typeof event.snapshot === "string" ? event.snapshot : null,
-      gemini_label: null,
-      report: null,
-      solana_tx: null,
-    }));
-  } catch (err) {
-    console.error(`failed to store incident ${event.id}:`, err.message);
-  }
-}
-
-if (!CAMERA_API_KEY) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("CAMERA_API_KEY is not set; refusing to start in production");
-    process.exit(1);
-  }
-  console.warn("CAMERA_API_KEY is not set; all camera events will be rejected");
-}
-
-// Constant-time compare so the key can't be guessed one character at a time.
-// Hashing first makes both buffers the same length, which timingSafeEqual requires.
-function keyMatches(provided, expected) {
-  if (!expected || typeof provided !== "string") return false;
-  const a = crypto.createHash("sha256").update(provided).digest();
-  const b = crypto.createHash("sha256").update(expected).digest();
-  return crypto.timingSafeEqual(a, b);
-}
 
 const clerk = CLERK_SECRET_KEY ? createClerkClient({ secretKey: CLERK_SECRET_KEY, publishableKey: CLERK_PUBLISHABLE_KEY }) : null;
 const ROLES = ["camera", "dashboard"];
 
-if (!clerk) console.warn("CLERK_SECRET_KEY is not set; sign-in is off (dashboards are open, cameras use CAMERA_API_KEY)");
+if (!clerk) console.warn(`Clerk sign-in is off; unauthenticated tower access is ${demo ? "explicitly enabled for local development" : "disabled"}`);
 else if (!ADMIN_EMAILS.size) console.warn("ADMIN_EMAILS is not set; nobody can open admin.html to create airports");
 
-// Role and airport live in each Clerk user's publicMetadata, which only this server can write.
-// Cached briefly so dashboards polling the API don't hit Clerk's rate limits.
-const accessCache = new Map();
-const ACCESS_TTL_MS = 60_000;
+async function clerkSession(token) {
+  const { sub, sid } = await verifyToken(token, { secretKey: CLERK_SECRET_KEY });
+  if (!sub || !sid) throw new Error("Clerk session required");
+  const session = await clerk.sessions.getSession(sid);
+  if (session.status !== "active" || session.userId !== sub) throw new Error("inactive Clerk session");
+  return sub;
+}
 
-// Resolve a Clerk session token to { userId, role, airport }, or null if it isn't a valid signed-in session.
 async function clerkAccess(token) {
   if (!clerk || typeof token !== "string" || !token) return null;
   try {
-    const { sub } = await verifyToken(token, { secretKey: CLERK_SECRET_KEY });
-    const hit = accessCache.get(sub);
-    if (hit && Date.now() - hit.at < ACCESS_TTL_MS) return hit.access;
+    const epoch = socketAccessEpoch();
+    const sub = await clerkSession(token);
     const user = await clerk.users.getUser(sub);
+    const request = mongo && await withMongo((mdb) => mdb.collection("role_requests").findOne({ _id: sub }));
+    if (epoch !== socketAccessEpoch() || request?.status === "applying" ||
+        (request?.status === "approved" && request.transitionId && request.transitionId !== user.publicMetadata?.transitionId)) return null;
     const { role, airport } = user.publicMetadata || {};
     const verified = (user.emailAddresses || []).filter((e) => e.verification?.status === "verified").map((e) => e.emailAddress.toLowerCase());
     const access = {
@@ -227,34 +194,41 @@ async function clerkAccess(token) {
       email: user.primaryEmailAddress?.emailAddress || verified[0] || null,
       name: user.fullName || user.username || null,
     };
-    accessCache.set(sub, { at: Date.now(), access });
     return access;
   } catch {
     return null;
   }
 }
 
-const bearerToken = (req) => (req.get("authorization") || "").replace(/^Bearer\s+/i, "");
+const bearerToken = (req) => {
+  const header = req.get("authorization");
+  return header === undefined ? undefined : (header.match(/^Bearer\s+(\S+)$/i)?.[1] ?? null);
+};
 
 // Find the airport whose join code matches, comparing every code in constant time.
 const airportForCode = (code) => airports.forJoinCode(code);
 
-// Dashboard-only HTTP routes. With Clerk on, the caller needs a dashboard account (scoped to its airport)
-// or TOWER_API_KEY in x-api-key (all airports). With Clerk off, they stay open as before.
+const { dashboardGrant, towerAccess, cameraAccess, view } = createAccess({
+  airports, lookup: clerkAccess, cameraKey: CAMERA_API_KEY, cameraAirport: process.env.CAMERA_API_AIRPORT,
+  towerKey: TOWER_API_KEY, towerAirport: process.env.TOWER_API_AIRPORT, demo,
+});
+const viewAirport = (req, requested) => view(req.towerGrant, requested === undefined ? req.get("x-airport") : requested);
 async function requireDashboard(req, res, next) {
-  if (!clerk) return next();
-  if (TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)) return next();
-  const access = await clerkAccess(bearerToken(req));
-  if (!access) return res.status(401).json({ error: "sign-in required" });
-  if (access.admin) return next();   // admins see every airport, like TOWER_API_KEY
-  if (access.role !== "dashboard" || !access.airport) return res.status(403).json({ error: "dashboard account required" });
-  req.airport = access.airport;
+  const grant = await dashboardGrant(bearerToken(req), req.get("x-api-key"));
+  if (!grant) return res.status(403).json({ error: "dashboard authorization required" });
+  req.towerGrant = grant;
+  req.airport = grant.airport;
+  res.set("Cache-Control", "private, no-store");
   next();
 }
 
-// All-access towers (admins, TOWER_API_KEY, sign-in off) can narrow the view to one airport with the tower
-// page's airport picker. Scoped dashboard accounts always see only their own airport.
-const viewAirport = (req, requested) => req.airport || (typeof requested === "string" && airports.has(requested) ? requested : null);
+function requireAirport(req, res, next) {
+  const requested = [req.get("x-airport"), req.query.airport, req.body?.airport].filter((value) => value !== undefined);
+  const airport = viewAirport(req, requested[0]);
+  if (!airport || requested.some((value) => value !== airport)) return res.status(403).json({ error: "authorized airport required" });
+  req.airport = airport;
+  next();
+}
 
 // Admin-only routes (admin.html): a signed-in account whose verified email is in ADMIN_EMAILS.
 async function requireAdmin(req, res, next) {
@@ -276,36 +250,145 @@ const io = new Server(server, {
 const cameras = io.of("/camera");
 const towers = io.of("/tower");
 
-// Towers join "airport:<code>" for their own airport, or "airport:*" (TOWER_API_KEY / sign-in off) to see all.
-// An event with no airport (API-key camera without x-airport) goes to every tower.
-const towersFor = (airport) => (airport ? towers.to([`airport:${airport}`, "airport:*"]) : towers);
+const towerRoom = (airport) => `airport:${airport}`;
+const unavailableTowers = { emit: () => false, get volatile() { return this; } };
+const towersFor = (airport) => airports.has(airport) ? towers.to(towerRoom(airport)) : unavailableTowers;
+const { revoke: revokeSockets, install: installSocketAccess, epoch: socketAccessEpoch } = createSocketAccess([cameras, towers]);
 
-// Stamp an incoming camera event and forward it to the tower dashboards for its airport.
-function relayCameraEvent(cameraId, payload, airport = null) {
+const { readSurveys, surveyedCorridor, sanitizeMetrics } = require("./corridor-calibration");
+const surveyedCorridors = readSurveys(process.env.SURVEYED_CORRIDORS_JSON);
+const retainIncidentEvidence = process.env.DURABLE_INCIDENT_EVIDENCE === "1";
+const shouldAlert = createRateLimit();
+const worker = createEnrichmentWorker({
+  journal, analyze: analyzeEvent, stamp: ledger.stampReport, verify: ledger.verifyReport,
+  imageUploadAllowed: () => cloudEvidenceEnabled,
+  allowed: airport => airports.has(airport),
+  reportError: (err, id) => console.warn(`incident ${id} enrichment failed:`, err.code || err.name),
+  project: async (document, revision, fields, evidence) => {
+    const { _id, airport, ...base } = document;
+    const filter = { _id, ...airportFilter(airport) };
+    const options = { writeConcern: { w: "majority", wtimeoutMS: 4000 } };
+    const readOptions = { readConcern: { level: "majority" }, projection: { snapshot: 0 } };
+    await withMongo(async mdb => {
+      const collection = mdb.collection("incidents");
+      if (revision === 1) {
+        try {
+          const result = await collection.insertOne({ ...base, _id, airport, revision, ...(evidence ?
+            { snapshot: evidence.bytes, snapshot_sha256: evidence.sha256, snapshot_state: "stored" } : {}) }, options);
+          if (!result.acknowledged) throw new Error("incident insert was not acknowledged");
+        } catch (err) {
+          if (err.code !== 11000 || !await collection.findOne(filter, readOptions)) throw err;
+        }
+      } else {
+        const result = await collection.updateOne({ ...filter, revision: { $lt: revision } }, { $set: { ...fields, revision } }, options);
+        if (!result.acknowledged || (!result.matchedCount && !await collection.findOne({ ...filter, revision: { $gte: revision } }, readOptions))) {
+          throw new Error("cannot project incident revision");
+        }
+      }
+      const incident = await collection.findOne(filter, readOptions);
+      if (!incident) throw new Error("incident projection is not readable");
+      towersFor(airport).emit("incident", { ...incident, persistence: "stored" });
+    });
+  },
+});
+let enrichmentRunning = false;
+async function drainEnrichment() {
+  if (!mongo || enrichmentRunning || shuttingDown) return;
+  enrichmentRunning = true;
+  try {
+    await loadAirportRegistry();
+    for (let i = 0; i < 12 && !shuttingDown && await worker.runOne(); i++) {}
+  }
+  catch (err) { console.warn("incident enrichment worker failed:", err.code || err.name); }
+  finally { enrichmentRunning = false; }
+}
+const enrichmentTimer = mongo && setInterval(drainEnrichment, 5000).unref();
+
+function incidentPreview(incident, state) {
+  const unavailable = state === "unavailable";
+  return { ...incident, persistence: unavailable ? "unavailable" : "pending",
+    report_state: unavailable ? "unavailable" : "pending", receipt_state: state };
+}
+const receiptRecovery = createReceiptRecovery({
+  spool, journal,
+  allowed: async airport => {
+    if (!fixedAirports.has(airport)) await loadAirportRegistry();
+    return airports.has(airport);
+  },
+  report: (message, error, id) => console.warn("incident receipt:", message, id || "", error?.code || error?.name || ""),
+  maxAgeMs: RETENTION_SECONDS * 1000,
+  publish({ record, alert, job }, state, receipt) {
+    const tower = towersFor(record.airport);
+    if (state === "confirmed") {
+      if (receipt.acknowledged) tower.emit("alert_acknowledged", { id: record.id, airport: record.airport });
+      if (receipt.alert) tower.emit("alert", receipt.alert);
+      void drainEnrichment();
+    } else {
+      tower.emit("incident", incidentPreview(job.incident, state));
+      if (alert) tower.emit("alert_pending", { ...alert, storage_state: state });
+    }
+  },
+});
+const receiptTimer = mongo && setInterval(() => void receiptRecovery.drain(), 1000).unref();
+if (mongo) void receiptRecovery.drain();
+
+// Ordinary chart samples remain best-effort; do not let their retries crowd out the incident outbox.
+const chartWrites = new Set();
+function persistChartSample(record, attempt = 0) {
+  if (shuttingDown) return;
+  if (!attempt) {
+    if (chartWrites.size >= 64) return console.warn("chart write queue full");
+    chartWrites.add(record.id);
+  }
+  void journal.record(record, null).then(() => chartWrites.delete(record.id), err => {
+    console.warn("chart sample not stored:", err.code || err.name);
+    if (attempt < 5 && !shuttingDown) setTimeout(() => persistChartSample(record, attempt + 1), 500 * 2 ** attempt).unref();
+    else chartWrites.delete(record.id);
+  });
+}
+
+function relayCameraEvent(cameraId, payload, airport, surveyId, detection) {
+  if (!airports.has(airport)) return;
   const event = {
-    ...payload,
-    id: crypto.randomUUID(),
-    cameraId: String(cameraId || payload.camera_id || payload.cameraId || "unknown"),
+    ...sanitizeMetrics(payload, surveyId),
+    id: randomUUID(),
+    cameraId,
     airport,
     receivedAt: Date.now(),
   };
-  towersFor(airport).emit("camera:event", event);
-  storeDetection(event);
-  if (event.risk === "yellow" || event.risk === "red") {
-    // Show warnings immediately. Persistence and provider work proceed without blocking the feed.
-    // Only new alerts become incidents (the pipeline calls create); a camera's 2-second repeats of the same alert
-    // used to be stored too, leaving dozens of incidents with no report.
-    ai.processIncident(event, {
-        create: () => storeIncident(event),
-        save: async (fields) => {
-          if (mongo) await withMongo((mdb) => mdb.collection("incidents").updateOne({ _id: event.id }, { $set: fields }));
-          else { const doc = memIncidents.find((d) => d._id === event.id); if (doc) Object.assign(doc, fields); }
-        },
-        emit: (name, data) => towersFor(airport).emit(name, data),
-      })
-      .catch((err) => console.error(`AI step failed for ${event.id}:`, err.message));
+  const { snapshot, ...liveEvent } = event;
+  const tower = towersFor(airport);
+  tower.emit("camera:event", liveEvent);
+  const incident = ["yellow", "red"].includes(event.risk) && ["bird", "drone", "unknown"].includes(event.type) && shouldAlert(event);
+  const text = incident ? buildAlertText(event) : null;
+  const alert = incident && event.risk === "red" ? { id: event.id, incident_id: event.id, airport,
+    text, type: event.type, risk: event.risk, time: event.receivedAt } : null;
+  const count = toNumber(event.flock_size || event.object_count);
+  const record = { id: event.id, airport, receivedAt: event.receivedAt, cameraId, risk: event.risk,
+    type: toText(event.type), direction: toText(event.direction), confidence: toNumber(event.confidence),
+    object_count: count === null ? null : Math.round(count) };
+  const document = incident ? {
+    _id: event.id, airport, camera_id: cameraId, time: new Date(event.receivedAt), type: record.type, risk: record.risk,
+    object_count: record.object_count, direction: record.direction, confidence: record.confidence,
+    eta_seconds: event.eta_seconds, eta_basis: event.eta_basis, corridor_survey_id: event.corridor_survey_id,
+    alert_text: text, report_state: "pending", snapshot_state: "unavailable", detection,
+  } : null;
+  if (!mongo) {
+    rememberDetection(record);
+    if (document) {
+      const preview = incidentPreview(document, "unavailable");
+      memIncidents.unshift(preview);
+      if (memIncidents.length > 50) memIncidents.pop();
+      if (alert) tower.emit("alert_pending", { ...alert, storage_state: "unavailable", fresh: true });
+      receiptRecovery.unavailable(record, alert, document);
+    }
+    return;
   }
-  return event;
+  if (!document) return persistChartSample(record);
+  if (alert) tower.emit("alert_pending", { ...alert, storage_state: "pending", fresh: true });
+  const job = createIncidentJob(event, document, { retainEvidence: retainIncidentEvidence });
+  tower.emit("incident", incidentPreview(job.incident, "pending"));
+  void receiptRecovery.submit(record, alert, job);
 }
 
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -318,7 +401,7 @@ app.use("/api", (req, res, next) => {
     res.set({
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Headers": "authorization, content-type, x-api-key, x-camera-id, x-airport",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       Vary: "Origin",
     });
   }
@@ -360,7 +443,7 @@ app.get("/robots.txt", (req, res) => {
 
 // The publishable key is public by design; pages fetch it here so it lives in one .env.
 app.get("/api/auth/config", (req, res) => {
-  res.json({ publishableKey: clerk ? CLERK_PUBLISHABLE_KEY : null });
+  res.json({ publishableKey: clerk ? CLERK_PUBLISHABLE_KEY : null, demoTower: demo });
 });
 
 // Wrong-code attempts per user, so airport codes can't be brute-forced.
@@ -371,10 +454,10 @@ const JOIN_WINDOW_MS = 10 * 60_000;
 // Finish sign-up: a signed-in user picks "camera" or "dashboard" and proves which airport they belong to.
 // Body: { role, code }. Saves { role, airport } to the user's Clerk publicMetadata.
 app.post("/api/auth/join", async (req, res) => {
-  if (!clerk) return res.status(503).json({ error: "sign-in is not configured" });
+  if (!clerk || !mongo) return res.status(503).json({ error: "account setup is not configured" });
   let userId;
   try {
-    ({ sub: userId } = await verifyToken(bearerToken(req), { secretKey: CLERK_SECRET_KEY }));
+    userId = await clerkSession(bearerToken(req));
   } catch {
     return res.status(401).json({ error: "sign-in required" });
   }
@@ -391,12 +474,19 @@ app.post("/api/auth/join", async (req, res) => {
   joinFailures.delete(userId);
 
   try {
-    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role, airport } });
+    await assignInitialRole({
+      collection: await withMongo((mdb) => mdb.collection("account_joins")),
+      readRole: async (id) => (await clerk.users.getUser(id)).publicMetadata,
+      writeRole: async (id, nextRole, nextAirport, joinId) => clerk.users.updateUserMetadata(id, {
+        publicMetadata: { role: nextRole, airport: nextAirport, joinId },
+      }),
+    }, userId, role, airport);
+    revokeSockets((grant) => grant.principal === userId);
   } catch (err) {
+    if (err instanceof RequestError) return res.status(err.status).json({ error: err.message });
     console.error(`failed to save role for ${userId}:`, err.message);
     return res.status(502).json({ error: "could not save your role, try again" });
   }
-  accessCache.delete(userId);
   res.json({ role, airport });
 });
 
@@ -430,14 +520,14 @@ app.post("/api/role-requests", async (req, res) => {
 });
 app.delete("/api/role-requests/mine", async (req, res) => {
   const access = await signedIn(req, res); if (!access) return;
-  try { await roleRequests.cancel(access.userId); res.json({ ok: true }); } catch (err) { sendRequestError(res, err); }
+  try { await roleRequests.cancel(access.userId, req.body?.revision); res.json({ ok: true }); } catch (err) { sendRequestError(res, err); }
 });
 app.get("/api/admin/role-requests", requireAdmin, async (req, res) => {
   try { res.json({ requests: await roleRequests.pending() }); } catch (err) { sendRequestError(res, err); }
 });
 app.post("/api/admin/role-requests/:id/:decision", requireAdmin, async (req, res) => {
   if (!["approve", "deny"].includes(req.params.decision)) return res.status(404).json({ error: "approve or deny" });
-  try { res.json({ request: await roleRequests.decide(req.params.id, req.params.decision === "approve", req.userId) }); }
+  try { res.json({ request: await roleRequests.decide(req.params.id, req.body?.revision, req.params.decision === "approve", req.userId) }); }
   catch (err) { sendRequestError(res, err); }
 });
 
@@ -461,12 +551,13 @@ app.post("/api/admin/airports/:code/rotate", requireAdmin, async (req, res) => {
   try { res.json(await airports.rotate(req.params.code)); } catch (err) { sendAirportError(res, err); }
 });
 app.delete("/api/admin/airports/:code", requireAdmin, async (req, res) => {
-  try { await airports.remove(req.params.code); accessCache.clear(); res.json({ ok: true }); }   // its users lose access right away
+  try { await airports.remove(req.params.code); revokeSockets((grant) => grant.airport === req.params.code); res.json({ ok: true }); }
   catch (err) { sendAirportError(res, err); }
 });
 
 // Health check used by DigitalOcean to decide whether the app is up.
 app.get("/health", (req, res) => {
+  const { gemini } = ai.health();
   res.json({
     status: "ok",
     uptime: process.uptime(),
@@ -474,34 +565,51 @@ app.get("/health", (req, res) => {
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
     ai: { ...ai.status(), openai: chat.health().configured ? "configured" : "missing" },
-    bot: BOT_ENABLED ? "server bot on" : "server bot off (towers detect)",
+    gemini: { state: gemini.state, failure: gemini.failure, lastSuccess: gemini.lastSuccess },
+    bot: BOT_ENABLED ? "server video detector enabled (no drone audio)" : "server detector disabled",
   });
 });
 
 app.get("/api/integrations", requireDashboard, (req, res) => res.json({ ...ai.health(), openai: chat.health() }));
 
-// Live database check for debugging deploys: "ok", "not configured", or the driver's error (never the password).
-// Kept off /health so a slow or broken database can't make DigitalOcean's health check restart the app.
-async function dbStatus(check) {
-  try {
-    await check();
-    return "ok";
-  } catch (err) {
-    return String(err.message).slice(0, 200);
-  }
-}
+const readiness = createReadiness({
+  video_detector: checkVideoDetector,
+  airport_registry: async () => {
+    await loadAirportRegistry();
+    return airports.size ? "ready" : "not_configured";
+  },
+  camera_access: () => CAMERA_API_KEY || clerk ? "ready" : "not_configured",
+  tower_access: async () => {
+    if (!clerk) return TOWER_API_KEY ? "ready" : "not_configured";
+    if (!mongo) return "not_configured";
+    await Promise.all([
+      clerk.users.getCount(),
+      withMongo(mdb => mdb.collection("role_requests").findOne({ _id: "skysentry:readiness:v1" })),
+    ]);
+    return "ready";
+  },
+  receipt_storage: () => mongo ? withMongo(mdb => checkReceiptStorage(mdb, RETENTION_SECONDS)) : "not_configured",
+  receipt_recovery: () => receiptRecovery.check(),
+}, { report: (name, err) => console.warn(`readiness ${name} failed:`, err.code || err.name) });
 
-app.get("/health/db", async (req, res) => {
-  const mongodb = mongo ? await dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured";
-  const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
-  res.json({ mongodb, clerk: clerkStatus, airports: airports.size });
+app.get("/ready", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (shuttingDown) return res.status(503).json({ status: "not_ready", checks: {} });
+  const { ready, checks } = await readiness();
+  res.status(ready && !shuttingDown ? 200 : 503)
+    .json({ status: ready && !shuttingDown ? "ready" : "not_ready", checks });
+});
+app.get("/health/db", async (_req, res) => {
+  const { checks } = await readiness();
+  res.set("Cache-Control", "no-store").json({ mongodb: checks.receipt_storage,
+    clerk: clerk ? checks.tower_access : "not_configured", airports: airports.size });
 });
 
-// Hourly detection totals for the last 24 hours (every camera).
-app.get("/api/hourly", requireDashboard, async (req, res) => {
-  if (!mongo) { res.set("X-Data-Source", "memory (set MONGODB_URI for MongoDB Atlas)"); return res.json(memHourly()); }
+// Hourly detection totals for the caller's airport for the last 24 hours.
+app.get("/api/hourly", requireDashboard, requireAirport, async (req, res) => {
+  if (!mongo) res.set("X-Data-Source", "memory (set MONGODB_URI for MongoDB Atlas)");
   try {
-    res.json(await readHourly(24));
+    res.json(await readHourly(req.airport, 24));
   } catch (err) {
     console.error("failed to read hourly detections:", err.message);
     res.status(500).json({ error: "query failed" });
@@ -509,56 +617,81 @@ app.get("/api/hourly", requireDashboard, async (req, res) => {
 });
 
 // Latest 20 incident reports, newest first (only the caller's airport for signed-in dashboards).
-app.get("/api/incidents", requireDashboard, async (req, res) => {
+app.get("/api/incidents", requireDashboard, requireAirport, async (req, res) => {
+  const { airport } = req;
   if (!mongo) {
-    const airport = viewAirport(req, req.query.airport);
     res.set("X-Data-Source", "memory (set MONGODB_URI for MongoDB Atlas)");
-    return res.json(memIncidents.filter((d) => !airport || d.airport === airport).slice(0, 20));
+    return res.json(memIncidents.filter((d) => d.airport === airport).slice(0, 20).map(({ snapshot, ...metadata }) => metadata));
   }
   try {
-    const airport = viewAirport(req, req.query.airport);
-    const filter = airport ? { airport } : {};
-    res.json(await withMongo((mdb) => mdb.collection("incidents").find(filter).sort({ time: -1 }).limit(20).toArray()));
+    const filter = airportFilter(airport);
+    res.json(await withMongo((mdb) => mdb.collection("incidents").find(filter, { projection: { snapshot: 0 } }).sort({ time: -1 }).limit(20).toArray()));
   } catch (err) {
     console.error("failed to read incidents:", err.message);
     res.status(500).json({ error: "query failed" });
   }
 });
 
-// Hourly detection totals for the last `hours` hours (optionally one type), grouped in MongoDB:
-// [{ hour: Date, type, events, total_objects }], oldest first. Empty when MongoDB isn't set up.
-async function readHourly(hours, type = null) {
-  if (!mongo) return [];
-  const match = { time: { $gt: new Date(Date.now() - hours * 3600_000) }, type: type || { $type: "string" } };
-  return withMongo((mdb) => mdb.collection("detections").aggregate([
-    { $match: match },
-    { $group: { _id: { hour: { $dateTrunc: { date: "$time", unit: "hour" } }, type: "$type" }, events: { $sum: 1 }, total_objects: { $sum: { $ifNull: ["$object_count", 0] } } } },
-    { $project: { _id: 0, hour: "$_id.hour", type: "$_id.type", events: 1, total_objects: 1 } },
-    { $sort: { hour: 1, type: 1 } },
-  ]).toArray());
+// Chart and both chat providers share the same scoped Mongo aggregation.
+async function readHourly(airport, hours, type = null) {
+  if (!airports.has(airport)) throw new Error("authorized airport required for hourly stats");
+  if (!mongo) return memHourly(airport, hours, type);
+  const pipeline = hourlyPipeline(airport, new Date(Date.now() - hours * 3600_000), type);
+  return withMongo((mdb) => mdb.collection("detections").aggregate(pipeline).toArray());
 }
+
+app.get("/api/incidents/:id/snapshot", requireDashboard, requireAirport, async (req, res) => {
+  res.set("Cache-Control", "private, no-store");
+  if (req.towerGrant?.principal === "local-demo") {
+    return res.status(403).json({ error: "authenticated tower required" });
+  }
+  const { airport } = req;
+  const { id } = req.params;
+  if (!/^(?:[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}|[\da-f]{64})$/i.test(id)) {
+    return res.status(404).json({ error: "snapshot unavailable" });
+  }
+  try {
+    const doc = mongo
+      ? await withMongo((mdb) => mdb.collection("incidents").findOne({ _id: id, ...airportFilter(airport) }, { projection: { _id: 0, snapshot: 1 } }))
+      : memIncidents.find((d) => d._id === id && d.airport === airport);
+    const snapshot = typeof doc?.snapshot === "string" && doc.snapshot.replace(/^data:image\/jpeg;base64,/i, "");
+    if (!snapshot || snapshot.length > EVIDENCE_CAP * 4 / 3 + 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(snapshot)) {
+      return res.status(404).json({ error: "snapshot unavailable" });
+    }
+    const image = Buffer.from(snapshot, "base64");
+    if (image.length < 4 || image.length > EVIDENCE_CAP || image.toString("base64") !== snapshot ||
+        image[0] !== 0xff || image[1] !== 0xd8 || image.at(-2) !== 0xff || image.at(-1) !== 0xd9) {
+      return res.status(404).json({ error: "snapshot unavailable" });
+    }
+    res.set("X-Content-Type-Options", "nosniff").type("image/jpeg").send(image);
+  } catch (err) {
+    console.error("failed to read incident snapshot:", err.message);
+    res.status(500).json({ error: "could not load snapshot" });
+  }
+});
 
 // Incident fields the chatbot may see (never the snapshot), with times in airport local time.
 const incidentSummary = (d) => ({
   id: d._id, time: localHourLabel(d.time, true), camera: d.camera_id, type: d.type, count: d.object_count,
   direction: d.direction, confidence: d.confidence, risk: d.risk, ai_label: d.gemini_label, report: d.report,
+  eta_seconds: d.eta_basis === "image_space_corridor" ? d.eta_seconds : null,
+  eta_basis: d.eta_basis === "image_space_corridor" ? d.eta_basis : null,
   solana: d.solana_status || (d.solana_tx ? "confirmed" : null),
   solana_url: d.solana_tx ? `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet` : null,
 });
 const oneOf = (v, allowed) => (allowed.includes(v) ? v : null);
 const clamp = (v, lo, hi, fallback) => (Number.isInteger(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
 
-// Tools the tower copilot can call (ai-voice/chat.js). Each one only sees the caller's airport
-// (null = every airport, for TOWER_API_KEY or sign-in off), the same as /api/incidents and the socket rooms.
+// Tools take their airport from the authorized request context, never model arguments.
 const chatTools = {
-  async get_hourly_stats({ hours, type } = {}) {
-    if (!mongo) return { error: "the detections database is not connected" };
-    const rows = await readHourly(clamp(hours, 1, 168, 24), oneOf(type, ["bird", "drone"]));
-    return { note: "totals cover every camera", rows: rows.map((r) => ({ hour: localHourLabel(r.hour), type: r.type, events: Number(r.events) || 0, total_objects: Number(r.total_objects) || 0 })) };
+  async get_hourly_stats({ hours, type } = {}, { airport }) {
+    const rows = await readHourly(airport, clamp(hours, 1, 168, 24), oneOf(type, ["bird", "drone"]));
+    return { note: "totals cover this airport", rows: rows.map((r) => ({ hour: localHourLabel(r.hour), type: r.type, events: Number(r.events) || 0, total_objects: Number(r.total_objects) || 0 })) };
   },
   async get_recent_incidents({ limit, risk, type } = {}, { airport }) {
     if (!mongo) return { error: "the incident store is not connected" };
-    const filter = { ...(airport ? { airport } : {}) };
+    if (!airports.has(airport)) return { error: "authorized airport required" };
+    const filter = airportFilter(airport);
     if (oneOf(risk, ["yellow", "red"])) filter.risk = risk;
     if (oneOf(type, ["bird", "drone", "unknown"])) filter.type = type;
     const docs = await withMongo((mdb) => mdb.collection("incidents").find(filter, { projection: { snapshot: 0 } }).sort({ time: -1 }).limit(clamp(limit, 1, 20, 10)).toArray());
@@ -567,15 +700,17 @@ const chatTools = {
   async get_incident({ id } = {}, { airport }) {
     if (!mongo) return { error: "the incident store is not connected" };
     if (typeof id !== "string" || !id || id.length > 100) return { error: "id must be an incident id" };
-    const doc = await withMongo((mdb) => mdb.collection("incidents").findOne({ _id: id, ...(airport ? { airport } : {}) }, { projection: { snapshot: 0 } }));
+    if (!airports.has(airport)) return { error: "authorized airport required" };
+    const doc = await withMongo((mdb) => mdb.collection("incidents").findOne({ _id: id, ...airportFilter(airport) }, { projection: { snapshot: 0 } }));
     return doc ? { incident: incidentSummary(doc) } : { error: "no incident with that id at this airport" };
   },
   async get_live_cameras(args, { airport }) {
-    const list = [...liveCameras.values()].filter((live) => !airport || live.airport === airport).map((live) => {
-      const st = live.lastState, bot = live.bot.status();
+    if (!airports.has(airport)) return { error: "authorized airport required" };
+    const list = liveCameras.active().filter((live) => live.airport === airport).map((live) => {
+      const st = live.bot.freshState(), bot = live.bot.status();
       return {
         camera: live.cameraId, last_frame_seconds_ago: Math.round((Date.now() - live.lastSeen) / 1000),
-        detector: bot.mode === "server" ? "server" : `tower fallback (${bot.reason})`,
+        detector: bot.mode === "server" ? "server video only (no drone audio)" : `${bot.mode} (${bot.reason})`,
         risk: st?.risk ?? "unknown", reasons: st?.reasons ?? [], learning_background: st?.learning ?? null, camera_shaking: st?.shake ?? null,
         main_track: st?.primary ?? null, tracks: st?.tracks?.length ?? 0, flocks: st?.flocks?.length ?? 0,
       };
@@ -585,33 +720,32 @@ const chatTools = {
 };
 
 // Gemini "Ask SkySentry" answers from the last 7 days of hourly stats; used when OpenAI is missing or fails.
-async function geminiAnswer(question) {
-  let hourly = [];
-  try { hourly = await readHourly(168); }
-  catch (err) { console.error("failed to read stats for the chat fallback:", err.message); }
+async function geminiAnswer(question, { airport }) {
+  const hourly = await readHourly(airport, 168);
   return (await ai.answerQuestion(question, hourly)).answer;
 }
 const chat = createChat({ tools: chatTools, fallback: geminiAnswer });
 const guideLimit = createRequestLimit({ max: 10, windowMs: 60_000 });
 
 // Tower copilot: { messages: [{role: "user"|"assistant", content}] } -> { answer, source, tools, incident_ids }.
-app.post("/api/chat", requireDashboard, async (req, res) => {
+app.post("/api/chat", requireDashboard, requireAirport, async (req, res) => {
   const messages = req.body?.messages;
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: "send messages: [{ role, content }]" });
-  res.json(await chat.copilot(messages, { airport: viewAirport(req, req.body?.airport) }));
+  res.json(await chat.copilot(messages, { airport: req.airport }));
 });
 
 // Airports this tower can pick from (no join codes): just its own for a scoped account, every one otherwise.
 app.get("/api/airports", requireDashboard, (req, res) => {
-  const list = req.airport ? [airports.get(req.airport)].filter(Boolean) : airports.all();
-  res.json({ airports: list.map(({ code, name }) => ({ code, name })), scoped: Boolean(req.airport) });
+  const scoped = !req.towerGrant.selectAirport;
+  const list = scoped ? [airports.get(req.airport)].filter(Boolean) : airports.all();
+  res.json({ airports: list.map(({ code, name }) => ({ code, name })), scoped });
 });
 
 // "Ask SkySentry" (one question, kept for older clients): now the copilot, with Gemini as its fallback.
-app.post("/api/ask", requireDashboard, async (req, res) => {
+app.post("/api/ask", requireDashboard, requireAirport, async (req, res) => {
   const question = String(req.body?.question ?? "").trim().slice(0, 500);
   if (!question) return res.status(400).json({ error: "type a question first" });
-  const { answer, source } = await chat.copilot([{ role: "user", content: question }], { airport: req.airport ?? null });
+  const { answer, source } = await chat.copilot([{ role: "user", content: question }], { airport: req.airport });
   res.json({ answer, source });
 });
 
@@ -623,223 +757,269 @@ app.post("/api/guide", async (req, res) => {
   res.json(await chat.guide(messages));
 });
 
-// Gemini bird judge: { image: base64 JPEG crop or data URL, context?: string } ->
-// { verdict: "bird"|"not_bird"|"uncertain", isBird, confidence, object, evidence, source }.
-// The tower calls this as a second opinion when the on-device model is unsure. Rate-limited per tower.
+// The tower requests advisory review of a server-observed track, never of caller-supplied pixels.
 const birdJudgeLimit = createRequestLimit({ max: 30, windowMs: 60_000 });
-const { verifyBird } = require("./ai-voice/ai");
-app.post("/api/verify-bird", requireDashboard, async (req, res) => {
-  if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip)) return res.status(429).json({ error: "too many checks; wait a minute" });
-  const image = typeof req.body?.image === "string" ? req.body.image : "";
-  if (!image || image.length > 900_000) return res.status(400).json({ error: "send image: a base64 JPEG under ~650 KB" });
-  const verdict = await verifyBird(image, typeof req.body?.context === "string" ? req.body.context : "");
-  logBirdVerdict(verdict, req.airport ?? null, image);
-  res.json(verdict);
+// Bird review needs camera crops: allowed when Gemini image uploads are opted in, or when the judge is a local
+// model on the operator's own machine (BIRD_JUDGE=local), where images never leave it.
+const judgeReviewEnabled = cloudEvidenceEnabled || aiConfig.BIRD_JUDGE === "local";
+const birdReview = createBirdReview({
+  findLive: (cameraId, airport) => {
+    const live = liveCameras.get(cameraId);
+    if (live && live.airport === airport && liveCameras.fresh(live)) return live;
+  },
+  crop: cropBirdReview, verify: verifyBird,
+});
+app.get("/api/cloud-evidence-policy", requireDashboard, requireAirport, (_req, res) => {
+  res.set("Cache-Control", "no-store").json({ cloudEvidenceEnabled, birdJudge: aiConfig.BIRD_JUDGE, reviewEnabled: judgeReviewEnabled });
+});
+app.post("/api/verify-bird", requireDashboard, requireAirport, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!clerk && !(TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)))
+    return res.status(401).json({ status: "unavailable", reason: "authentication_required" });
+  if (!judgeReviewEnabled) return res.json({ status: "unavailable", reason: "cloud_evidence_disabled" });
+  if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip))
+    return res.status(429).json({ status: "unavailable", reason: "rate_limited" });
+  if (!isPlainObject(req.body) || Object.keys(req.body).some(key => !["cameraId", "streamId", "frameId", "trackId"].includes(key)))
+    return res.status(400).json({ status: "unavailable", reason: "invalid_reference" });
+  try {
+    const { crop, ...verdict } = await birdReview.review(req.body, req.airport);
+    if (verdict.status === "verified") logBirdVerdict(verdict, verdict.evidenceRef.airport, crop);
+    res.json(verdict);
+  } catch (error) {
+    console.warn("Bird evidence review failed:", error.message);
+    res.status(503).json({ status: "unavailable", reason: "review_failed" });
+  }
 });
 
 // HTTP route for cameras that can't hold a socket open (scripts, microcontrollers, webhooks).
-// Auth: a signed-in camera account ("Authorization: Bearer <Clerk session token>"), or for scripts and
-// microcontrollers "x-api-key: <CAMERA_API_KEY>" (or Bearer <CAMERA_API_KEY>) plus optional "x-airport: <code>".
-// Returns the camera's airport (null = all towers), or undefined if not allowed.
-async function cameraAirport(key, token, requestedAirport) {
-  if (keyMatches(key, CAMERA_API_KEY)) return airports.has(requestedAirport) ? requestedAirport : null;
-  const access = await clerkAccess(token);
-  // Camera accounts, and tower accounts running a demo clip, send for their own airport.
-  if ((access?.role === "camera" || access?.role === "dashboard") && access.airport) return access.airport;
-  if (access?.admin) return airports.has(requestedAirport) ? requestedAirport : null;   // admins run a camera for any airport
-  return undefined;
-}
-
 app.post("/api/camera-events", async (req, res) => {
   const bearer = bearerToken(req);
-  const airport = await cameraAirport(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
-  if (airport === undefined) return res.status(401).json({ error: "camera sign-in or camera key required" });
-  if (!isPlainObject(req.body)) {
-    return res.status(400).json({ error: "body must be a JSON object" });
-  }
-  const event = relayCameraEvent(req.get("x-camera-id"), req.body, airport);
-  res.status(202).json({ ok: true, id: event.id, towers: towers.sockets.size });
+  const grant = await cameraAccess(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
+  if (!grant) return res.status(403).json({ error: "airport-bound camera authorization required" });
+  return res.status(403).json({ error: "live camera events require server detection; submit frames instead" });
 });
 
 // Socket auth: { token: <Clerk session token> } for camera accounts, or { key, airport } for API-key cameras.
-cameras.use(async (socket, next) => {
-  const { key, token, airport } = socket.handshake.auth;
-  const allowed = await cameraAirport(key, token, airport);
-  if (allowed === undefined) return next(new Error("unauthorized"));
-  socket.data.airport = allowed;
-  next();
-});
+installSocketAccess(cameras, ({ key, token, airport, deviceId }) =>
+  isDeviceId(deviceId) ? cameraAccess(key, token, airport) : null);
 
 cameras.on("connection", (socket) => {
-  // Two devices under one ID used to share one feed (frames mixed, and one disconnecting removed both), so a
-  // second live socket with a taken ID gets a unique one, which the camera page shows.
-  let cameraId = String(socket.handshake.auth.cameraId || socket.id).slice(0, 60);
-  const taken = liveCameras.get(cameraId);
-  if (taken?.socketId && taken.socketId !== socket.id && cameras.sockets.has(taken.socketId)) cameraId = `${cameraId}-${socket.id.slice(0, 4)}`;
-  socket.emit("camera:id", cameraId);
-  const { airport } = socket.data;
-  console.log(`camera connected: ${cameraId}${airport ? ` (${airport})` : ""}`);
-  towersFor(airport).emit("camera:status", { cameraId, airport, online: true, at: Date.now() });
+  const { grant, airport } = socket.data;
+  const cameraId = cameraIdentity(grant, "socket", socket.handshake.auth.deviceId);
+  let live = null;
+  let cameraConfig = null;
+  const close = () => {
+    if (live) liveCameras.remove(live);
+    live = cameraConfig = null;
+  };
 
-  socket.on("camera:event", (payload, ack) => {
+  socket.on("camera:event", (_payload, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
-    if (!isPlainObject(payload)) return reply({ ok: false, error: "payload must be an object" });
-    const event = relayCameraEvent(cameraId, payload, airport);
-    reply({ ok: true, id: event.id, towers: towers.sockets.size });
+    reply({ ok: false, error: "live camera events require server detection" });
   });
 
-  // Live video: the phone streams JPEG frames; the server bot runs Vivan's engine on them (bot.js) and
-  // every tower at this airport gets the feed plus the bot's overlay. If the bot hands over, towers detect.
-  const live = openLive(cameraId, airport, (name, data) => socket.emit(name, data));
-  live.socketId = socket.id;
-  socket.on("camera:config", (config) => configureLive(live, config));
+  socket.on("camera:config", (config) => {
+    if (!isPlainObject(config) || !isLiveSource(config.source)) return;
+    cameraConfig = config;
+    if (live && liveCameras.current(live)) configureLive(live, config);
+  });
   socket.on("camera:frame", async (meta, jpegBuf, ack) => {
     const reply = typeof ack === "function" ? ack : () => {};
-    if (!isPlainObject(meta) || !Buffer.isBuffer(jpegBuf) || jpegBuf.length > 900_000) return reply({ ok: false });
-    reply({ ok: true, bot: await liveFrame(live, jpegBuf, meta.t) });
-  });
-
-  socket.on("disconnect", () => {
-    console.log(`camera disconnected: ${cameraId}`);
-    if (liveCameras.get(cameraId) === live) liveCameras.delete(cameraId);
-    towersFor(airport).emit("camera:status", { cameraId, airport, online: false, at: Date.now() });
-  });
-});
-
-// Socket auth: { token: <Clerk session token> } for dashboard accounts (their airport only),
-// or { key: TOWER_API_KEY } to see every airport. With sign-in off and no TOWER_API_KEY, towers are open.
-towers.use(async (socket, next) => {
-  const { key, token } = socket.handshake.auth;
-  socket.data.airport = null;
-  if (TOWER_API_KEY && keyMatches(key, TOWER_API_KEY)) return next();
-  if (clerk) {
-    const access = await clerkAccess(token);
-    if (access?.admin) return next();   // admins watch every airport
-    if (access?.role === "dashboard" && access.airport) {
-      socket.data.airport = access.airport;
-      return next();
+    if (!cameraConfig || !isPlainObject(meta) || !isLiveSource(meta.source) || !isJPEG(jpegBuf) ||
+        !Number.isFinite(meta.t) || meta.t < 0) {
+      return reply({ ok: false, error: "live camera configuration, capture time and JPEG required" });
     }
-    return next(new Error("unauthorized"));
-  }
-  if (!TOWER_API_KEY) return next();
-  next(new Error("unauthorized"));
+    if (live && live.lastSeen !== null && !liveCameras.fresh(live)) liveCameras.remove(live);
+    const other = liveCameras.get(cameraId);
+    if (other && other !== live) return reply({ ok: false, error: "device already has an active stream" });
+    if (!live || !liveCameras.current(live)) {
+      live = openLive(cameraId, airport, cameraConfig.cameraLabel, (name, data) => {
+        if (name === "bot:state") socket.volatile.emit(name, data);
+        else socket.emit(name, data);
+      });
+      configureLive(live, cameraConfig);
+    }
+    const stream = live;
+    const result = await liveFrame(stream, jpegBuf, meta.t);
+    reply(liveCameras.fresh(stream) ? { ok: true, ...result } : { ok: false, error: "stream stopped" });
+  });
+  socket.on("camera:stop", close);
+  socket.on("disconnect", close);
 });
 
-// Streaming cameras by id: their server bot, settings, and which tower (if any) is the fallback detector.
-const liveCameras = new Map();
+installSocketAccess(towers, ({ key, token, airport }) => towerAccess(token, key, airport));
+
+const liveCameras = createCameraRegistry({
+  onStatus: (live, status) => towersFor(live.airport).emit("camera:status", status),
+});
+const cameraLabel = (label) => typeof label === "string" && /^[a-z0-9._ -]{1,60}$/i.test(label.trim()) ? label.trim() : "Camera";
 
 // toCamera(name, data) sends bot results back to the streaming device (socket cameras); HTTP cameras read
 // the latest state from the response instead.
-function openLive(cameraId, airport, toCamera = () => {}) {
-  const old = liveCameras.get(cameraId);
-  if (old && old.airport === airport) { old.toCamera = toCamera; return old; }
-  // Until the camera sends its own settings, assume the runway approach is the left 30% of the frame,
-  // so the bot can judge "heading toward the runway" from the very first frame.
-  const live = { cameraId, airport, config: { corridor: [[0, 0], [0.3, 0], [0.3, 1], [0, 1]], camera_id: cameraId }, fallbackOwner: null, fallbackAt: 0, toCamera, lastState: null, lastSeen: Date.now() };
+function openLive(cameraId, airport, label, toCamera = () => {}) {
+  const live = { cameraId, cameraLabel: cameraLabel(label), airport, streamId: randomUUID(), frameId: 0,
+    config: { camera_id: cameraId }, toCamera, lastResult: null, lastSeen: Date.now() };
+  const exactResult = (frame, state) => liveCameras.fresh(live) && frame.streamId === live.streamId &&
+    state && state === live.bot.freshState() && state.t === frame.t &&
+    typeof state.generation === "string" && state.generation === live.bot.status().generation;
   live.bot = new CameraBot({
     cameraId,
-    onEvent: (ev) => relayCameraEvent(cameraId, ev, airport),
-    onState: (state) => {
-      live.lastState = state;
-      towersFor(airport).emit("bot:state", { cameraId, state });   // small; not volatile, or it's dropped behind the frame
-      live.toCamera("bot:state", { cameraId, state });
+    onEvent: (ev, frame, state) => {
+      if (!exactResult(frame, state) || frame !== live.lastResult?.frame || state !== live.lastResult.state) return;
+      relayCameraEvent(cameraId, { ...ev, cameraLabel: live.cameraLabel, source: "live" }, airport, live.config.surveyId,
+        { streamId: frame.streamId, frameId: frame.frameId, generation: state.generation, t: frame.t });
     },
-    onStatus: () => { towersFor(airport).emit("bot:status", live.bot.status()); live.toCamera("bot:status", live.bot.status()); },
+    onState: (state, frame) => {
+      if (!exactResult(frame, state)) return;
+      const { streamId, frameId } = frame;
+      const result = { cameraId, cameraLabel: live.cameraLabel, streamId, frameId, state, mode: "server",
+        at: Date.now(), remaining_ms: live.bot.remainingMs() };
+      if (result.remaining_ms <= 0) return;
+      live.lastResult = { frame, state };
+      if (judgeReviewEnabled) birdReview.record(live, frame, state);
+      towersFor(airport).volatile.emit("bot:state", result);
+      live.toCamera("bot:state", result);
+    },
+    onStatus: () => {
+      if (!liveCameras.fresh(live)) return;
+      const status = live.bot.status();
+      if (status.mode !== "server") live.lastResult = null;
+      towersFor(airport).emit("bot:status", status);
+      live.toCamera("bot:status", status);
+    },
   });
   live.bot.configure(live.config);
-  liveCameras.set(cameraId, live);
-  towersFor(airport).emit("bot:status", live.bot.status());
-  return live;
+  return liveCameras.add(live);
 }
 function configureLive(live, config) {
-  if (!isPlainObject(config)) return false;
+  if (!liveCameras.current(live) || !isPlainObject(config) || !isLiveSource(config.source)) return false;
+  live.bot.invalidate("camera configuration changed");
+  live.streamId = randomUUID(); live.frameId = 0; live.lastResult = null;
+  if (config.cameraLabel !== undefined) live.cameraLabel = cameraLabel(config.cameraLabel);
   const preset = [].concat(config.preset || []).filter((x) => typeof x === "string").slice(0, 3);
-  live.config = { camera: config.camera, corridor: config.corridor, preset: preset.length ? preset : undefined, camera_id: live.cameraId };
+  const survey = surveyedCorridor(surveyedCorridors, live, config.camera, "webcam");
+  live.config = { camera: config.camera, corridor: survey?.polygon || [], surveyId: survey?.surveyId,
+    preset: preset.length ? preset : undefined, camera_id: live.cameraId };
   live.bot.configure(live.config);
-  towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, ...live.config });
+  live.toCamera("camera:config", live.config);
+  if (liveCameras.fresh(live)) towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, ...live.config });
   return true;
 }
 async function liveFrame(live, jpegBuf, t) {
-  live.lastSeen = Date.now();
-  towersFor(live.airport).volatile.emit("camera:frame", { cameraId: live.cameraId, t, jpeg: jpegBuf });
-  return (await live.bot.frame(jpegBuf, Number(t) || 0)) ? "server" : "tower";
+  const wasFresh = liveCameras.fresh(live);
+  if (!liveCameras.frame(live)) return null;
+  if (!wasFresh) {
+    towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, ...live.config });
+    towersFor(live.airport).emit("bot:status", live.bot.status());
+    live.toCamera("bot:status", live.bot.status());
+  }
+  const frame = { streamId: live.streamId, frameId: ++live.frameId, t, at: live.lastSeen, jpeg: jpegBuf };
+  towersFor(live.airport).volatile.emit("camera:frame", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, source: "live", ...frame });
+  await live.bot.frame(jpegBuf, t, frame);
+  const detector = live.bot.status();
+  const state = live.bot.freshState();
+  return {
+    bot: detector.mode, detector, state, at: Date.now(), remaining_ms: live.bot.remainingMs(),
+  };
 }
+setInterval(() => {
+  for (const live of liveCameras.active()) live.bot.expire();
+}, 500).unref();
 
 // HTTP streaming for native apps (no Socket.IO library needed). Same auth as /api/camera-events.
-//   POST /api/camera-config  JSON { camera: {lat, lon, heading_deg, hfov_deg}, corridor: [[x,y],...] }
+//   POST /api/camera-config  JSON { source: "live", camera: {lat, lon, heading_deg, hfov_deg, pitch_deg} }
 //   POST /api/camera-frame   body = one JPEG (Content-Type: image/jpeg), header x-frame-time = seconds
-//   -> { ok, bot: "server"|"tower", state }   state = the bot's latest tracks/flocks/risk for the app's overlay
+//   POST /api/camera-stop    closes only the matching live session
+//   -> { ok, bot: "server"|"starting"|"unavailable", detector, state, at, remaining_ms }
 async function httpCamera(req, res) {
   const bearer = bearerToken(req);
-  const airport = await cameraAirport(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
-  if (airport === undefined) { res.status(401).json({ error: "camera sign-in or camera key required" }); return null; }
-  const cameraId = String(req.get("x-camera-id") || "phone").slice(0, 60);
-  const fresh = !liveCameras.has(cameraId);
-  const live = openLive(cameraId, airport);
-  if (fresh) towersFor(airport).emit("camera:status", { cameraId, airport, online: true, at: Date.now() });
-  return live;
+  const access = await cameraAccess(req.get("x-api-key") || bearer, bearer, req.get("x-airport"));
+  if (!access) { res.status(403).json({ error: "airport-bound camera authorization required" }); return null; }
+  const deviceId = req.get("x-camera-device"), session = req.get("x-camera-session");
+  if (!isLiveSource(req.get("x-camera-source")) || !isDeviceId(deviceId) || !isDeviceId(session)) {
+    res.status(400).json({ error: "live camera source, device ID and session ID required" });
+    return null;
+  }
+  const cameraId = cameraIdentity(access, "http", deviceId);
+  return { cameraId, airport: access.airport, session, live: liveCameras.get(cameraId) };
 }
 app.post("/api/camera-config", async (req, res) => {
-  const live = await httpCamera(req, res); if (!live) return;
-  if (!configureLive(live, req.body)) return res.status(400).json({ error: "body must be a JSON object" });
+  const ingress = await httpCamera(req, res); if (!ingress) return;
+  if (!isPlainObject(req.body) || !isLiveSource(req.body.source)) return res.status(400).json({ error: "explicit live source required" });
+  const { cameraId, airport, session } = ingress;
+  if (ingress.live && ingress.live.session !== session) return res.status(409).json({ error: "device already has a configured stream" });
+  const live = ingress.live?.session === session ? ingress.live : openLive(cameraId, airport, req.get("x-camera-id"));
+  live.session = session;
+  configureLive(live, req.body);
   res.json({ ok: true });
 });
 app.post("/api/camera-frame", express.raw({ type: ["image/jpeg", "application/octet-stream"], limit: "900kb" }), async (req, res) => {
-  const live = await httpCamera(req, res); if (!live) return;
-  if (!Buffer.isBuffer(req.body) || req.body.length < 100) return res.status(400).json({ error: "send one JPEG frame as the request body" });
-  const bot = await liveFrame(live, req.body, req.get("x-frame-time"));
-  res.json({ ok: true, bot, state: live.lastState });
-});
-// HTTP cameras have no disconnect event; mark them offline after 10 s without frames.
-setInterval(() => {
-  for (const live of liveCameras.values()) {
-    if (live.toCamera.length === 0 && Date.now() - live.lastSeen > 10_000) {
-      liveCameras.delete(live.cameraId);
-      towersFor(live.airport).emit("camera:status", { cameraId: live.cameraId, airport: live.airport, online: false, at: Date.now() });
-    }
+  const ingress = await httpCamera(req, res); if (!ingress) return;
+  if (!isJPEG(req.body)) return res.status(400).json({ error: "send one JPEG frame as the request body" });
+  const captureTime = req.get("x-frame-time");
+  if (!captureTime?.trim() || !Number.isFinite(Number(captureTime)) || Number(captureTime) < 0)
+    return res.status(400).json({ error: "valid x-frame-time required" });
+  const { live, session } = ingress;
+  if (!live || live.session !== session || (live.lastSeen !== null && !liveCameras.fresh(live))) {
+    if (live?.session === session) liveCameras.remove(live);
+    return res.status(409).json({ error: "configure the live camera before sending frames" });
   }
-}, 5000).unref();
-const towerSees = (socket, live) => !socket.data.airport || !live.airport || live.airport === socket.data.airport;
+  const result = await liveFrame(live, req.body, Number(captureTime));
+  if (!liveCameras.fresh(live)) return res.status(409).json({ error: "stream stopped" });
+  res.json({ ok: true, ...result });
+});
+app.post("/api/camera-stop", async (req, res) => {
+  const ingress = await httpCamera(req, res); if (!ingress) return;
+  if (ingress.live?.session === ingress.session) liveCameras.remove(ingress.live);
+  res.json({ ok: true });
+});
+setInterval(() => { liveCameras.sweep(); birdReview.prune(); }, 1000).unref();
+const towerSees = (socket, live) => airports.has(socket.data.airport) && socket.data.airport === live.airport;
 
 towers.on("connection", (socket) => {
-  // An all-access tower that picked one airport (auth.airport) joins only that airport's room.
-  const requested = socket.handshake.auth?.airport;
-  if (!socket.data.airport && typeof requested === "string" && airports.has(requested)) socket.data.view = requested;
-  const scope = socket.data.airport || socket.data.view;
-  socket.join(scope ? `airport:${scope}` : "airport:*");
-  for (const live of liveCameras.values()) {
-    if (!towerSees(socket, live) || (socket.data.view && live.airport && live.airport !== socket.data.view)) continue;
+  const { airport, principal } = socket.data;
+  socket.join(towerRoom(airport));
+  for (const live of liveCameras.active()) {
+    if (!towerSees(socket, live)) continue;
+    socket.emit("camera:status", liveCameras.presence(live));
     socket.emit("bot:status", live.bot.status());
-    if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, ...live.config });
+    if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, ...live.config });
   }
 
-  // Trained checks run on tower crops; accept only fresh results for this airport's active tracks.
-  let lastLabelAt = 0;
-  const trackLabelsAt = new Map();
-  socket.on("tower:label", (payload, ack) => {
-    const reply = typeof ack === "function" ? ack : () => {};
-    const live = isPlainObject(payload) && liveCameras.get(String(payload.cameraId));
-    if (!live || !live.bot.active || !towerSees(socket, live)) return reply({ ok: false });
-    const now = Date.now(), trackKey = `${live.cameraId}:${payload.trackId}`;
-    if (now - lastLabelAt < 400 || now - (trackLabelsAt.get(trackKey) || 0) < 2000) return reply({ ok: false });
-    if (!live.bot.applyLabel(payload)) return reply({ ok: false });
-    lastLabelAt = now; trackLabelsAt.set(trackKey, now);
-    // Keep this connection's bookkeeping bounded during long demos.
-    for (const [id, at] of trackLabelsAt) if (now - at > 60000) trackLabelsAt.delete(id);
-    reply({ ok: true });
+  socket.on("tower:label", (_payload, ack) => {
+    if (typeof ack === "function") ack({ ok: false, reason: "tower labels cannot modify server detection" });
   });
 
-  // Fallback detection: when a camera's server bot has handed over, the first tower to report owns that
-  // camera's events (others just draw), so alerts are never duplicated. Ownership lapses after 5 s of silence.
-  socket.on("tower:bot-event", (ev, ack) => {
-    const reply = typeof ack === "function" ? ack : () => {};
-    const live = isPlainObject(ev) && liveCameras.get(String(ev.camera_id));
-    if (!live || live.bot.active || !towerSees(socket, live)) return reply({ ok: false, reason: "server bot is active" });
-    const now = Date.now();
-    if (live.fallbackOwner && live.fallbackOwner !== socket.id && now - live.fallbackAt < 5000) return reply({ ok: false, reason: "another tower is detecting" });
-    live.fallbackOwner = socket.id; live.fallbackAt = now;
-    relayCameraEvent(live.cameraId, { ...ev, detected_by: "tower" }, live.airport);
-    reply({ ok: true });
+  socket.on("tower:bot-event", (_ev, ack) => {
+    if (typeof ack === "function") ack({ ok: false, reason: "tower fallback is not supported" });
+  });
+  const validAlertId = id => typeof id === "string" && /^(?:[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}|[\da-f]{64})$/i.test(id);
+  socket.on("alert:replay", async (cursor, ack) => {
+    if (typeof ack !== "function") return;
+    if (!airports.has(airport) || (cursor !== null && !validAlertId(cursor))) return ack({ ok: false });
+    const pending = cursor === null ? await receiptRecovery.forAirport(airport) : [];
+    if (!socket.connected || !airports.has(airport)) return;
+    try {
+      const page = await journal.replay(airport, cursor);
+      if (socket.connected && airports.has(airport)) ack({ ok: true, ...page, pending });
+    } catch (err) {
+      console.warn("alert history unavailable:", err.code || err.name);
+      if (socket.connected && airports.has(airport)) ack({ ok: false, pending });
+    }
+  });
+  socket.on("alert:acknowledge", async (id, ack) => {
+    if (typeof ack !== "function") return;
+    if (!airports.has(airport) || !principal || principal === "local-demo" || !validAlertId(id)) return ack({ ok: false });
+    try {
+      const saved = await journal.acknowledge(airport, id, principal);
+      if (!socket.connected || !airports.has(airport)) return;
+      if (!saved) return ack({ ok: false });
+      towersFor(airport).emit("alert_acknowledged", { id, airport });
+      ack({ ok: true });
+    } catch (err) {
+      console.warn("alert acknowledgment unavailable:", err.code || err.name);
+      ack({ ok: false });
+    }
   });
   console.log(`tower connected: ${socket.id}${socket.data.airport ? ` (${socket.data.airport})` : ""}`);
   socket.on("disconnect", () => console.log(`tower disconnected: ${socket.id}`));
@@ -865,11 +1045,14 @@ server.listen(PORT, HOST, () => {
 });
 
 // App Platform sends SIGTERM on redeploys; close cleanly.
-process.on("SIGTERM", () => {
+process.once("SIGTERM", async () => {
+  shuttingDown = true;
   console.log("SIGTERM received, shutting down");
-  io.close();
-  server.close(async () => {
-    await Promise.allSettled([db?.end(), mongo?.close()]);
-    process.exit(0);
-  });
+  clearInterval(receiptTimer);
+  clearInterval(enrichmentTimer);
+  const closeIngress = new Promise(resolve => io.close(resolve)); // Socket.IO also closes its HTTP server.
+  await Promise.all([closeIngress, receiptRecovery.stop()]);
+  try { await mongo?.close(); }
+  catch (err) { console.warn("MongoDB shutdown failed:", err.code || err.name); }
+  process.exit(0);
 });

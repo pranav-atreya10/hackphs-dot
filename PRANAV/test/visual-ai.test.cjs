@@ -2,63 +2,51 @@ const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-let VisualBirdVerifier, chooseBirdCandidate;
+let VisualBirdVerifier;
 
 before(async () => {
-  // Use ESM semantics in tests without changing the CommonJS server package.
+  // The evidence module has its own tests; supply one already-paired candidate here.
   const source = await fs.readFile(path.join(__dirname, '../public/js/visual-ai.js'), 'utf8');
-  ({ VisualBirdVerifier, chooseBirdCandidate } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`));
+  const helper = `export const chooseBirdCandidate = feeds => [...feeds.values()].find(t => !t.offline)?.candidate;
+    export const captureBirdEvidence = () => ({canvas: {}, bbox: {}});
+    export const validBox = () => true;
+    export const pruneBirdAttempts = () => {};`;
+  const code = source.replaceAll('./bird-evidence.js', `data:text/javascript;base64,${Buffer.from(helper).toString('base64')}`);
+  ({ VisualBirdVerifier } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`));
 });
 
-function feed(patch = {}) {
-  return { cameraId: 'iphone', video: { width: 1280, height: 720 }, lastFrameAt: Date.now(), frameT: 100,
-    mode: 'server', botState: { t: 100, tracks: [{ id: 1, classification: 'unknown', bbox: { x: .3, y: .2, w: .08, h: .1 } }] }, ...patch };
+function feed(cameraId = 'iphone', source = 'server') {
+  const tr = { id: 1, classification: 'unknown' }, streamId = `${cameraId}-stream`;
+  const t = { cameraId, mode: source, lastFrameAt: Date.now(), streamId, botState: { generation: 1, tracks: [tr] },
+    engine: { applyLabel() { assert.fail('advisory checks cannot affect engine state'); } } };
+  t.candidate = { t, tr, key: cameraId, source, streamId, frameId: 5, frameT: .5, frameReceivedAt: t.lastFrameAt, generation: 1 };
+  return t;
 }
-function setup({ classify, load } = {}) {
-  const emitted = [], button = { textContent: '', addEventListener() {}, setAttribute() {} }, status = { dataset: {} };
-  let calls = 0;
+function setup({ classify, load, judge } = {}) {
+  const button = { textContent: '', addEventListener() {}, setAttribute() {} }, status = { dataset: {} }, reviewStatus = {};
+  let calls = 0, loads = 0;
   class Adapter {
     constructor() { this.stats = { intervalMs: 900 }; }
-    async load() { if (load) await load(); }
-    async classifyBox() { calls++; return classify ? classify() : { label: 'bird', score: .84, ms: 30 }; }
+    async load(progress) { loads++; if (load) await load(progress); }
+    async classifyCaptured() { calls++; return classify ? classify() : { label: null, score: 0, ms: 30 }; }
     adapt() {}
   }
-  const socket = { connected: true, timeout() { return { emit(name, payload, ack) { emitted.push({ name, payload }); ack(null, { ok: true }); } }; } };
-  const verifier = new VisualBirdVerifier({ socket, button, status, loadAdapter: async () => ({ CocoVerifier: Adapter }) });
-  return { verifier, emitted, status, calls: () => calls };
+  const verifier = new VisualBirdVerifier({ button, status, reviewStatus, judge, loadAdapter: async () => ({ CocoVerifier: Adapter }) });
+  return { verifier, status, reviewStatus, calls: () => calls, loads: () => loads };
 }
 
-test('selection skips small, invalid, stale, moving and learning feeds', () => {
-  const now = Date.now(), valid = feed();
-  const cases = [
-    feed({ lastFrameAt: now - 3000 }), feed({ offline: true }), feed({ frameT: NaN }),
-    feed({ botState: { shake: true, tracks: valid.botState.tracks } }),
-    feed({ botState: { learning: true, tracks: valid.botState.tracks } }),
-    feed({ botState: { motion: { ready: false }, tracks: valid.botState.tracks } }),
-    feed({ botState: { tracks: [{ ...valid.botState.tracks[0], bbox: { x: .9, y: .2, w: .2, h: .1 } }] } }),
-    feed({ botState: { tracks: [{ ...valid.botState.tracks[0], bbox: { x: .3, y: .2, w: .001, h: .001 } }] } }),
-    feed({ botState: { tracks: [{ ...valid.botState.tracks[0], classification: 'rejected' }] } }),
-  ];
-  for (const item of cases) assert.equal(chooseBirdCandidate(new Map([['iphone', item]]), new Map(), now), null);
-  assert.equal(chooseBirdCandidate(new Map([['iphone', valid]]), new Map(), now).tr.id, 1);
-  assert.equal(chooseBirdCandidate(new Map([['iphone', valid]]), new Map([['iphone:1', now - 100]]), now), null);
-});
-
-test('a second opinion prioritizes an unknown track over a larger already-classified bird', () => {
-  const unknown = feed(), bird = feed({ cameraId: 'other' });
-  bird.botState.tracks = [{ id: 2, classification: 'bird', bbox: { x: .1, y: .1, w: .4, h: .4 } }];
-  assert.equal(chooseBirdCandidate(new Map([['other', bird], ['iphone', unknown]]), new Map()).t.cameraId, 'iphone');
-});
-
-test('trained label carries the matching track, crop and capture clock to the server', async () => {
-  const s = setup();
+test('model stays unloaded until enable and shows actual adapter progress', async () => {
+  let finish;
+  const s = setup({ load: progress => {
+    progress('Downloading weights…');
+    return new Promise(resolve => { finish = resolve; });
+  } });
+  assert.equal(s.loads(), 0);
   try {
-    await s.verifier.enable(); s.verifier.onFeed(feed()); await s.verifier.tick();
-    assert.equal(s.emitted.length, 1);
-    assert.equal(s.emitted[0].name, 'tower:label');
-    assert.deepEqual(s.emitted[0].payload, { cameraId: 'iphone', trackId: 1, label: 'bird', score: .84,
-      bbox: { x: .3, y: .2, w: .08, h: .1 }, frameT: 100, source: 'coco' });
-    assert.match(s.status.textContent, /bird 84%/);
+    const loading = s.verifier.enable(); await Promise.resolve();
+    assert.match(s.status.textContent, /Downloading weights/);
+    finish(); await loading;
+    assert.equal(s.status.dataset.state, 'ready');
   } finally { s.verifier.disable(); }
 });
 
@@ -71,35 +59,42 @@ test('slow inference never overlaps another check and disabling discards its res
     const first = s.verifier.tick(); await s.verifier.tick();
     assert.equal(s.calls(), 1);
     s.verifier.disable(); finish({ label: 'bird', score: .9, ms: 800 }); await first;
-    assert.equal(s.emitted.length, 0);
     assert.equal(s.status.dataset.state, 'off');
   } finally { s.verifier.disable(); }
 });
 
-test('a vanished track cannot receive an old trained label', async () => {
-  let finish;
-  const result = new Promise(resolve => { finish = resolve; }), s = setup({ classify: () => result }), t = feed();
+test('unresolved cloud review does not delay local checks and a late verdict is historical', async () => {
+  const t = feed();
+  let finish, reference, requests = 0;
+  const result = new Promise(resolve => { finish = resolve; });
+  const s = setup({ judge: ref => { reference = ref; requests++; return result; } });
   try {
     await s.verifier.enable(); s.verifier.onFeed(t);
-    const first = s.verifier.tick(); t.botState = { t: 101, tracks: [] };
-    finish({ label: 'bird', score: .9, ms: 30 }); await first;
-    assert.equal(s.emitted.length, 0);
+    await s.verifier.tick(); await s.verifier.tick();
+    assert.equal(s.calls(), 2);
+    assert.equal(requests, 1);
+    assert.deepEqual(reference, { cameraId: 'iphone', streamId: 'iphone-stream', frameId: 5, trackId: 1 });
+    assert.match(s.status.textContent, /Latest local check/);
+    assert.match(s.reviewStatus.textContent, /pending/);
+    t.candidate.frameReceivedAt -= 3000;
+    finish({ status: 'verified', source: 'gemini', verdict: 'not_bird', application: 'advisory',
+      evidenceRef: { ...reference, generation: 1, t: .5 } });
+    await result;
+    assert.match(s.reviewStatus.textContent, /Earlier cloud review.*not a bird.*Not a clearance/);
   } finally { s.verifier.disable(); }
 });
 
-test('handover during an inference cannot label a different engine with the same track ID', async () => {
-  let finish;
-  const result = new Promise(resolve => { finish = resolve; }), s = setup({ classify: () => result }), t = feed();
-  const applied = [];
-  try {
-    await s.verifier.enable(); s.verifier.onFeed(t);
-    const first = s.verifier.tick();
-    t.mode = 'tower'; t.fallbackState = t.botState;
-    t.engine = { applyLabel(...args) { applied.push(args); } };
-    finish({ label: 'bird', score: .9, ms: 30 }); await first;
-    assert.equal(s.emitted.length, 0); assert.equal(applied.length, 0);
-  } finally { s.verifier.disable(); }
-});
+for (const [verdict, text] of [['bird', /: bird\./], ['uncertain', /: uncertain\./]]) {
+  test(`cloud review preserves ${verdict}`, async () => {
+    const t = feed();
+    const s = setup({ judge: async ref => ({ status: 'verified', source: 'gemini', verdict, application: 'advisory',
+      evidenceRef: { ...ref, generation: 1, t: .5 } }) });
+    try {
+      await s.verifier.enable(); s.verifier.onFeed(t); await s.verifier.tick();
+      assert.match(s.reviewStatus.textContent, text);
+    } finally { s.verifier.disable(); }
+  });
+}
 
 test('unavailable model download leaves detection usable with a retryable status', async () => {
   const s = setup({ load: async () => { throw new Error('CDN unavailable'); } });
@@ -107,15 +102,17 @@ test('unavailable model download leaves detection usable with a retryable status
   assert.equal(s.verifier.enabled, false);
   assert.equal(s.status.dataset.state, 'unavailable');
   assert.match(s.status.textContent, /Motion detection stays active/);
-  assert.equal(s.calls(), 0); assert.equal(s.emitted.length, 0);
+  assert.equal(s.calls(), 0);
 });
 
-test('fallback labels go to the local engine, never the inactive server engine', async () => {
-  const applied = [], t = feed({ mode: 'tower', engine: { applyLabel(...args) { applied.push(args); } } });
-  t.fallbackState = t.botState;
-  const s = setup();
-  try {
-    await s.verifier.enable(); s.verifier.onFeed(t); await s.verifier.tick();
-    assert.deepEqual(applied, [[1, 'bird', .84, 'coco']]); assert.equal(s.emitted.length, 0);
-  } finally { s.verifier.disable(); }
-});
+for (const [source, multiple] of [['tower', false], ['demo', false], ['server', true]]) {
+  test(`does not request cloud review for ${multiple ? 'a multi-subject crop' : source}`, async () => {
+    const s = setup({ classify: () => ({ ms: 10, ...(multiple ? { relevant: [{}, {}] } : {}) }),
+      judge: () => assert.fail('no cloud review expected') });
+    try {
+      await s.verifier.enable(); s.verifier.onFeed(feed('iphone', source)); await s.verifier.tick();
+      assert.equal(s.reviewStatus.textContent, '');
+      if (multiple) assert.match(s.status.textContent, /multiple detections/);
+    } finally { s.verifier.disable(); }
+  });
+}

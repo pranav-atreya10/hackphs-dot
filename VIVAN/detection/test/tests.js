@@ -203,6 +203,8 @@ test('scenario flock_corridor: red, flock of 6, flapping ~4 Hz, ETA counts down'
   const red = events.filter((e) => e.risk === 'red' && e.eta_seconds !== null && e.flock_size >= 5);
   ok(red.length, 'no red event with a 5+ flock and an ETA');
   ok(red.every((e) => e.type === 'bird' && e.bearing_deg !== null && e.eta_range), 'red flock events missing type/bearing/eta_range');
+  ok(red.every((e) => e.eta_basis === 'synthetic_image_space_corridor' && !('target_geo' in e) && !('path_geo' in e)),
+    'demo ETA must be marked and no bearing may become a geographic target');
   ok(red.some((e) => e.needs_snapshot && e.crop_box), 'no photo requested for the flock');
   const etas = red.map((e) => e.eta_seconds);
   ok(etas[etas.length - 1] < etas[0], `ETA should count down: ${etas.join(', ')}`);
@@ -273,14 +275,14 @@ for (const name of ['rock_throw', 'debris_shower', 'spinning_debris']) {
     }
   });
 }
-test('scenario rock_throw: debris is explained and ignored by risk and the beacon', () => {
+test('scenario rock_throw: possible debris is advisory but is not a beacon target', () => {
   const sky = new SyntheticSky({ scenario: 'rock_throw', seed: 7 });
   const engine = new DetectionEngine();
-  engine.setCorridor(sky.corridor);
+  engine.setCorridor(sky.corridor, { demo: true });
   let state, explained = false, why = '';
   for (let i = 0; i < sky.durationSec * 30; i++) {
     state = engine.process(sky.render(i / 30), i / 30);
-    if (state.risk.reasons.some((r) => /debris/.test(r))) explained = true;
+    if (state.risk.raw === 'yellow' && state.risk.reasons.some((r) => /possible debris/.test(r))) explained = true;
     const d = state.tracks.find((t) => t.classification === 'debris');
     if (d) why = d.reason;
   }
@@ -394,7 +396,7 @@ test('robustness: flock scenes pass at a phone-like 15 fps with the phone preset
 function engineOn(scene, frames, config = {}) {
   const sky = new SyntheticSky({ scenario: scene, seed: 7 });
   const engine = new DetectionEngine(config);
-  engine.setCorridor(sky.corridor);
+  engine.setCorridor(sky.corridor, { demo: true });
   let st;
   let i = 0;
   const step = (n) => { for (const end = i + n; i < end; i++) st = engine.process(sky.render(i / 30), i / 30); return st; };
@@ -557,6 +559,38 @@ test('risk: rising forecast raises yellow, and red once it reaches a flock', () 
 });
 
 // ---------- runner ----------
+test('corridor projection is disabled until an approved survey or isolated demo is configured', () => {
+  const engine = new DetectionEngine();
+  const polygon = [[0.5, 0], [1, 0], [1, 1], [0.5, 1]];
+  const observed = { x: 25, y: 50, svx: 25, svy: 0 };
+  engine.setCorridor(polygon);
+  ok(engine.describeGroup('track', observed, 100, 100).eta_seconds === null);
+  engine.setCorridor(polygon, { surveyId: 'approved-test-survey' });
+  const group = engine.describeGroup('track', observed, 100, 100);
+  ok(group.eta_seconds === 1 && group.eta_basis === 'image_space_corridor');
+  engine.setCorridor(polygon);
+  ok(engine.describeGroup('track', observed, 100, 100).eta_basis === null);
+});
+
+test('reporting skips unobserved batches, prunes dead tracks, and maintains heartbeat', () => {
+  const engine = new DetectionEngine();
+  const risk = { level: 'green', reasons: [] };
+  const report = (t) => engine.report([], risk, t, t, 100, 100);
+  engine.tracker.tracks = [{ id: 1, confirmed: true, trail: [[1, 20, 30]], svx: 1, svy: 0 }];
+  const events = [], batches = [];
+  engine.on('event', (e) => events.push(e));
+  report(0); report(1);
+  ok(events.length === 1 && engine.rep.sentUpTo.size === 0);
+  const unsubscribe = engine.on('track_batch', (batch) => batches.push(batch));
+  report(2); report(3);
+  ok(batches.length === 1 && batches[0].points[0].track_id === 1);
+  unsubscribe();
+  engine.tracker.tracks = [];
+  engine.rep.crops.set(1, 0);
+  report(Math.max(4, engine.cfg.report.cropMinIntervalSec, engine.cfg.report.greenHeartbeatSec));
+  ok(engine.rep.sentUpTo.size === 0 && engine.rep.crops.size === 0 && events.length === 2);
+});
+
 export async function runAll(log = console.log) {
   const results = [];
   for (const t of tests) {

@@ -70,6 +70,34 @@ test('Solana timeout is bounded before submission', async () => {
   const result = await createSolana({ settings, web3: f.web3, timeoutMs: 20 }).stampReport('Report');
   assert.equal(result.status, 'failed'); assert.match(result.error, /timed out/); assert.equal(f.calls.length, 0);
 });
+
+test('Solana does not send if the durable signature reservation fails', async () => {
+  const f = fixture();
+  f.web3.Transaction.prototype.sign = function () { this.signature = Buffer.alloc(64, 1); };
+  let reservations = 0;
+  const result = await createSolana({ settings, web3: f.web3 }).stampReport('Report', { beforeSubmit: async ({ signature }) => {
+    assert.ok(signature);
+    reservations++;
+    throw new Error('simulated reservation write failure');
+  } });
+  assert.equal(result.status, 'failed');
+  assert.equal(reservations, 1);
+  assert.deepEqual(f.calls, []);
+});
+
+test('replayed alert is visible without browser speech, and duplicate receipt does not reannounce it', async () => {
+  const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
+  const shown = [], spoken = [];
+  const player = createAlertPlayer({ enabled: () => true, alarm: () => {}, showText: text => shown.push(text),
+    speakText: text => spoken.push(text) });
+  const replayed = { id: 'stored1', text: 'Recovered warning' };
+  player.receive(replayed, { replay: true });
+  player.receive(replayed);
+  player.receive({ id: 'live1', text: 'New warning' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(shown, ['Recovered warning', 'New warning']);
+  assert.deepEqual(spoken, ['New warning']);
+});
 test('late or duplicate audio updates never repeat the announcement', async () => {
   const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
   let timeout, spoken = 0, played = 0, alarms = 0;
@@ -92,10 +120,13 @@ test('only new alerts become incidents: 2-second repeats are not stored, an esca
 });
 test('health reports a failing Gemini instead of just "configured"', () => {
   const ai = require('../ai-voice/ai');
-  const p = createPipeline({ settings: { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }, voice: { health: () => ({}) }, solana: { health: () => ({}) } });
-  Object.assign(ai.geminiState, { lastError: 'm: Gemini HTTP 404', lastErrorAt: 2, lastSuccessAt: 1 });
+  const p = createPipeline({ settings: { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }, solana: { health: () => ({}) } });
+  const failure = { reason: 'model', httpStatus: 404, action: 'Check the configured Gemini model IDs and project availability.' };
+  Object.assign(ai.geminiState, { lastError: 'm: Gemini HTTP 404', lastFailure: failure, lastErrorAt: 2, lastSuccessAt: 1 });
   assert.equal(p.status().gemini, 'failing (m: Gemini HTTP 404)');
-  Object.assign(ai.geminiState, { lastSuccessAt: 3 });
+  assert.equal(p.health().gemini.state, 'unavailable');
+  assert.deepEqual(p.health().gemini.failure, failure);
+  Object.assign(ai.geminiState, { lastError: null, lastFailure: null, lastSuccessAt: 3 });
   assert.equal(p.status().gemini, 'live');
   Object.assign(ai.geminiState, { lastError: null, lastErrorAt: 0, lastSuccessAt: 0 });
 });

@@ -14,6 +14,7 @@ struct PrimaryThreat: Decodable, Equatable {
     var size: Double?
     var classification: String?
     var eta_seconds: Double?
+    var eta_basis: String?
     var bearing_deg: Double?
     var flap_hz: Double?
     var heading: String?
@@ -93,6 +94,8 @@ struct FrameReply: Decodable {
     var ok: Bool?
     var bot: String?
     var state: BotState?
+    var at: Double?
+    var remaining_ms: Double?
     var error: String?
 }
 
@@ -104,7 +107,7 @@ private func decodeLooseId<K: CodingKey>(_ c: KeyedDecodingContainer<K>, _ key: 
 }
 
 extension PrimaryThreat {
-    /// One line for the banner, e.g. "Flock of 6 birds · heading south · 9 s to runway".
+    /// One line for the banner, including image-space timing only when available.
     var summary: String {
         var parts: [String] = []
         let cls = (classification ?? "unknown").lowercased()
@@ -116,8 +119,8 @@ extension PrimaryThreat {
             parts.append(cls == "bird" ? "Bird" : cls == "drone" ? "Drone" : "Unknown object")
         }
         if let h = heading, !h.isEmpty { parts.append("heading \(h)") }
-        if let e = eta_seconds, e.isFinite {
-            parts.append(e < 0.5 ? "at the runway" : "\(Int(e.rounded())) s to runway")
+        if eta_basis == "image_space_corridor", let e = eta_seconds, e.isFinite, e >= 0 {
+            parts.append("projected image-mask entry: \(e.formatted(.number.precision(.fractionLength(0)))) s")
         } else if let f = flap_hz, f > 0 {
             parts.append(String(format: "wings %.1f Hz", f))
         }
