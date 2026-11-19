@@ -90,3 +90,8 @@ real footage from another source: always test on footage from a different source
 
 **Not done yet:** the app wiring (approved), v5 (bigger pretrained model, needs a GPU), the Gemini comparison.
 Datasets are not in git (data/ is ignored); the scripts re-download them and check their checksums.
+
+**Independent small-bird evidence:** `small_bird_preflight.py` checks local native-frame metadata for
+size coverage and source-group overlap without loading media. See `Shreyansh Local Ai Model/DATASETS.md`
+for permission and evaluation requirements. Resized 7/10/13 px tests are stress proxies, not evidence
+of recall on real birds of those sizes.
