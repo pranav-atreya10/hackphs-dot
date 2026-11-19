@@ -6,7 +6,7 @@ import { VirtualBeacon, encodeBeacon, frameFromEvent } from '/detection/adapters
 import { createTowerMonitoring, imageEta, operational, RISK_RANK } from '/js/tower-monitoring.mjs';
 import { createTowerLayers } from '/js/tower-layers.mjs';
 import { createAlertPlayer } from '/js/alert-player.mjs';
-import { reconcileIncidents } from '/js/incident-history.mjs';
+import { receiptProgress, reconcileIncidents } from '/js/incident-history.mjs';
 
 const $ = id => document.getElementById(id);
 const time = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
@@ -59,7 +59,7 @@ const initQR = feature('QR code', 'qrNote', async () => {
   qr.addData(camUrl); qr.make();
   $('qr').innerHTML = qr.createImgTag(4, 0, 'QR code that opens the SkySentry camera page on a phone');
 });
-if (location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) $('camUrl').textContent += ' (phones need https for the camera; use the deployed site)';
+if (location.protocol !== 'https:' && !/^(localhost|127\.)/.test(location.hostname)) $('camUrl').textContent += ' (browser camera access requires HTTPS or localhost)';
 
 /* ---------- sound: alarm, then the browser's voice reads the alert ---------- */
 $('sound').addEventListener('click', () => {
@@ -81,7 +81,6 @@ function alarm() {
 const announcements = createAlertPlayer({
   enabled: () => soundOn, alarm,
   showText: text => { $('alertText').textContent = text; },
-  playAudio: audio => new Audio(`data:audio/mpeg;base64,${audio}`).play(),
   speakText: text => {
     if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = .95; speechSynthesis.speak(u); }
   },
@@ -104,39 +103,57 @@ function showAlert(data, { replay = false, provisional = false } = {}) {
   const { id } = data;
   let entry = alerts.get(id);
   if (!entry) {
-    if (alerts.size >= 200) removeAlert(alerts.keys().next().value);
+    if (alerts.size >= 200) {
+      const completed = [...alerts].find(([, candidate]) => candidate.committed);
+      removeAlert(completed?.[0] ?? alerts.keys().next().value);
+    }
     const row = document.createElement('li'), label = document.createElement('span'), status = document.createElement('span');
     const button = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Acknowledge', className: 'ghost' });
     label.textContent = data.text;
     button.addEventListener('click', () => {
       button.disabled = true;
-      socket.timeout(5000).emit('alert:acknowledge', id, (err, receipt) => {
+      socket.timeout(8000).emit('alert:acknowledge', id, (err, receipt) => {
         if (!err && receipt?.ok) acknowledgeAlert(id);
         else { status.textContent = ' Acknowledgment not confirmed. Try again. '; button.disabled = false; }
       });
     });
     row.append(label, status, button);
     $('unacknowledgedAlerts').append(row);
-    entry = { row, status, button, committed: false };
+    entry = { row, status, button, committed: false, progress: -1 };
     alerts.set(id, entry);
   }
-  if (provisional && !entry.committed) {
-    entry.status.textContent = data.storage_failed ? ' Not confirmed by storage. ' : ' Waiting for durable storage. ';
+  const progress = receiptProgress(data.storage_state);
+  if (provisional && !entry.committed && progress > entry.progress) {
+    entry.progress = progress;
+    entry.status.textContent = ({
+      retrying: ' Not confirmed by storage. Saved for retry. ',
+      retrying_volatile: ' Not confirmed by storage. Retrying in memory only. ',
+      unavailable: ' Not confirmed by storage. No retry scheduled. ',
+    })[data.storage_state] || ' Waiting for durable storage. ';
     entry.button.hidden = true;
   } else if (!provisional) {
     entry.committed = true;
-    entry.status.textContent = replay ? ' Recovered from alert history. ' : ' ';
+    entry.status.textContent = replay ? ' Recovered from alert history. ' : ' Storage confirmed. ';
     entry.button.hidden = false;
   }
-  announcements.receive(data, { replay });
+  const age = Date.now() - data.time;
+  if (!replay && provisional && data.fresh === true && age >= -2000 && age < 10000) {
+    announcements.receive({ id, text: data.text }); // Only a new in-session warning can speak.
+  }
 }
 function replayAlerts() {
   if (!socket?.connected || typeof socket.timeout !== 'function') return;
   const generation = ++alertSyncGeneration;
   const unseen = new Map([...alerts].filter(([, entry]) => entry.committed));
   const page = (cursor, count) => {
-    socket.timeout(5000).emit('alert:replay', cursor, (err, result) => {
+    socket.timeout(8000).emit('alert:replay', cursor, (err, result) => {
       if (generation !== alertSyncGeneration || !socket.connected) return;
+      if (Array.isArray(result?.pending)) for (const { alert, incident, state } of result.pending) {
+        if (alert) showAlert({ ...alert, storage_state: state }, { replay: true, provisional: true });
+        if (operational(incident) && incident.airport === view) updateIncidents([{ ...incident, receipt_state: state,
+          persistence: state === 'unavailable' ? 'unavailable' : 'pending',
+          report_state: state === 'unavailable' ? 'unavailable' : 'pending' }], 'live');
+      }
       if (err || !result?.ok || !Array.isArray(result.alerts)) {
         $('alertSync').textContent = 'Alert history unavailable; retrying.';
         return;
@@ -276,7 +293,7 @@ function incidentItem(inc) {
   b.innerHTML = '<b></b><span></span>';
   const n = inc.object_count;
   b.firstChild.textContent = `${inc.risk === 'red' ? 'Red' : 'Yellow'} · ${inc.type === 'drone' ? 'Drone' : n > 1 ? `${n} ${inc.type}s` : inc.type} · ${inc.camera_id}`;
-  b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_status === 'confirmed' || (inc.solana_tx && !inc.solana_status) ? ' · stamped on Solana' : inc.solana_status === 'pending' ? ' · stamp pending' : inc.solana_error ? ' · stamp needs attention' : ''}`;
+  b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_status === 'confirmed' ? ' · devnet memo confirmed' : inc.solana_status === 'pending' ? ' · memo pending' : inc.solana_error ? ' · memo needs attention' : ''}`;
   b.addEventListener('click', () => showIncident(inc));
   li.appendChild(b); return li;
 }
@@ -357,7 +374,9 @@ async function loadEvidence(d, container) {
 function renderIncidentReport(d, text) {
   text.replaceChildren();
   const label = document.createElement('p'); label.innerHTML = '<b>Advisory report:</b> ';
-  label.append(d.gemini_label ?? (['unavailable', 'incomplete'].includes(d.report_state) ? 'report unavailable' : 'waiting for the report…'));
+  label.append(d.gemini_label ?? (d.receipt_state === 'retrying' ? 'waiting for storage retry'
+    : d.receipt_state === 'retrying_volatile' ? 'waiting for an in-memory storage retry'
+    : ['unavailable', 'incomplete'].includes(d.report_state) ? 'report unavailable' : 'waiting for the report…'));
   const report = document.createElement('p'); report.textContent = d.report ?? '';
   text.append(label, report);
   if (d.bird_verdict?.status === 'verified') {
@@ -370,10 +389,14 @@ function renderIncidentReport(d, text) {
     p.textContent = `Gemini bird check unavailable. ${d.bird_verdict.evidence}`;
     text.append(p);
   }
-  if (d.report_hash) { const p = document.createElement('p'); p.textContent = `Report fingerprint: ${d.report_hash.slice(0, 16)}…`; text.append(p); }
+  if (d.report_hash) {
+    const p = document.createElement('p');
+    p.textContent = `Report fingerprint: ${d.report_hash.slice(0, 16)}… A matching devnet memo verifies the text hash, not the report’s accuracy.`;
+    text.append(p);
+  }
   if (d.solana_error) { const p = document.createElement('p'); p.textContent = `Solana: ${d.solana_error}`; text.append(p); }
   else if (d.type === 'drone' && d.solana_status === 'hash only') { const p = document.createElement('p'); p.textContent = 'Report hashed locally. Connect a funded devnet wallet to stamp it on Solana.'; text.append(p); }
-  if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = d.solana_status === 'pending' ? 'Check pending Solana stamp' : 'View the Solana stamp'; text.append(a); }
+  if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Inspect the devnet transaction'; text.append(a); }
 }
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { ...(await auth.headers()), ...(view ? { 'x-airport': view } : {}), ...(opts.headers || {}) } });
@@ -585,6 +608,8 @@ async function connect() {
   socket.on('disconnect', reason => {
     historyRequest?.abort(); evidenceRequest?.abort(); pendingFeed.clear(); cameraPositions.clear();
     alertSyncGeneration++;
+    $('alertSync').textContent = 'Alert history unavailable while disconnected.';
+    announcements.clear();
     if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
     if (selectedIncident) { $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
     monitoring.setConnected(false); refreshRisk();
@@ -616,9 +641,8 @@ async function connect() {
   });
   socket.on('incident', packet => { if (operational(packet) && packet.airport === view) updateIncidents([packet], 'live'); });
   socket.on('alert_pending', data => showAlert(data, { provisional: true }));
-  socket.on('alert', showAlert);
+  socket.on('alert', data => showAlert(data));
   socket.on('alert_acknowledged', data => { if (scopedAlert(data)) acknowledgeAlert(data.id); });
-  socket.on('alert_update', packet => { if (operational(packet)) announcements.update(packet); });
   socket.connect();
 }
 function showStartupError(err) {

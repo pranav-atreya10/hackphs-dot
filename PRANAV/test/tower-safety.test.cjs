@@ -199,7 +199,7 @@ test('real tower socket wiring renders the same highest warning in the dashboard
     },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     VirtualBeacon: class { feed(line) { frames.push(beacon.parseBeaconLine(line)); } render() {} },
-    createAlertPlayer: () => ({ receive() {}, update() {} }),
+    createAlertPlayer: () => ({ receive() {}, clear() {} }),
     signIn: async () => ({ role: 'dashboard', airport: 'TEST', socketAuth: async () => ({}), headers: async () => ({}) }),
     refreshSocketAuth() {},
     fetch: async path => ({ ok: true, json: async () => path === '/api/airports'

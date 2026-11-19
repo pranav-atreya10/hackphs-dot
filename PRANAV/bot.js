@@ -187,4 +187,13 @@ class CameraBot {
   remainingMs() { return this.active ? Math.max(0, FRESH_MS - (this.now() - this.resultAt)) : 0; }
 }
 
-module.exports = { CameraBot, BOT_ENABLED: ENABLED, cropBirdReview: (jpeg, box) => crop(jpeg, box, { review: true }) };
+async function checkVideoDetector() {
+  if (!ENABLED) return 'disabled';
+  const { DetectionEngine } = await loadEngine();
+  const jpeg = await sharp({ create: { width: 32, height: 24, channels: 3, background: '#709acd' } }).jpeg().toBuffer();
+  const state = new DetectionEngine().process(await decode(jpeg), 0);
+  return state?.motion && state?.risk ? 'ready' : 'unavailable';
+}
+
+module.exports = { CameraBot, BOT_ENABLED: ENABLED, checkVideoDetector,
+  cropBirdReview: (jpeg, box) => crop(jpeg, box, { review: true }) };

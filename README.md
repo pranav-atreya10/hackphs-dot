@@ -1,6 +1,6 @@
 # SkySentry
 
-SkySentry connects an iPhone camera to a live tower dashboard, detects moving birds and drones near a runway corridor, double-checks birds with a strict Gemini bird judge, and turns alerts into incident reports stored in MongoDB. It is software only: no extra hardware, the tower beacon is drawn on screen. The Node server and deployed website are in `PRANAV`; the native iPhone app is in `ATHARV/ios`.
+SkySentry is a video-only monitoring prototype. An authorized camera sends JPEGs to the Node server in `PRANAV`, which assigns risk and shows warnings in a tower dashboard. The native camera app is in `ATHARV/ios`. JPEGs contain no drone audio, and even “No detections in monitored video” is not clearance. The prototype is not qualified for airport operations.
 
 **Live site:** https://lancerhacks-rvs8r.ondigitalocean.app (deployed from `main` on DigitalOcean App Platform)
 
@@ -10,8 +10,8 @@ SkySentry connects an iPhone camera to a live tower dashboard, detects moving bi
 |---|---|---|
 | `/` | Landing page: the 100-second film, how it works, demos, and the "Ask about SkySentry" chat | Everyone |
 | `/account.html` | Sign up / sign in (Clerk), then pick an account type and enter an airport join code | Everyone |
-| `/camera.html` | **Camera station.** Uses this device's camera (or **Upload a video**), detects birds and drones, and streams to the tower. On a laptop, a QR code opens it on a phone. | Camera accounts, admins; tower accounts only for demo clips |
-| `/tower.html` | **Tower dashboard.** Live risk (also in the sidebar), camera feeds with the detector's boxes, map pins, spoken alerts, AI incident reports, hourly chart, beacon, and the assistant | Tower accounts, admins |
+| `/camera.html` | **Camera station.** Streams live video from this device. Uploads and synthetic scenes stay in local preview. | Airport-bound camera accounts, or a bound camera key; demos stay local |
+| `/tower.html` | **Tower dashboard.** Server-assigned risk and coverage, fresh alerts with optional browser speech, reports, a camera map, chart, software beacon and advisory assistant | Tower accounts, admins, or an airport-bound tower key |
 | `/demo.html` | Demo library: recorded bird and drone clips. Not linked from any menu (camera stations pick demo clips in their own settings); still works by URL | Everyone |
 | `/settings.html` | Account type, airport, profile and security (Clerk), switch-type requests, delete account, light/dark theme | Signed-in users (theme for everyone) |
 | `/admin.html` | Create airports and join codes; approve or deny account-type switch requests | Admins |
@@ -25,24 +25,24 @@ The first time someone opens the **Tower** or **Camera** page, a short guided to
 
 - **Camera station** and **Tower dashboard** accounts belong to one airport. They join with that airport's code and only see their own side and airport. The sidebar's bottom-left Account tab shows the type.
 - **Switching type** needs an admin: request it in Settings, or from a page your account can't open. The admin approves it on the admin page, and you keep your airport.
-- **Admins** are set by email in `ADMIN_EMAILS`. They use both the camera and the tower without a join code; the tower has an airport picker to show one airport or all of them. Admins create airports and join codes.
-- Without Clerk keys, sign-in is off. Cameras then use `CAMERA_API_KEY`, and the tower is open (or uses `TOWER_API_KEY`).
+- **Admins** are configured by verified email in `ADMIN_EMAILS`. They can create airports and choose one registered airport per dashboard connection.
+- Without Clerk, use separate camera and tower keys bound to registered airports. Keyless tower access is opt-in for loopback demos only and does not pass readiness.
 
 ### How an alert travels
 
-Camera (browser or iPhone app) → streams frames to the server → the server bot runs the detection engine (`VIVAN/detection`), or the camera or tower runs it if the server is busy → a yellow or red alert goes to the tower live. It's read out loud by the tower browser's voice, checked and written up by Gemini, stored in MongoDB (incidents, and every detection for the hourly chart), and drone reports are stamped on Solana devnet. Only a *new* alert becomes an incident; a camera's 2-second repeats don't.
+The server evaluates current frames from an authorized airport. If the detector is stale or unavailable, the tower shows the coverage gap, not a green result. Live warnings can precede MongoDB confirmation; only stored alerts can be acknowledged and replayed. Browser speech is opt-in for fresh alerts, and recovery is silent. Delivery and reports can be delayed or incomplete. Snapshot retention and optional cloud image review are separate, default-off settings. A Solana devnet hash can help compare exact drone report text; it is not tamper-proof storage or proof of accuracy.
 
 ## Run it locally
 
 ```bash
 cd PRANAV
-npm install
-cp .env.example .env      # then fill in what you have; everything except CAMERA_API_KEY is optional
+npm ci                    # follow repository download policy
+cp .env.example .env      # use only approved local settings; remove dummy provider values
 npm run dev               # http://localhost:8080 (or PORT)
 npm test                  # server, auth, airports, switch requests, pipeline
 ```
 
-On a Mac you can instead double-click **Restart SkySentry.command**; keep its terminal open while streaming. Phones need **https** to use their camera, so test phones against the live site.
+On a Mac you can instead double-click **Restart SkySentry.command**. Browser camera access requires HTTPS or localhost. See [the runbook](PRANAV/OPERATIONS.md) for isolated synthetic verification; do not test against the public site.
 
 Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's film/site into `PRANAV/public`), `npm run record-film` (render the film to MP4).
 
@@ -50,19 +50,21 @@ Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's fi
 
 | Variable | What it does |
 |---|---|
-| `CAMERA_API_KEY` | **Required in production.** Key for cameras and scripts when not using sign-in. |
-| `TOWER_API_KEY` | Optional key that opens the tower for every airport. |
+| `CAMERA_API_KEY`, `CAMERA_API_AIRPORT` | Required in production. Device key and its single registered airport. |
+| `TOWER_API_KEY`, `TOWER_API_AIRPORT` | Optional distinct tower key and its single registered airport. |
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Sign-in. On `*.ondigitalocean.app`, use the Clerk **Development** keys (`pk_test_` / `sk_test_`); production keys need a domain you own. |
 | `ADMIN_EMAILS` | Comma-separated emails of admins (must be verified in Clerk). |
 | `AIRPORT_CODES` | Fixed airports and join codes, e.g. `KPCT=pct-sky-4821`. Admins can add more on the admin page (saved in MongoDB). |
 | `MONGODB_URI` | Everything stored: incident reports, every detection (hourly chart; deleted after 8 days), bird verdicts, admin-created airports, switch requests. |
-| `GEMINI_API_KEY` (`GEMINI_MODEL`, `GEMINI_BACKUP_MODEL`) | Snapshot checks and incident reports. Without it, reports use a template. |
+| `RECEIPT_SPOOL_FILE` | Absolute private file on a supported persistent local volume for restart recovery. Without it, `/ready` is not ready. Do not configure it on ephemeral App Platform storage. |
+| `GEMINI_API_KEY` (`GEMINI_MODEL`, `GEMINI_BACKUP_MODEL`) | Optional advisory reports and text fallback; reports can use a template when unavailable. |
+| `DURABLE_INCIDENT_EVIDENCE`, `GEMINI_CLOUD_EVIDENCE_ENABLED` | Independent opt-ins for retaining incident images and sending eligible images to Gemini. |
 | `OPENAI_API_KEY` (`OPENAI_MODEL`, `OPENAI_GUIDE_MODEL`) | Tower assistant and the landing-page chat. |
 | `SOLANA_SECRET_KEY` (`SOLANA_RPC_URL`) | Devnet stamp on drone reports. |
 | `SERVER_BOT`, `BOT_PRESET` | Server-side detection on streamed video (`on` by default). |
 | `AIRPORT_NAME`, `SITE_URL`, `CORS_ORIGIN`, `PORT` | Display name, sitemap origin, allowed origins, port. |
 
-**Check it's working:** `/health` shows each provider as `live`, `configured`, `failing (reason)` or a fallback. `/health/db` shows MongoDB, Clerk and the airport count.
+**Checks:** `/health` is process liveness, not readiness. `/ready` checks required software capabilities, not live coverage or clearance. `/health/db` reports storage and Clerk diagnostics.
 
 ## Repo layout
 

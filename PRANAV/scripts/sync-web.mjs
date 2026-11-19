@@ -97,7 +97,7 @@ const loader = html => must(html, '<span class="load-title">SKYSENTRY</span>', `
 
 let filmPage = readText(join(film, 'index.html'));
 filmPage = must(filmPage, '<div class="top"><h1>SkySentry</h1>', `<div class="top"><h1>${MARK}SkySentry</h1>`, 'film.html title');
-output('film.html', themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film of SkySentry spotting birds and drones near a runway and alerting the control tower.'));
+output('film.html', themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film illustrating simulated video detection and tower warnings.'));
 
 // Landing page: the product site plus links into the live system.
 let site = readText(join(film, 'site.html'));
@@ -109,7 +109,7 @@ const live = readText(fileURLToPath(new URL('./live-section.html', import.meta.u
 const anchor = '<section class="sec" id="stack">';
 if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
 site = site.replace(anchor, live + '\n  ' + anchor);
-// Promo clips (public/promo/, made from the team's GIFs) right after "How it works".
+// Isolated demo links, right after "How it works".
 const promo = readText(fileURLToPath(new URL('./promo-section.html', import.meta.url)));
 site = must(site, '<section class="sec" id="risk">', promo + '\n  <section class="sec" id="risk">', 'site.html #risk section');
 // The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), and the top bar's
@@ -125,7 +125,7 @@ site = must(site, '<div class="cta"><a class="btn-s primary" href="#film">Watch 
   '<div class="cta"><a class="btn-s primary" href="/account.html">Sign up</a><a class="btn-s" href="/app.html">Get the app</a></div>', 'site.html hero buttons');
 site = must(site, '<div><b>SkySentry</b>', `<div><b>${MARK}SkySentry</b>`, 'site.html footer');
 site = site.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Source\+Serif[^>]*>\n?/, '');
-output('index.html', themed(decorative(loader(site)), 'site.css', 'SkySentry turns an ordinary phone into an early-warning lookout that spots birds and drones near runways and alerts the control tower.'));
+output('index.html', themed(decorative(loader(site)), 'site.css', 'SkySentry is a video-only monitoring prototype with server-assigned risk and advisory tower warnings.'));
 }
 
 if (differences.length) {

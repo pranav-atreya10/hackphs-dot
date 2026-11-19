@@ -2,9 +2,8 @@ These production adapters integrate [Shreyansh's pipeline (PR #12)](https://gith
 The original package remains under `SHREYANSH/`. `describe.js` and Gemini prompts come from that package;
 native Node fetch replaces SDK transports so DigitalOcean deploys `source_dir: PRANAV` with one clean install.
 
-Red alerts reach the tower immediately. Gemini reports run in the background; the tower reads the alert out loud with the browser's voice.
-The tower waits up to five seconds for audio, then speaks locally, and never plays a late duplicate.
-Reports and Solana stamps update the same incident. Cooldowns are scoped by airport, camera and type;
+Red warnings can appear before storage confirms them. With sound enabled, the browser can read a fresh warning aloud. Replay, acknowledgment and report updates are silent. No provider audio is sent to the tower.
+Reports and optional devnet hashes update the same incident separately. Delivery and reports can be delayed or incomplete. Cooldowns are scoped by airport, camera and type;
 escalation always passes. Unknown objects remain visible without being relabeled as birds.
 
 Variables: `GEMINI_API_KEY`, `GEMINI_MODEL` (default `gemini-3.5-flash`), `GEMINI_BACKUP_MODEL`
@@ -13,7 +12,7 @@ Local keys can be in `PRANAV/.env` or `SHREYANSH/.env`; existing environment var
 Production uses injected environment variables only. Never put secrets in browser code or GitHub.
 
 Solana checks devnet before signing. The memo is SHA-256 of the exact report text, matching
-Shreyansh's `verifyReport`. Wallet validation, request timeouts, insufficient funds and failed or pending
+Shreyansh's `verifyReport`; it does not prevent edits or establish accuracy. Wallet validation, request timeouts, insufficient funds and failed or pending
 confirmation are reported explicitly. No wallet is generated or automatic airdrop requested.
 The wallet must hold devnet SOL for fees. Setup and last errors are available from `ai.health()`;
 configured providers are not labeled live until a successful call has completed.

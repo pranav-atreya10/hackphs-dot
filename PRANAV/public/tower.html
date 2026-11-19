@@ -101,7 +101,7 @@
 </aside>
 <div class="page">
 <header class="page-head"><h1>Tower</h1><p>Live risk, camera feeds and alerts for the runway.</p>
-  <p>SkySentry sends detection data to its server and may store incident snapshots in MongoDB Atlas. Only when the deployment operator enables cloud evidence processing may camera crops and incident snapshots also be sent to Google Gemini for review.</p>
+  <p>Video warnings are advisory, not clearance. Incident snapshot retention and sending eligible camera images to Gemini are separate settings, both off by default.</p>
 </header>
 <div id="auth" hidden></div>
 
@@ -113,7 +113,7 @@
       <p class="hint" id="feedsLoad" role="status"></p>
       <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false">Enable trained bird check</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Bird check off · motion detection stays active.</span></div>
       <p class="hint" id="birdReviewStatus" role="status" aria-live="polite"></p>
-      <p class="hint">Optional trained model checks tracked objects for birds on this Mac. Camera images stay in this browser. Tiny objects may remain unknown; this model does not identify drones.</p>
+      <p class="hint">The trained bird check runs in this browser. Separate cloud review is available only if enabled for this deployment. Neither review changes operational risk.</p>
     </section>
     <details class="card" id="towerDemo">
       <summary>Preview recorded footage (demo)</summary>
@@ -123,7 +123,7 @@
     <div class="duo"><section class="card risk" id="risk" data-risk="unavailable" aria-live="polite">
       <span class="lvl" id="riskLvl">UNAVAILABLE</span><span class="what" id="riskWhat">No usable monitoring</span><span class="why" id="riskWhy">Waiting for a tower connection</span>
     </section>
-    <section class="card"><h2>Latest alert</h2><p id="alertText">No alerts yet.</p>
+    <section class="card"><h2>Latest live alert</h2><p id="alertText">No live alerts yet.</p>
       <p id="alertSync" class="hint" role="status"></p><ul id="unacknowledgedAlerts" aria-label="Unacknowledged alerts"></ul>
     </section></div>
   </div>

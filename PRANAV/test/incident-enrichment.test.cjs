@@ -158,6 +158,7 @@ test('a stale lease cannot stage report output or reserve a stamp', async () => 
 
 test('replay and acknowledgment use one exact scalar airport and preserve the first acknowledgment', async () => {
   const expected = { airport: 'AAA', $expr: { $eq: ['$airport', 'AAA'] } };
+  let visible = false, writes = 0;
   const journal = createEventJournal(fn => fn({ collection: () => ({
     find(filter, options) {
       assert.equal(filter.acknowledged_at.$exists, false);
@@ -165,7 +166,14 @@ test('replay and acknowledgment use one exact scalar airport and preserve the fi
       assert.equal(options.readConcern.level, 'majority');
       return { sort() { return this; }, limit() { return this; }, async toArray() { return [{ alert: { id: 'a', airport: 'AAA' } }]; } };
     },
+    async findOne(filter, options) {
+      assert.equal(options.readConcern.level, 'majority');
+      assert.deepEqual({ airport: filter.airport, $expr: filter.$expr }, expected);
+      if (filter.acknowledged_at) assert.equal(writes, 1);
+      return visible ? { airport: 'AAA' } : null;
+    },
     async findOneAndUpdate({ _id, ...filter }, [update], options) {
+      writes++;
       assert.equal(_id, 'a');
       assert.deepEqual({ airport: filter.airport, $expr: filter.$expr }, expected);
       assert.deepEqual(update.$set.acknowledged_at.$ifNull, ['$acknowledged_at', '$$NOW']);
@@ -176,5 +184,8 @@ test('replay and acknowledgment use one exact scalar airport and preserve the fi
   }) }));
   await assert.rejects(() => journal.replay(['AAA', 'BBB']), /authorized airport/);
   assert.deepEqual(await journal.replay('AAA'), { alerts: [{ id: 'a', airport: 'AAA' }], next: null });
+  assert.equal(await journal.acknowledge('AAA', 'a', 'operator'), null);
+  assert.equal(writes, 0, 'a receipt not visible at majority cannot be acknowledged');
+  visible = true;
   assert.deepEqual(await journal.acknowledge('AAA', 'a', 'operator'), { airport: 'AAA' });
 });

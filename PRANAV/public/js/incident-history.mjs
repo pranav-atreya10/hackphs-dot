@@ -1,7 +1,11 @@
+export function receiptProgress(state) {
+  return ({ pending: 0, retrying_volatile: 1, retrying: 2, unavailable: 3 })[state] ?? 0;
+}
+
 function revision(row, source) {
   // Legacy stored reports have no revision but still outrank a provisional live message.
   return Number.isSafeInteger(row.revision) && row.revision > 0 ? row.revision
-    : source === 'history' ? 0 : row.persistence === 'unavailable' ? -1 : -2;
+    : source === 'history' ? 0 : receiptProgress(row.persistence === 'unavailable' ? 'unavailable' : row.receipt_state) - 4;
 }
 
 export function reconcileIncidents(current, incoming, source, limit = 40) {

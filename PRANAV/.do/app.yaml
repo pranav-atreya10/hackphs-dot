@@ -30,11 +30,12 @@ services:
       - key: CAMERA_API_KEY
         type: SECRET
         scope: RUN_TIME
+      - key: CAMERA_API_AIRPORT
+        scope: RUN_TIME
       - key: TOWER_API_KEY
         type: SECRET
         scope: RUN_TIME
-      - key: DATABASE_URL
-        type: SECRET
+      - key: TOWER_API_AIRPORT
         scope: RUN_TIME
       - key: MONGODB_URI
         type: SECRET
@@ -67,15 +68,7 @@ services:
       - key: OPENAI_GUIDE_MODEL
         value: gpt-5-nano
         scope: RUN_TIME
-      - key: ELEVENLABS_API_KEY
-        type: SECRET
-        scope: RUN_TIME
-      - key: ELEVENLABS_VOICE_ID
-        value: 21m00Tcm4TlvDq8ikWAM
-        scope: RUN_TIME
-      - key: ELEVENLABS_MODEL
-        value: eleven_flash_v2_5
-        scope: RUN_TIME
+      # Do not set RECEIPT_SPOOL_FILE on this ephemeral service. /ready will report restart recovery unavailable.
       - key: SOLANA_SECRET_KEY
         type: SECRET
         scope: RUN_TIME

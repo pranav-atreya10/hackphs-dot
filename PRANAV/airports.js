@@ -59,7 +59,8 @@ function createAirports({ env = "", collection = async () => null, matches }) {
     async load() {
       const coll = await collection();
       if (!coll) return;
-      stored = new Map((await coll.find({}).toArray()).filter((d) => hasCode(d._id) && !d.removedAt).map((d) => [d._id, fromDoc(d)]));
+      stored = new Map((await coll.find({}, { readConcern: { level: "majority" } }).toArray())
+        .filter((d) => hasCode(d._id) && !d.removedAt).map((d) => [d._id, fromDoc(d)]));
     },
 
     // The airport a join code belongs to, comparing every code so timing doesn't leak which one matched.

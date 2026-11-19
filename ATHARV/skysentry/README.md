@@ -1,6 +1,6 @@
 # SkySentry in Motion — detail enhancement
 
-This is an enhancement of the user's supplied `SkySentry in Motion.html`. The eight scenes, 100-second story, UI layout, timeline and risk/architecture explanations are retained. Camera shot 2 is widened slightly to keep the detailed aircraft fully in frame; detection formation spacing is increased to reduce overlap.
+This is an enhancement of the user's supplied `SkySentry in Motion.html`. The eight scenes, 100-second story, UI layout and timeline are retained. Detection readings, reports and charts are simulated. The captions describe the live server's video-only capability and mark the film as an illustration, not field validation. `tools/build_site.py` embeds the film without starting it until the visitor activates Play.
 
 Added: a CC0 detailed airliner with animated fan assemblies and landing gear, scanned asphalt/grass materials, HDR environment lighting, runway rubber wear and patch seams, drainage, approach lighting, taxi signs, hold-short markings, ribbed hangars, terminal glazing, tower consoles and antennas, fence wire, parked vehicles, ground service equipment, sensor optics/cable/display, feathered geese and a drone gimbal.
 

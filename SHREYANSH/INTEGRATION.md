@@ -1,4 +1,11 @@
-# SHREYANSH/ — AI + voice pipeline: how to plug it into the server
+# SHREYANSH/ — historical AI + voice prototype
+
+This is a record of the original standalone package, **not an integration
+guide for the live server**. Do not wire it into camera ingress or tower
+alerts. The current [PRANAV adapters](../PRANAV/ai-voice/README.md) keep provider
+results advisory, use only opt-in browser speech for fresh alerts, and never
+use ElevenLabs. See [operations](../PRANAV/OPERATIONS.md) for the current
+readiness and receipt contracts.
 
 Owner: Shreyansh (AI + voice lead). This folder is a self-contained CommonJS package:
 Gemini incident reports, ElevenLabs spoken alerts, a Solana devnet stamp for drone reports,
