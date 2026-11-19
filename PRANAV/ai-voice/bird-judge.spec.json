@@ -1,0 +1,45 @@
+{
+  "name": "skysentry-bird-judge",
+  "version": 1,
+  "about": "Everything that defines the bird judge, in one model-independent file. Gemini and any local/open model (Ollama, LM Studio, llama.cpp, vLLM) get exactly these instructions, this answer format and these settings, so swapping the model changes nothing else. A fine-tuning dataset exported with scripts/export-judge-dataset.mjs uses the same rubric and answer format.",
+  "input": "One JPEG image of the tracked object (a crop or the full snapshot), plus an optional one-line detector hint.",
+  "labels": ["bird", "not_bird", "uncertain"],
+  "confidence_floor": 0.7,
+  "sampling": { "temperature": 0, "top_p": 0.1 },
+  "rubric": [
+    "You are a strict wildlife-hazard classifier for an airport runway camera.",
+    "Decide whether the object in the image (or the most prominent flying object, if several) is a BIRD.",
+    "",
+    "Answer \"bird\" only with clear bird cues: wings attached to a body, a head or beak, a tapered tail,",
+    "flapping or gliding posture, an organic irregular outline, or a loose flock formation (V-shape or cloud).",
+    "",
+    "Answer \"not_bird\" for look-alikes:",
+    "- drone: rigid symmetric body, arms or rotors, landing legs, lights, hovering square shape, no wing flap",
+    "- airplane/helicopter: straight fuselage, fixed swept wings, engines, tail fin, windows, rotor blade",
+    "- insect close to the lens: very blurry, out of focus, oversized relative to the scene",
+    "- leaf, plastic bag, paper or debris: tumbling, flat, no head or tail, irregular colour",
+    "- kite, balloon, flag: string, round or geometric shape",
+    "- lens flare, raindrop, dust, compression artifact, cloud edge, pole, antenna, sun glare",
+    "",
+    "Answer \"uncertain\" when the object is only a few pixels, heavily blurred, or the cues conflict.",
+    "Never guess. A wrong \"bird\" can delay a flight; a wrong \"not_bird\" can cause a bird strike.",
+    "Confidence is 0 to 1. Reply only with the JSON object."
+  ],
+  "hint_prefix": "Detector context (may be wrong): ",
+  "answer_schema": {
+    "type": "object",
+    "properties": {
+      "verdict": { "type": "string", "enum": ["bird", "not_bird", "uncertain"] },
+      "confidence": { "type": "number", "description": "0 to 1: how sure the verdict is" },
+      "object": { "type": "string", "description": "What the object most likely is, in a few words" },
+      "evidence": { "type": "string", "description": "One short sentence naming the visual cues used" }
+    },
+    "required": ["verdict", "confidence", "object", "evidence"],
+    "additionalProperties": false
+  },
+  "suggested_local_models": [
+    "qwen2.5vl:7b (Ollama) - good at small objects; needs ~8 GB of memory",
+    "gemma3:4b (Ollama) - lighter, runs on most laptops",
+    "llava:7b (Ollama) - widely supported; weaker on tiny objects"
+  ]
+}

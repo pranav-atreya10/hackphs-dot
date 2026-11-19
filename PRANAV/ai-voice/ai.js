@@ -144,76 +144,41 @@ async function tryModels(task, ask) {
 async function analyzeEvent(event) {
   const fallback = fallbackReport(event);
   const image = stripDataUrl(event.snapshot);
-  if (!gemini || !image) return fallback;
+  if (!image) return fallback;
+  if (!gemini) { // no report model, but a local judge can still check birds
+    if (JUDGE !== 'local' || event.type === 'drone') return fallback;
+    const v = await verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`).catch(() => null);
+    return v && v.source !== 'fallback' ? { ...fallback, bird_verdict: v } : fallback;
+  }
 
   // The report and the strict bird judge run in parallel, so the judge adds no extra wait.
   const judging = event.type === 'drone' ? Promise.resolve(null)
     : verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`).catch(() => null);
-  const [result, judge] = await Promise.all([
+  const [result, verdict] = await Promise.all([
     tryModels('report', (model, limit) => askGeminiForReport(model, event, image, limit)), judging]);
   if (!result) console.warn('[ai] using fallback report');
   const out = result || fallback;
-  return judge && judge.source === 'gemini' ? { ...out, bird_verdict: judge } : out;
+  return verdict && verdict.source !== 'fallback' ? { ...out, bird_verdict: verdict } : out;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Bird judge: a strict, separate yes/no Gemini call. Gemini can't be fine-tuned here, so it is
-// "trained" with a fixed rubric of look-alikes, a forced JSON schema, temperature 0 and a
-// confidence floor. It only answers "bird" when it is sure; otherwise "uncertain".
+// Bird judge: a strict, separate yes/no call. Gemini can't be fine-tuned here, so it is "trained" with a
+// fixed rubric of look-alikes, a forced JSON schema, temperature 0 and a confidence floor; it only answers
+// "bird" when it is sure, otherwise "uncertain". BIRD_JUDGE=local sends the same rubric to a local/open model
+// (bird-judge.js); BIRD_JUDGE=off skips it.
 // ---------------------------------------------------------------------------------------------
 
-const BIRD_CONFIDENCE_FLOOR = 0.7;
-const BIRD_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    verdict: { type: 'STRING', enum: ['bird', 'not_bird', 'uncertain'] },
-    confidence: { type: 'NUMBER', description: '0 to 1: how sure the verdict is' },
-    object: { type: 'STRING', description: 'What the object most likely is, in a few words' },
-    evidence: { type: 'STRING', description: 'One short sentence naming the visual cues used' }
-  },
-  required: ['verdict', 'confidence', 'object', 'evidence'],
-  propertyOrdering: ['verdict', 'confidence', 'object', 'evidence']
-};
-
-const BIRD_RUBRIC = [
-  'You are a strict wildlife-hazard classifier for an airport runway camera.',
-  'Decide whether the object in the image (or the most prominent flying object, if several) is a BIRD.',
-  '',
-  'Answer "bird" only with clear bird cues: wings attached to a body, a head or beak, a tapered tail,',
-  'flapping or gliding posture, an organic irregular outline, or a loose flock formation (V-shape or cloud).',
-  '',
-  'Answer "not_bird" for look-alikes:',
-  '- drone: rigid symmetric body, arms or rotors, landing legs, lights, hovering square shape, no wing flap',
-  '- airplane/helicopter: straight fuselage, fixed swept wings, engines, tail fin, windows, rotor blade',
-  '- insect close to the lens: very blurry, out of focus, oversized relative to the scene',
-  '- leaf, plastic bag, paper or debris: tumbling, flat, no head or tail, irregular colour',
-  '- kite, balloon, flag: string, round or geometric shape',
-  '- lens flare, raindrop, dust, compression artifact, cloud edge, pole, antenna, sun glare',
-  '',
-  'Answer "uncertain" when the object is only a few pixels, heavily blurred, or the cues conflict.',
-  'Never guess. A wrong "bird" can delay a flight; a wrong "not_bird" can cause a bird strike.',
-  'Confidence is 0 to 1. Reply only with the JSON object.'
-].join('\n');
+// The rubric, answer format and confidence floor live in bird-judge.spec.json (shared with local models).
+const judge = require('./bird-judge');
+const { BIRD_RUBRIC, normalizeBirdVerdict } = judge;
+const JUDGE = config.BIRD_JUDGE; // 'gemini' | 'local' | 'off'
 
 async function askGeminiIsBird(model, image, context, timeLimitMs) {
-  const parts = [{ inlineData: { mimeType: 'image/jpeg', data: image } }, { text: BIRD_RUBRIC + (context ? `\n\nDetector context (may be wrong): ${context}` : '') }];
+  const hint = judge.hintText(context);
+  const parts = [{ inlineData: { mimeType: 'image/jpeg', data: image } }, { text: BIRD_RUBRIC + (hint ? `\n\n${hint}` : '') }];
   const text = await generate(model, [{ role: 'user', parts }],
-    { responseMimeType: 'application/json', responseSchema: BIRD_SCHEMA, temperature: 0, topP: 0.1, candidateCount: 1 }, timeLimitMs);
+    { responseMimeType: 'application/json', responseSchema: judge.GEMINI_SCHEMA, temperature: judge.spec.sampling.temperature, topP: judge.spec.sampling.top_p, candidateCount: 1 }, timeLimitMs);
   return normalizeBirdVerdict(JSON.parse(text || '{}'), model);
-}
-
-// Clamp and validate whatever Gemini returned; low-confidence answers become "uncertain".
-function normalizeBirdVerdict(parsed, model) {
-  const verdicts = ['bird', 'not_bird', 'uncertain'];
-  let verdict = verdicts.includes(parsed?.verdict) ? parsed.verdict : 'uncertain';
-  const confidence = Math.max(0, Math.min(1, Number(parsed?.confidence) || 0));
-  if (verdict !== 'uncertain' && confidence < BIRD_CONFIDENCE_FLOOR) verdict = 'uncertain';
-  return {
-    verdict, isBird: verdict === 'bird', confidence,
-    object: typeof parsed?.object === 'string' ? parsed.object.trim().slice(0, 80) : '',
-    evidence: typeof parsed?.evidence === 'string' ? parsed.evidence.trim().slice(0, 200) : '',
-    source: model ? 'gemini' : 'fallback', model,
-  };
 }
 
 /**
@@ -223,9 +188,24 @@ function normalizeBirdVerdict(parsed, model) {
  */
 async function verifyBird(snapshot, context = '') {
   const image = stripDataUrl(snapshot);
-  if (!gemini || !image) return { ...normalizeBirdVerdict({ verdict: 'uncertain', confidence: 0, object: '', evidence: gemini ? 'No image was provided.' : 'Gemini key not configured; detector result only.' }), source: 'fallback' };
+  const unsure = (evidence) => ({ ...normalizeBirdVerdict({ verdict: 'uncertain', confidence: 0, object: '', evidence }), source: 'fallback' });
+  if (!image) return unsure('No image was provided.');
+  if (JUDGE === 'off') return unsure('Bird judge is turned off (BIRD_JUDGE=off); detector result only.');
+  if (JUDGE === 'local') {
+    try {
+      const v = await judge.askLocalIsBird(image, context, { url: config.LOCAL_JUDGE_URL, model: config.LOCAL_JUDGE_MODEL, key: config.LOCAL_JUDGE_KEY, timeoutMs: TIMEOUT_MS });
+      judge.localState.lastSuccessAt = Date.now();
+      return v;
+    } catch (err) {
+      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? `no reply within ${TIMEOUT_MS} ms` : err.message;
+      Object.assign(judge.localState, { lastError: config.redact(reason).slice(0, 80), lastErrorAt: Date.now() });
+      console.warn(`[ai] bird judge: local model (${config.LOCAL_JUDGE_MODEL}) failed: ${config.redact(reason).slice(0, 160)}`);
+      return unsure('The local model did not answer.');
+    }
+  }
+  if (!gemini) return unsure('Gemini key not configured; detector result only.');
   const result = await tryModels('bird judge', (model, limit) => askGeminiIsBird(model, image, String(context).slice(0, 200), limit));
-  return result || { ...normalizeBirdVerdict({ verdict: 'uncertain', confidence: 0, evidence: 'Gemini did not answer in time.' }), source: 'fallback' };
+  return result || unsure('Gemini did not answer in time.');
 }
 
 // ---------------------------------------------------------------------------------------------
