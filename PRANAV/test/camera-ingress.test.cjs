@@ -96,7 +96,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   jpeg.set([255, 216], 0);
   jpeg.set([255, 217], jpeg.length - 2);
   const broadcast = { emit: (name, data) => messages.push([name, data]), get volatile() { return this; } };
-  let sendDetection, snapshot = jpeg.toString("base64");
+  let sendDetection, snapshot = jpeg.toString("base64"), storage;
   const context = {
     app: { post: (path, ...fns) => routes.set(path, fns.at(-1)) },
     express: { raw() {} }, bearerToken() {}, cameraAccess: async () => access,
@@ -107,23 +107,30 @@ test("authenticated capture uses its pinned mask and only the server can persist
     towerRoom: airport => `airport:${airport}`, airports: new Set(["KPCT"]),
     surveyedCorridor, surveyedCorridors: [{ cameraId, airport: "KPCT", camera: pose, polygon: approved, surveyId: "survey" }],
     randomUUID, CameraBot: class {
-      constructor({ onEvent }) { this.onEvent = onEvent; }
+      constructor({ onEvent, onState }) { Object.assign(this, { onEvent, onState }); }
       configure() {}
       invalidate() {}
-      status() { return { mode: "server" }; }
+      status() { return { mode: "server", generation: this.state?.generation }; }
       freshState() { return this.state; }
       remainingMs() { return 1000; }
       async frame(_jpeg, t, frame) {
         this.state = { t, generation: "detector-generation" };
         const event = { type: "bird", risk: "red", snapshot, airport: "untrusted" };
         sendDetection = (candidate, state = this.state) => this.onEvent(event, candidate, state);
+        sendDetection(frame); // No accepted result for this frame yet.
+        this.onState(this.state, frame);
         sendDetection({ ...frame, t: String(t) });
         sendDetection({ ...frame, streamId: "retired-stream" });
+        sendDetection({ ...frame, frameId: frame.frameId + 1 });
         sendDetection(frame, { ...this.state, generation: "retired-generation" });
         sendDetection(frame);
       }
     },
-    mongo: true, pendingReceipts: new Set(), retainIncidentEvidence: true, createIncidentJob, sanitizeMetrics,
+    mongo: true, cloudEvidenceEnabled: false, retainIncidentEvidence: true, createIncidentJob, sanitizeMetrics,
+    incidentPreview: (incident, state) => ({ ...incident, persistence: state, report_state: state }),
+    receiptRecovery: { submit(record, alert, job) {
+      storage = context.journal.record(record, alert, job).then(receipt => broadcast.emit("alert", receipt.alert));
+    }, unavailable(_record, _alert, incident) { broadcast.emit("incident", context.incidentPreview(incident, "unavailable")); } },
     memIncidents: [], rememberDetection() {},
     buildAlertText: () => "Bird warning", shouldAlert: () => true, drainEnrichment() {},
     toText: x => typeof x === "string" ? x : null, toNumber: x => Number.isFinite(x) ? x : null,
@@ -165,6 +172,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   assert.equal(records.length, 0);
 
   assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "8.125" })).code, 200);
+  await storage;
   const [, frame] = messages.find(([name]) => name === "camera:frame");
   assert.equal(records.length, 1);
   const [record] = records;
@@ -188,6 +196,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   snapshot = "x".repeat(800_000);
   assert.equal((await post("/api/camera-config", config)).code, 200);
   assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "8.625" })).code, 200);
+  await storage;
   const invalid = records[1];
   assert.equal(invalid.enrichment.incident.snapshot_state, "invalid");
   assert.equal(invalid.enrichment.evidence, null);
@@ -206,7 +215,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   assert.equal(preview.report_state, "unavailable");
   assert.equal(Object.hasOwn(preview, "revision"), false, "memory-only alerts are not committed revisions");
   assert.equal(Object.hasOwn(preview, "snapshot"), false);
-  assert.equal(context.memIncidents[0], preview);
+  assert.deepEqual(context.memIncidents[0], preview);
   assert.equal(records.length, 2);
 });
 

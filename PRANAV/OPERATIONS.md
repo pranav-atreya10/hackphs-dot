@@ -6,7 +6,7 @@ Keep the repository on this Mac. Install Node.js 20.12 or newer, then install th
 
 Create `PRANAV/.env` with `PORT=8095`, `AIRPORT_CODES`, and a `CAMERA_API_AIRPORT` listed in `AIRPORT_CODES`. Enter that airport and the configured `CAMERA_API_KEY` on the iPhone. `.env` is ignored by Git; do not put secrets into scripts or commit them. Do not copy placeholder database and Clerk settings unless replacing them with working values.
 
-Double-click **Restart SkySentry.command** in the repository root. It checks the port, stops only a Node server owned by your account whose working directory is this repository's `PRANAV` folder, starts the updated code, waits for `/health`, and opens the tower. It never forces another app to stop. The terminal must remain open while the local server is in use.
+Double-click **Restart SkySentry.command** in the repository root. It checks the port, stops only a Node server owned by your account whose working directory is this repository's `PRANAV` folder, starts the updated code, waits for `/health` (process liveness only), and opens the tower. It never forces another app to stop. The terminal must remain open while the local server is in use.
 
 For a check that does not restart anything, run:
 
@@ -16,13 +16,21 @@ bash PRANAV/scripts/restart-local.sh --check
 
 Use `http://localhost:8095/tower.html` on the Mac. In the native iPhone app, enter the Mac's current Wi-Fi address, for example `http://<Mac-Wi-Fi-IP>:8095`, and the same camera key. `localhost` on the iPhone refers to the iPhone. Allow Local Network access and keep both devices on the same network. Wi-Fi addresses can change; check the Mac's Wi-Fi settings if the phone becomes unable to reach it.
 
-Locking the display does not deploy new code. The Mac must remain awake with the server running to relay a phone feed. For use without this Mac, point the phone at the deployed HTTPS server and use that server's camera key.
+Locking the display does not deploy new code. The Mac must remain awake with the server running to relay a phone feed. Test against an isolated server only; do not use the public deployment for a smoke test.
 
 ## Deploy the GitHub code
 
 The Node web service uses repository `pranav-atreya10/hackphs-dot`, branch `main`, source directory `PRANAV`, build command `npm ci`, run command `npm start`, port `8080`, and health path `/health`. These settings are recorded in `.do/app.yaml`. Keep the app at one instance unless adding a shared Socket.IO adapter and shared camera state.
 
-Production requires a camera key and its `CAMERA_API_AIRPORT`, plus either a distinct tower key with `TOWER_API_AIRPORT`, or both Clerk keys and `MONGODB_URI`. Key bindings must name configured `AIRPORT_CODES` entries. Key-based cameras must submit the matching airport. `ALLOW_UNAUTHENTICATED_TOWER=true` opts into a loopback-only local tower without Clerk or a tower key; never enable it in production. Optional providers need their own encrypted runtime variables.
+Production startup requires a camera key and its `CAMERA_API_AIRPORT`, plus either a distinct tower key with `TOWER_API_AIRPORT`, or both Clerk keys and `MONGODB_URI`. Key bindings must name configured `AIRPORT_CODES` entries. Key-based cameras must submit the matching airport. `ALLOW_UNAUTHENTICATED_TOWER=true` opts into a loopback-only local tower without Clerk or a tower key; it does not pass readiness. Optional providers need their own encrypted runtime variables.
+
+## Liveness and readiness
+
+Keep the App Platform health check on `/health`; it verifies liveness and shows last-observed optional provider state without probing dependencies. Use `/ready` separately. It returns `503` until the synthetic JPEG detector self-check, airport registry and access configuration, Mongo majority receipt/report write and read, detection TTL index, and restart spool checks pass. If configured, Clerk must answer a service read and the role lookup must be readable. The Mongo check uses one fixed, unscoped synthetic record per collection, not an operator incident or alert. Checks are cached briefly and return sanitized states. `/health/db` shows storage and Clerk diagnostics but is not a readiness gate.
+
+A `200` from `/ready` is not proof of an authorized device session, continuous camera coverage, acoustic detection, field accuracy or airport qualification. A camera with missing or stale results is degraded or unavailable. Even **No detections in monitored video** is not clearance. Gemini, OpenAI and Solana outages do not block detector warnings or software readiness.
+
+Verify changes in isolation with `npm test`. Use only synthetic frames and fake providers for camera-to-tower checks. Recorded uploads, the synthetic sky preview and the film never test live ingress, voice delivery or field performance. Do not send demo clips through a live camera route or test against the public site.
 
 ## Airport scope and account rollout
 
@@ -32,9 +40,7 @@ MongoDB adds `(airport, time)` indexes and keeps the existing detection TTL poli
 
 An approval in `applying` suspends app access. Use **Reconcile** to finalize once Clerk returns the exact transition ID, role, and airport recorded in MongoDB. Reconcile never blindly retries an uncertain Clerk write. If Clerk never applied it, an operator must establish that no writer/request remains in flight, confirm the prior role and airport against provider audit data, then resolve that exact generation before allowing another request. Likewise, an unconfirmed `account_joins` reservation must be reconciled against Clerk's `joinId` before restoring or clearing it. Preserve an audit record of any recovery and never loosen authorization to get past a provider failure.
 
-After a deploy, check `/health` for server and bot status, `/health/db` for configured database status, open `/tower.html`, and send a real camera or demo clip through `/camera.html`. Confirm frames and bot state arrive, then test an alert. A build success or green health check does not verify camera authentication, tracking, speech, or ledger publication by itself.
-
-Before publishing changes, run `npm test` in `PRANAV` and ensure `npm ci` works with the builder's npm version. Commit `package.json` and `package-lock.json` together whenever dependencies change.
+Before publishing changes, run `npm test` in `PRANAV` and verify dependency installation with the builder's npm version where repository policy permits. Commit `package.json` and `package-lock.json` together whenever dependencies change.
 
 From the repository root, rebuild the landing source with `python ATHARV/skysentry/tools/build_site.py`, then run `npm --prefix PRANAV run sync-web -- --film` to update only the deployed film and landing. Use `--detector` for intentional detector updates. Sync updates managed files without deleting unrelated files; unexpected deployed detector files must be reviewed explicitly. `python ATHARV/skysentry/tools/build_site.py --check` and `npm --prefix PRANAV run check:web` report drift without writing files and run in GitHub CI, where all three folders are available.
 
@@ -50,9 +56,9 @@ Clerk UI loading follows the [official JavaScript quickstart](https://clerk.com/
 
 ## Sponsor service readiness
 
-In DigitalOcean App Platform → Settings → web → Environment Variables, add an encrypted `GEMINI_API_KEY` value. Save and wait for redeployment. Never commit keys. `/health` reports template mode until it is present. Spoken alerts use the tower browser's own voice (no key needed): in Tower, select **Turn on alert sound** and send a demo threat to hear it. ElevenLabs was removed; any `ELEVENLABS_*` variables left in DigitalOcean are ignored and can be deleted.
+Gemini may answer or write advisory reports, but it does not change operational risk. The browser only sounds fresh alerts after the operator selects **Turn on alert sound**; replay and storage confirmations are silent. No ElevenLabs credential is needed.
 
-For Solana, confirm one devnet memo transaction and compare its report hash before claiming an on-chain stamp works. Database health checks confirm connectivity; show a stored camera event, hourly chart and retrieved incident to demonstrate the complete MongoDB workflows. The DEV writing challenge requires a separately published project story.
+An optional confirmed Solana devnet memo can be compared with the hash of exact report text. This does not prevent edits, prove the report accurate, or establish a chain of custody. A mocked provider result does not verify a real devnet transaction.
 
 ## Surveyed corridor setup
 
@@ -76,23 +82,41 @@ track. Do not treat archived guessed points as measured locations.
 
 ## Alert recovery and incident evidence
 
-Live warnings appear before MongoDB confirms them. Acknowledgment and replay use
-the selected airport's stored alerts; replay is silent. If storage is unavailable,
-the tower marks the alert unconfirmed. Retries before the first receipt are
-bounded and held in memory; they cannot survive a server restart. A receipt
-confirmed by MongoDB persists the report job for recovery. Ambiguous Solana
-submissions are reconciled by signature, not submitted a second time.
-Only stored incident updates carry a committed revision; a memory-only alert
-does not.
-Detection receipts, unacknowledged alert replay, and unfinished jobs share the
-eight-day detection retention window. This does not backfill historical reports.
+Live warnings appear before MongoDB confirms them. The tower distinguishes an
+unconfirmed retry from a failed write; only confirmed alerts can be acknowledged.
+Reconnect restores unconfirmed warnings separately from stored history. Neither
+replay nor storage updates speak or set the current risk. An acknowledged alert
+does not reappear in the unacknowledged list. A Mongo receipt persists the report
+job; reports can still be delayed or incomplete. Ambiguous Solana submissions are
+reconciled by signature rather than sent again.
+
+For **self-managed, single-instance** use, `RECEIPT_SPOOL_FILE` must be the
+absolute path to a pre-created empty or existing SkySentry spool file on a
+persistent local volume that implements file sync. Give the app exclusive
+ownership, restrict access to its service account (mode `0600` on POSIX, a private
+ACL on Windows), and keep it outside the checkout, web root and temp folders. Do
+not truncate or recreate the file on restart, move it between installations,
+share it between processes, or use a network mount. Each synced checkpoint
+holds up to 64 incident receipts, capped to eight days of recovery; an incident
+whose receipt is already stored is retried by ID without duplicating alerts.
+The spool never stores images. Only a completed spool checkpoint is eligible for
+restart recovery; a warning can appear before that checkpoint completes.
+
+Without a supported file, `/ready` fails even if MongoDB is healthy. This is
+the expected result for the checked-in App Platform spec; its ephemeral disk
+does not survive instance replacement. Best-effort live warnings and Mongo
+writes continue, but unconfirmed memory-only retries can be lost. An exhausted
+or full queue does not replace existing pending receipts. Alert receipts,
+unacknowledged replay and unfinished Mongo report jobs share the eight-day
+detection retention window; this change does not backfill historical reports.
 
 `DURABLE_INCIDENT_EVIDENCE=1` opts in to retaining eligible server-cropped JPEGs
 in MongoDB, visible only through the authenticated airport-scoped snapshot
 route. It does not authorize sending images to Google. Only
 `GEMINI_CLOUD_EVIDENCE_ENABLED=true` allows Gemini image processing. Neither
 switch is enabled by default, and missing or invalid evidence never blocks a
-warning. Bird and unidentified-object reports use detector readings, with any
+warning. A restart before Mongo accepts an opted-in snapshot may recover the
+receipt and report without that snapshot. Bird and unidentified-object reports use detector readings, with any
 Gemini image verdict stored separately as advisory context. The same image is
 not sent to a second report prompt. A confirmation of storage is not
 confirmation of a completed report.

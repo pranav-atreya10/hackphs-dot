@@ -18,7 +18,10 @@ const { createPipeline } = require("./ai-voice/pipeline");
 const { analyzeEvent, verifyBird, cloudEvidenceEnabled } = require("./ai-voice/ai");
 const { buildAlertText, createRateLimit } = require("./ai-voice/voice");
 const { createSolana } = require("./ai-voice/solana");
-const { createEventJournal } = require("./durable-events");
+const { createEventJournal, checkReceiptStorage } = require("./durable-events");
+const { createReceiptSpool } = require("./receipt-spool");
+const { createReceiptRecovery } = require("./receipt-recovery");
+const { createReadiness } = require("./site-readiness");
 const { createIncidentJob, createEnrichmentWorker, CAP: EVIDENCE_CAP } = require("./incident-enrichment");
 const ledger = createSolana();
 const ai = createPipeline({ solana: ledger });
@@ -28,7 +31,7 @@ const { accessConfig, createAccess, createSocketAccess, keyMatches } = require("
 const { airportFilter, hourlyPipeline } = require("./airport-history");
 const { assignInitialRole, createRoleRequests, RequestError } = require("./role-requests");
 const { localHourLabel } = require("./ai-voice/describe");
-const { CameraBot, BOT_ENABLED, cropBirdReview } = require("./bot");
+const { CameraBot, BOT_ENABLED, checkVideoDetector, cropBirdReview } = require("./bot");
 const { createBirdReview } = require("./bird-review");
 const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
 
@@ -46,7 +49,8 @@ const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || "";
 // Join codes per airport, e.g. "KPCT=pct-sky-4821,KTTN=ttn-sky-9310". Signing up needs one of these codes,
 // and each user only sees their own airport's alerts. Admins can add more airports on admin.html (saved in MongoDB).
 const AIRPORT_CODES_ENV = process.env.AIRPORT_CODES || "";
-const { demo } = accessConfig(process.env, parseEnv(AIRPORT_CODES_ENV));
+const fixedAirports = parseEnv(AIRPORT_CODES_ENV);
+const { demo } = accessConfig(process.env, fixedAirports);
 const HOST = demo ? "127.0.0.1" : "0.0.0.0";
 // Admin accounts, by verified email, e.g. "you@example.com,teammate@example.com". Admins create airports and
 // join codes on admin.html and see every airport in the tower.
@@ -57,6 +61,9 @@ const MONGODB_URI = process.env.MONGODB_URI || "";
 // Detections are deleted automatically after this many days (keeps the Atlas free tier from filling up;
 // the chart needs 24 h and the assistant looks back 7 days).
 const DETECTION_DAYS = 8;
+const RETENTION_SECONDS = DETECTION_DAYS * 86400;
+const spool = process.env.RECEIPT_SPOOL_FILE ? createReceiptSpool(process.env.RECEIPT_SPOOL_FILE) : null;
+let shuttingDown = false;
 
 if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections will not be stored");
 
@@ -66,7 +73,7 @@ if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections
 // A short server-selection timeout makes an unreachable cluster fail in 5s, before DigitalOcean's gateway gives up.
 let mongo = null;
 function newMongo() {
-  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
+  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000, timeoutMS: 5000 });
   const mdb = mongo.db("skysentry");
   for (const name of ["incidents", "detections"]) {
     mdb.collection(name).createIndex({ airport: 1, time: -1 })
@@ -74,7 +81,7 @@ function newMongo() {
   }
   mdb.collection("incidents").createIndex({ time: -1 })
     .catch((err) => console.error("failed to index incidents:", err.message));
-  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: DETECTION_DAYS * 86400 })
+  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: RETENTION_SECONDS })
     .catch((err) => console.error("failed to index detections for expiration:", err.message));
   mdb.collection("detections").createIndex({ "enrichment.due_at": 1 }, { sparse: true })
     .catch((err) => console.error("failed to index incident enrichment:", err.code || err.name));
@@ -87,7 +94,7 @@ async function withMongo(fn) {
   try {
     return await fn(client.db("skysentry"));
   } catch (err) {
-    if (err.name !== "MongoTopologyClosedError") throw err;
+    if (err.name !== "MongoTopologyClosedError" || shuttingDown) throw err;
     if (mongo === client) newMongo();
     return fn(mongo.db("skysentry"));
   }
@@ -99,7 +106,12 @@ const airports = createAirports({
   collection: async () => (mongo ? withMongo(async (mdb) => mdb.collection("airports")) : null),
   matches: keyMatches,
 });
-airports.load().catch((err) => console.error("failed to load airports from MongoDB:", err.message));
+let registryLoaded = !mongo, registryLoad;
+function loadAirportRegistry() {
+  if (registryLoaded) return;
+  return registryLoad ??= airports.load().then(() => { registryLoaded = true; }).finally(() => { registryLoad = null; });
+}
+loadAirportRegistry()?.catch(err => console.warn("airport registry load failed:", err.code || err.name));
 
 // Account-type switch requests (camera station <-> tower dashboard), approved by admins on admin.html.
 const roleRequests = createRoleRequests({
@@ -243,7 +255,6 @@ const { readSurveys, surveyedCorridor, sanitizeMetrics } = require("./corridor-c
 const surveyedCorridors = readSurveys(process.env.SURVEYED_CORRIDORS_JSON);
 const retainIncidentEvidence = process.env.DURABLE_INCIDENT_EVIDENCE === "1";
 const shouldAlert = createRateLimit();
-const pendingReceipts = new Set();
 const worker = createEnrichmentWorker({
   journal, analyze: analyzeEvent, stamp: ledger.stampReport, verify: ledger.verifyReport,
   imageUploadAllowed: () => cloudEvidenceEnabled,
@@ -278,13 +289,59 @@ const worker = createEnrichmentWorker({
 });
 let enrichmentRunning = false;
 async function drainEnrichment() {
-  if (!mongo || enrichmentRunning) return;
+  if (!mongo || enrichmentRunning || shuttingDown) return;
   enrichmentRunning = true;
-  try { for (let i = 0; i < 12 && await worker.runOne(); i++) {} }
+  try {
+    await loadAirportRegistry();
+    for (let i = 0; i < 12 && !shuttingDown && await worker.runOne(); i++) {}
+  }
   catch (err) { console.warn("incident enrichment worker failed:", err.code || err.name); }
   finally { enrichmentRunning = false; }
 }
-if (MONGODB_URI) setInterval(drainEnrichment, 5000).unref();
+const enrichmentTimer = mongo && setInterval(drainEnrichment, 5000).unref();
+
+function incidentPreview(incident, state) {
+  const unavailable = state === "unavailable";
+  return { ...incident, persistence: unavailable ? "unavailable" : "pending",
+    report_state: unavailable ? "unavailable" : "pending", receipt_state: state };
+}
+const receiptRecovery = createReceiptRecovery({
+  spool, journal,
+  allowed: async airport => {
+    if (!fixedAirports.has(airport)) await loadAirportRegistry();
+    return airports.has(airport);
+  },
+  report: (message, error, id) => console.warn("incident receipt:", message, id || "", error?.code || error?.name || ""),
+  maxAgeMs: RETENTION_SECONDS * 1000,
+  publish({ record, alert, job }, state, receipt) {
+    const tower = towersFor(record.airport);
+    if (state === "confirmed") {
+      if (receipt.acknowledged) tower.emit("alert_acknowledged", { id: record.id, airport: record.airport });
+      if (receipt.alert) tower.emit("alert", receipt.alert);
+      void drainEnrichment();
+    } else {
+      tower.emit("incident", incidentPreview(job.incident, state));
+      if (alert) tower.emit("alert_pending", { ...alert, storage_state: state });
+    }
+  },
+});
+const receiptTimer = mongo && setInterval(() => void receiptRecovery.drain(), 1000).unref();
+if (mongo) void receiptRecovery.drain();
+
+// Ordinary chart samples remain best-effort; do not let their retries crowd out the incident outbox.
+const chartWrites = new Set();
+function persistChartSample(record, attempt = 0) {
+  if (shuttingDown) return;
+  if (!attempt) {
+    if (chartWrites.size >= 64) return console.warn("chart write queue full");
+    chartWrites.add(record.id);
+  }
+  void journal.record(record, null).then(() => chartWrites.delete(record.id), err => {
+    console.warn("chart sample not stored:", err.code || err.name);
+    if (attempt < 5 && !shuttingDown) setTimeout(() => persistChartSample(record, attempt + 1), 500 * 2 ** attempt).unref();
+    else chartWrites.delete(record.id);
+  });
+}
 
 function relayCameraEvent(cameraId, payload, airport, surveyId, detection) {
   if (!airports.has(airport)) return;
@@ -312,47 +369,22 @@ function relayCameraEvent(cameraId, payload, airport, surveyId, detection) {
     eta_seconds: event.eta_seconds, eta_basis: event.eta_basis, corridor_survey_id: event.corridor_survey_id,
     alert_text: text, report_state: "pending", snapshot_state: "unavailable", detection,
   } : null;
-  const unavailable = () => {
-    if (document) tower.emit("incident", { ...document, report_state: "unavailable", persistence: "unavailable" });
-    if (alert) tower.emit("alert_pending", { ...alert, storage_failed: true });
-  };
   if (!mongo) {
     rememberDetection(record);
     if (document) {
-      const preview = { ...document, report_state: "unavailable", persistence: "unavailable" };
+      const preview = incidentPreview(document, "unavailable");
       memIncidents.unshift(preview);
       if (memIncidents.length > 50) memIncidents.pop();
-      tower.emit("incident", preview);
+      if (alert) tower.emit("alert_pending", { ...alert, storage_state: "unavailable", fresh: true });
+      receiptRecovery.unavailable(record, alert, document);
     }
-    if (alert) tower.emit("alert_pending", { ...alert, storage_failed: true });
     return;
   }
-  if (alert) tower.emit("alert_pending", alert);
-  if (pendingReceipts.size >= 64) {
-    console.warn("detector receipt queue full; event not stored");
-    unavailable();
-    return;
-  }
-  const job = document && createIncidentJob(event, document, { retainEvidence: retainIncidentEvidence });
-  if (job) tower.emit("incident", { ...job.incident, persistence: "pending" });
-  pendingReceipts.add(event.id);
-  async function persist(attempt) {
-    try {
-      const receipt = await journal.record(record, alert, job);
-      pendingReceipts.delete(event.id);
-      if (receipt.acknowledged) tower.emit("alert_acknowledged", { id: event.id, airport });
-      if (receipt.alert) tower.emit("alert", receipt.alert);
-      if (job) void drainEnrichment();
-    } catch (err) {
-      console.warn(`detector receipt ${event.id} failed:`, err.code || err.name);
-      if (attempt < 5) setTimeout(() => void persist(attempt + 1), 500 * 2 ** attempt).unref();
-      else {
-        pendingReceipts.delete(event.id);
-        unavailable();
-      }
-    }
-  }
-  void persist(0);
+  if (!document) return persistChartSample(record);
+  if (alert) tower.emit("alert_pending", { ...alert, storage_state: "pending", fresh: true });
+  const job = createIncidentJob(event, document, { retainEvidence: retainIncidentEvidence });
+  tower.emit("incident", incidentPreview(job.incident, "pending"));
+  void receiptRecovery.submit(record, alert, job);
 }
 
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -536,21 +568,37 @@ app.get("/health", (req, res) => {
 
 app.get("/api/integrations", requireDashboard, (req, res) => res.json({ ...ai.health(), openai: chat.health() }));
 
-// Live database check for debugging deploys: "ok", "not configured", or the driver's error (never the password).
-// Kept off /health so a slow or broken database can't make DigitalOcean's health check restart the app.
-async function dbStatus(check) {
-  try {
-    await check();
-    return "ok";
-  } catch (err) {
-    return String(err.message).slice(0, 200);
-  }
-}
+const readiness = createReadiness({
+  video_detector: checkVideoDetector,
+  airport_registry: async () => {
+    await loadAirportRegistry();
+    return airports.size ? "ready" : "not_configured";
+  },
+  camera_access: () => CAMERA_API_KEY || clerk ? "ready" : "not_configured",
+  tower_access: async () => {
+    if (!clerk) return TOWER_API_KEY ? "ready" : "not_configured";
+    if (!mongo) return "not_configured";
+    await Promise.all([
+      clerk.users.getCount(),
+      withMongo(mdb => mdb.collection("role_requests").findOne({ _id: "skysentry:readiness:v1" })),
+    ]);
+    return "ready";
+  },
+  receipt_storage: () => mongo ? withMongo(mdb => checkReceiptStorage(mdb, RETENTION_SECONDS)) : "not_configured",
+  receipt_recovery: () => receiptRecovery.check(),
+}, { report: (name, err) => console.warn(`readiness ${name} failed:`, err.code || err.name) });
 
-app.get("/health/db", async (req, res) => {
-  const mongodb = mongo ? await dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured";
-  const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
-  res.json({ mongodb, clerk: clerkStatus, airports: airports.size });
+app.get("/ready", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (shuttingDown) return res.status(503).json({ status: "not_ready", checks: {} });
+  const { ready, checks } = await readiness();
+  res.status(ready && !shuttingDown ? 200 : 503)
+    .json({ status: ready && !shuttingDown ? "ready" : "not_ready", checks });
+});
+app.get("/health/db", async (_req, res) => {
+  const { checks } = await readiness();
+  res.set("Cache-Control", "no-store").json({ mongodb: checks.receipt_storage,
+    clerk: clerk ? checks.tower_access : "not_configured", airports: airports.size });
 });
 
 // Hourly detection totals for the caller's airport for the last 24 hours.
@@ -803,22 +851,24 @@ const cameraLabel = (label) => typeof label === "string" && /^[a-z0-9._ -]{1,60}
 // the latest state from the response instead.
 function openLive(cameraId, airport, label, toCamera = () => {}) {
   const live = { cameraId, cameraLabel: cameraLabel(label), airport, streamId: randomUUID(), frameId: 0,
-    config: { camera_id: cameraId }, toCamera, lastState: null, lastSeen: Date.now() };
+    config: { camera_id: cameraId }, toCamera, lastResult: null, lastSeen: Date.now() };
+  const exactResult = (frame, state) => liveCameras.fresh(live) && frame.streamId === live.streamId &&
+    state && state === live.bot.freshState() && state.t === frame.t &&
+    typeof state.generation === "string" && state.generation === live.bot.status().generation;
   live.bot = new CameraBot({
     cameraId,
     onEvent: (ev, frame, state) => {
-      if (!liveCameras.fresh(live) || frame.streamId !== live.streamId ||
-          state !== live.bot.freshState() || state.t !== frame.t) return;
+      if (!exactResult(frame, state) || frame !== live.lastResult?.frame || state !== live.lastResult.state) return;
       relayCameraEvent(cameraId, { ...ev, cameraLabel: live.cameraLabel, source: "live" }, airport, live.config.surveyId,
         { streamId: frame.streamId, frameId: frame.frameId, generation: state.generation, t: frame.t });
     },
     onState: (state, frame) => {
-      if (!liveCameras.fresh(live) || frame.streamId !== live.streamId || state.t !== frame.t) return;
+      if (!exactResult(frame, state)) return;
       const { streamId, frameId } = frame;
       const result = { cameraId, cameraLabel: live.cameraLabel, streamId, frameId, state, mode: "server",
         at: Date.now(), remaining_ms: live.bot.remainingMs() };
       if (result.remaining_ms <= 0) return;
-      live.lastState = state;
+      live.lastResult = { frame, state };
       if (cloudEvidenceEnabled) birdReview.record(live, frame, state);
       towersFor(airport).volatile.emit("bot:state", result);
       live.toCamera("bot:state", result);
@@ -826,7 +876,7 @@ function openLive(cameraId, airport, label, toCamera = () => {}) {
     onStatus: () => {
       if (!liveCameras.fresh(live)) return;
       const status = live.bot.status();
-      if (status.mode !== "server") live.lastState = null;
+      if (status.mode !== "server") live.lastResult = null;
       towersFor(airport).emit("bot:status", status);
       live.toCamera("bot:status", status);
     },
@@ -837,7 +887,7 @@ function openLive(cameraId, airport, label, toCamera = () => {}) {
 function configureLive(live, config) {
   if (!liveCameras.current(live) || !isPlainObject(config) || !isLiveSource(config.source)) return false;
   live.bot.invalidate("camera configuration changed");
-  live.streamId = randomUUID(); live.frameId = 0; live.lastState = null;
+  live.streamId = randomUUID(); live.frameId = 0; live.lastResult = null;
   if (config.cameraLabel !== undefined) live.cameraLabel = cameraLabel(config.cameraLabel);
   const preset = [].concat(config.preset || []).filter((x) => typeof x === "string").slice(0, 3);
   const survey = surveyedCorridor(surveyedCorridors, live, config.camera, "webcam");
@@ -940,10 +990,14 @@ towers.on("connection", (socket) => {
   socket.on("alert:replay", async (cursor, ack) => {
     if (typeof ack !== "function") return;
     if (!airports.has(airport) || (cursor !== null && !validAlertId(cursor))) return ack({ ok: false });
-    try { ack({ ok: true, ...await journal.replay(airport, cursor) }); }
-    catch (err) {
+    const pending = cursor === null ? await receiptRecovery.forAirport(airport) : [];
+    if (!socket.connected || !airports.has(airport)) return;
+    try {
+      const page = await journal.replay(airport, cursor);
+      if (socket.connected && airports.has(airport)) ack({ ok: true, ...page, pending });
+    } catch (err) {
       console.warn("alert history unavailable:", err.code || err.name);
-      ack({ ok: false });
+      if (socket.connected && airports.has(airport)) ack({ ok: false, pending });
     }
   });
   socket.on("alert:acknowledge", async (id, ack) => {
@@ -951,6 +1005,7 @@ towers.on("connection", (socket) => {
     if (!airports.has(airport) || !principal || principal === "local-demo" || !validAlertId(id)) return ack({ ok: false });
     try {
       const saved = await journal.acknowledge(airport, id, principal);
+      if (!socket.connected || !airports.has(airport)) return;
       if (!saved) return ack({ ok: false });
       towersFor(airport).emit("alert_acknowledged", { id, airport });
       ack({ ok: true });
@@ -983,11 +1038,14 @@ server.listen(PORT, HOST, () => {
 });
 
 // App Platform sends SIGTERM on redeploys; close cleanly.
-process.on("SIGTERM", () => {
+process.once("SIGTERM", async () => {
+  shuttingDown = true;
   console.log("SIGTERM received, shutting down");
-  io.close();
-  server.close(async () => {
-    await Promise.allSettled([db?.end(), mongo?.close()]);
-    process.exit(0);
-  });
+  clearInterval(receiptTimer);
+  clearInterval(enrichmentTimer);
+  const closeIngress = new Promise(resolve => io.close(resolve)); // Socket.IO also closes its HTTP server.
+  await Promise.all([closeIngress, receiptRecovery.stop()]);
+  try { await mongo?.close(); }
+  catch (err) { console.warn("MongoDB shutdown failed:", err.code || err.name); }
+  process.exit(0);
 });

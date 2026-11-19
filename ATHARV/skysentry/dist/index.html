@@ -266,23 +266,23 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
       <div class="vf">
         <div class="runway-side"><span>RUNWAY SIDE</span></div>
         <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-        <div class="hud-top"><span class="rec"><i></i>REC</span><span>CAM runway-east</span><span>COCO-SSD · TensorFlow.js</span><span id="ts">14:32:00</span></div>
+        <div class="hud-top"><span class="rec"><i></i>DEMO</span><span>CAM runway-east</span><span>Simulated video detector</span><span id="ts">14:32:00</span></div>
         <i class="cross"></i>
         <div id="boxes"></div>
         <div class="status fu" style="--d:.6s"><span class="chip" id="riskChip">GREEN</span><span id="countTxt">0 birds</span></div>
         <div class="mic glass fu" style="--d:7s">
-          <span class="eyebrow">Mic · Teachable Machine sound model</span>
+          <span class="eyebrow">Illustrated video signal · no audio</span>
           <div class="wave" id="wave"></div>
-          <div class="conf"><span>Drone confidence</span><b id="confVal">0.00</b><div class="track"><div class="fill" id="confFill"></div><i class="thr"></i></div></div>
-          <span class="alert pop" style="--d:11.4s">DRONE ALERT</span>
-          <span class="note fi" style="--d:12.2s">Camera: drone too small to box · Mic: drone heard. Daylight only.</span>
+          <div class="conf"><span>Example score</span><b id="confVal">0.00</b><div class="track"><div class="fill" id="confFill"></div><i class="thr"></i></div></div>
+          <span class="alert pop" style="--d:11.4s">ILLUSTRATED WARNING</span>
+          <span class="note fi" style="--d:12.2s">Live JPEGs carry no microphone data.</span>
         </div>
       </div>
     </div>
 
     <!-- L5 risk -->
     <div class="layer" id="L5">
-      <div class="callout l" data-a="phone"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Risk engine<small>Runs on the phone</small></div></div></div>
+      <div class="callout l" data-a="phone"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Risk engine<small>The server evaluates phone video</small></div></div></div>
       <div class="riskpanel glass fu" style="--d:.2s">
         <span class="eyebrow">The risk engine</span>
         <svg viewBox="0 0 600 330" aria-hidden="true">
@@ -294,9 +294,9 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
         </svg>
         <div class="rules">
           <span class="livecount" id="riskCount">BIRDS IN VIEW: 0</span>
-          <div class="rule fu" style="--d:.4s"><i style="background:#2e8b57"></i><b style="color:#2e8b57">GREEN</b><span>No birds, no drone sound. Quiet status update every few seconds.</span></div>
-          <div class="rule fu" style="--d:3.6s"><i style="background:#d99a00"></i><b style="color:#b07d00">YELLOW</b><span>1 to 4 birds, not heading to the runway. On-screen caution, Gemini check, logged.</span></div>
-          <div class="rule fu" style="--d:6.6s"><i style="background:#d13b2f"></i><b style="color:#d13b2f">RED</b><span>5+ birds, any heading to the runway, or any drone. Alarm, voice alert, report, map pin.</span></div>
+          <div class="rule fu" style="--d:.4s"><i style="background:#2e8b57"></i><b style="color:#2e8b57">GREEN</b><span>No detections in monitored video. Not clearance.</span></div>
+          <div class="rule fu" style="--d:3.6s"><i style="background:#d99a00"></i><b style="color:#b07d00">YELLOW</b><span>Video detection warrants caution.</span></div>
+          <div class="rule fu" style="--d:6.6s"><i style="background:#d13b2f"></i><b style="color:#d13b2f">RED</b><span>Higher-risk video detection. Sound is opt-in.</span></div>
         </div>
       </div>
     </div>
@@ -306,17 +306,17 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
       <div class="steps glass fu" style="--d:.2s">
         <span class="eyebrow">How one alert travels</span>
         <ol id="stepList">
-          <li><b>1</b>Detect and send</li><li><b>2</b>Save the stream</li><li><b>3</b>Verify with AI</li>
-          <li><b>4</b>Store the report</li><li><b>5</b>Stamp drone reports</li><li><b>6</b>Give it a voice</li><li><b>7</b>Tell the tower</li>
+          <li><b>1</b>Send live frames</li><li><b>2</b>Show the warning</li><li><b>3</b>Confirm storage</li>
+          <li><b>4</b>Review, if enabled</li><li><b>5</b>Save the report</li><li><b>6</b>Compare a hash</li><li><b>7</b>Replay silently</li>
         </ol>
       </div>
-      <div class="callout node" data-a="n_phone" data-n="0"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Camera station<small>Detects, scores risk, sends events</small></div></div></div>
-      <div class="callout node l" data-a="n_server" data-n="1"><div class="cin fi" style="--d:.9s"><i class="ln"></i><i class="dot"></i><div class="lb">API server<small>Node.js · Socket.IO · DigitalOcean</small></div></div></div>
-      <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Event log<small>Every event, timestamped</small></div></div></div>
-      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Gemini<small>Checks snapshots, writes reports</small></div></div></div>
-      <div class="callout node" data-a="n_s2" data-n="4"><div class="cin fi" style="--d:1.3s"><i class="ln"></i><i class="dot"></i><div class="lb">MongoDB Atlas<small>Reports + snapshots</small></div></div></div>
-      <div class="callout node" data-a="n_s3" data-n="5"><div class="cin fi" style="--d:1.4s"><i class="ln"></i><i class="dot"></i><div class="lb">Solana devnet<small>Tamper-proof drone stamps</small></div></div></div>
-      <div class="callout node" data-a="n_s4" data-n="6"><div class="cin fi" style="--d:1.5s"><i class="ln"></i><i class="dot"></i><div class="lb">Browser voice<small>Speaks the alert</small></div></div></div>
+      <div class="callout node" data-a="n_phone" data-n="0"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Camera station<small>Streams JPEGs, no drone audio</small></div></div></div>
+      <div class="callout node l" data-a="n_server" data-n="1"><div class="cin fi" style="--d:.9s"><i class="ln"></i><i class="dot"></i><div class="lb">API server<small>Evaluates video and assigns risk</small></div></div></div>
+      <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Event log<small>Confirmed receipts support replay</small></div></div></div>
+      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Gemini<small>Optional advisory review</small></div></div></div>
+      <div class="callout node" data-a="n_s2" data-n="4"><div class="cin fi" style="--d:1.3s"><i class="ln"></i><i class="dot"></i><div class="lb">MongoDB Atlas<small>Reports, with optional image retention</small></div></div></div>
+      <div class="callout node" data-a="n_s3" data-n="5"><div class="cin fi" style="--d:1.4s"><i class="ln"></i><i class="dot"></i><div class="lb">Solana devnet<small>Optional report hash comparison</small></div></div></div>
+      <div class="callout node" data-a="n_s4" data-n="6"><div class="cin fi" style="--d:1.5s"><i class="ln"></i><i class="dot"></i><div class="lb">Browser voice<small>Opt-in; fresh alerts only</small></div></div></div>
       <div class="callout node l" data-a="n_tower" data-n="7"><div class="cin fi" style="--d:1.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Control tower<small>Live dashboard over Socket.IO</small></div></div></div>
     </div>
 
@@ -355,7 +355,7 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
     <div class="layer" id="L8">
       <div class="close">
         <h2 class="fu" style="--d:.3s">SkySentry</h2>
-        <p class="fu" style="--d:.9s">An extra set of eyes for the airports that can’t afford a million-dollar system.</p>
+        <p class="fu" style="--d:.9s">An advisory video-monitoring prototype. Not a source of runway clearance.</p>
         <span class="sign fi" style="--d:2s">BUILT IN 24 HOURS · HACKPHS 2026</span>
         <span class="sp fi" style="--d:2.6s">Gemini · DigitalOcean · MongoDB Atlas · Solana</span>
       </div>
@@ -701,7 +701,7 @@ async function startFilm({userInitiated = false} = {}) {
     {id:"s2", name:"Why it matters", dur:14, cap:[[0,"In 2009, geese took out both engines of a passenger jet minutes after takeoff."],[6.4,"In 2018, drone sightings shut down London’s Gatwick Airport over three days, disrupting about 1,000 flights."]],
       hud:t => { $("flights").textContent = Math.round(1000*easeOut((t-7.4)/2.6)).toLocaleString("en-US"); }},
     {id:"s3", name:"The gap", dur:10, cap:[[0,"Big airports buy bird radar and counter-drone systems."],[3.2,"Small airports like Princeton and Trenton-Mercer usually can’t."],[6.4,"SkySentry costs a phone and free-tier cloud tools."]]},
-    {id:"s4", name:"Detection", dur:16, cap:[[0,"From the phone’s point of view: COCO-SSD finds each bird in the browser, and tracking shows where it’s heading."],[7,"Drones are hard to see but easy to hear. A Teachable Machine sound model listens for the buzz."]],
+    {id:"s4", name:"Detection", dur:16, cap:[[0,"This scene illustrates detection boxes. In live use, the server evaluates camera frames."],[7,"The JPEG feed does not carry drone audio. Distance and visibility can limit detection."]],
       hud:t => {
         let n = 0;
         W.birds.forEach((b, i) => {
@@ -714,13 +714,13 @@ async function startFilm({userInitiated = false} = {}) {
         });
         const [lvl, col] = riskOf(n); const drone = t > 11.4;
         const chip = $("riskChip"); chip.textContent = drone ? "RED" : lvl; chip.style.background = drone ? "#d13b2f" : col;
-        $("countTxt").textContent = `${n} bird${n === 1 ? "" : "s"}${n ? " · toward runway" : ""}${drone ? " · drone heard" : ""}`;
+        $("countTxt").textContent = `${n} bird${n === 1 ? "" : "s"}${drone ? " · example warning" : ""}`;
         $("ts").textContent = "14:32:" + String(Math.floor(t)).padStart(2, "0");
         const c = .86*easeOut((t-8)/3.4); $("confVal").textContent = c.toFixed(2); $("confFill").style.width = (c*100) + "%";
       }},
-    {id:"s5", name:"Risk engine", dur:10, cap:[[0,"Green: a clear sky, so just a quiet status update."],[3.6,"Yellow: a few birds, not heading for the runway. Caution on screen."],[6.6,"Red: a flock, birds heading for the runway, or any drone. Alarm and voice alert."]],
+    {id:"s5", name:"Risk engine", dur:10, cap:[[0,"Green: no detections in monitored video, not clearance."],[3.6,"Yellow: caution. Red: a higher-risk detection."],[6.6,"Degraded or unavailable means coverage is limited or missing."]],
       hud:t => { const n = t < 3.6 ? 0 : t < 6.6 ? 3 : 8; $("riskCount").textContent = "BIRDS IN VIEW: " + n; }},
-    {id:"s6", name:"Alert journey", dur:22, cap:[[0,"Here’s how one alert travels through SkySentry."],[2,"1 · Detect and send. The camera spots birds or a drone and sends an event."],[4.8,"2 · Save the stream. MongoDB Atlas stores every event and powers the hourly charts."],[7.6,"3 · Verify with AI. Gemini checks the snapshot and writes an incident report."],[10.4,"4 · Store the report. MongoDB Atlas keeps the report and its snapshot."],[13.2,"5 · Stamp drone reports. A hash goes on Solana devnet so nobody can quietly edit it."],[16,"6 · Give it a voice. The tower’s browser reads the alert out loud."],[18.8,"7 · Tell the tower. Socket.IO pushes everything to the tower screen instantly."]],
+    {id:"s6", name:"Alert journey", dur:22, cap:[[0,"How a warning can reach the tower."],[2,"1 · The authorized camera sends video; the server assigns risk."],[4.8,"2 · The tower can warn before storage confirms the alert."],[7.6,"3 · A stored receipt enables acknowledgment and replay."],[10.4,"4 · Optional image review does not change risk."],[13.2,"5 · Reports can be delayed or incomplete."],[16,"6 · A devnet hash can help compare exact report text."],[18.8,"7 · Replay is silent. Speech is opt-in for fresh alerts."]],
       hud:t => {
         let step = -1; s6starts.forEach((s, i) => { if (t >= s) step = i; });
         stepLis.forEach((li, i) => { li.classList.toggle("cur", i === step); li.classList.toggle("done", i < step); });
@@ -736,7 +736,7 @@ async function startFilm({userInitiated = false} = {}) {
         } else { W.pulse.visible = W.halo.visible = false; W.glow.forEach(g => g.geometry.setDrawRange(0, 0)); }
         callouts.forEach(c => c.classList.toggle("hot", +c.dataset.n === hot));
       }},
-    {id:"s7", name:"The tower", dur:12, cap:[[0,"In the tower, the alarm sounds and the alert is read out loud."],[5,"Gemini’s report, the alert log, a map pin and the hourly chart show what happened and when birds are worst."]],
+    {id:"s7", name:"The tower", dur:12, cap:[[0,"The demo shows what an opted-in browser voice alert looks like."],[5,"Reports are advisory. A camera’s view on the map is not a measured object location."]],
       hud:t => { const s = "Caution, flock of eight birds crossing the runway, heading east."; $("typed").textContent = s.slice(0, Math.floor(Math.max(0, t - 2)*26)); $("clock").textContent = "14:32:" + String(5 + Math.floor(t)).padStart(2, "0"); }},
     {id:"s8", name:"Close", dur:8, cap:[[0,"Built in 24 hours with a phone and free tools."],[2.4,"SkySentry: an extra set of eyes for the airports that can’t afford a million-dollar system."]]}
   ];

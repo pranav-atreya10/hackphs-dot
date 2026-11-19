@@ -2,6 +2,27 @@ const { randomUUID } = require('node:crypto');
 const { airportFilter } = require('./airport-history');
 
 const durable = { writeConcern: { w: 'majority', wtimeoutMS: 4000 } };
+const majority = { readConcern: { level: 'majority' } };
+const probeId = 'skysentry:readiness:v1';
+
+async function checkReceiptStorage(db, retentionSeconds) {
+  const detections = db.collection('detections');
+  const indexes = await detections.listIndexes().toArray();
+  if (!indexes.some(({ key, expireAfterSeconds }) =>
+    Object.keys(key).length === 1 && key.time === 1 && expireAfterSeconds === retentionSeconds)) {
+    return 'retention_unverified';
+  }
+  // Use one unscoped synthetic row per collection, not an alert, report or operator credential.
+  for (const collection of [detections, db.collection('incidents')]) {
+    const marker = randomUUID();
+    const result = await collection.updateOne({ _id: probeId }, { $set: { marker, time: new Date() } },
+      { ...durable, upsert: true });
+    if (result.acknowledged !== true || !await collection.findOne({ _id: probeId, marker }, majority)) {
+      return 'majority_unverified';
+    }
+  }
+  return 'ready';
+}
 
 function createEventJournal(withMongo) {
   const run = fn => {
@@ -25,7 +46,7 @@ function createEventJournal(withMongo) {
       } catch (err) {
         if (err.code !== 11000) throw err;
         const saved = await collection.findOne(filter, {
-          projection: { alert: 1, acknowledged_at: 1 }, readConcern: { level: 'majority' },
+          projection: { alert: 1, acknowledged_at: 1 }, ...majority,
         });
         if (!saved) throw err;
         return { alert: saved.alert && !saved.acknowledged_at ? saved.alert : null,
@@ -37,15 +58,22 @@ function createEventJournal(withMongo) {
     const rows = await run(collection => collection.find({
       ...airportFilter(scope), alert: { $exists: true }, acknowledged_at: { $exists: false },
       ...(cursor ? { _id: { $gt: cursor } } : {}),
-    }, { projection: { alert: 1 }, readConcern: { level: 'majority' } }).sort({ _id: 1 }).limit(101).toArray());
+    }, { projection: { alert: 1 }, ...majority }).sort({ _id: 1 }).limit(101).toArray());
     return { alerts: rows.slice(0, 100).map(row => row.alert), next: rows.length > 100 ? rows[99]._id : null };
   }
   async function acknowledge(scope, id, operator) {
-    return run(collection => collection.findOneAndUpdate(
-      { _id: id, ...airportFilter(scope), alert: { $exists: true } },
-      [{ $set: { acknowledged_at: { $ifNull: ['$acknowledged_at', '$$NOW'] },
-        acknowledged_by: { $ifNull: ['$acknowledged_by', { $literal: operator }] } } }],
-      { ...durable, returnDocument: 'after', projection: { _id: 0, airport: 1 } }));
+    return run(async collection => {
+      const filter = { _id: id, ...airportFilter(scope), alert: { $exists: true } };
+      // Do not ACK a locally visible insert that has not yet been majority confirmed.
+      if (!await collection.findOne(filter, { ...majority, projection: { _id: 1 } })) return null;
+      const saved = await collection.findOneAndUpdate(
+        filter,
+        [{ $set: { acknowledged_at: { $ifNull: ['$acknowledged_at', '$$NOW'] },
+          acknowledged_by: { $ifNull: ['$acknowledged_by', { $literal: operator }] } } }],
+        { ...durable, returnDocument: 'after', projection: { _id: 1 } });
+      if (!saved) return null;
+      return collection.findOne({ ...filter, acknowledged_at: { $exists: true } }, { ...majority, projection: { airport: 1 } });
+    });
   }
   async function claimEnrichment() {
     const now = new Date();
@@ -72,4 +100,4 @@ function createEventJournal(withMongo) {
   return { record, replay, acknowledge, claimEnrichment, setEnrichment };
 }
 
-module.exports = { createEventJournal };
+module.exports = { createEventJournal, checkReceiptStorage };

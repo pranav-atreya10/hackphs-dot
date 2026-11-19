@@ -6,7 +6,7 @@ export function createAlertPlayer({ enabled, alarm, playAudio, speakText, showTe
     state.started = true;
     clearTimer(state.timer);
     await state.ready;
-    if (!enabled()) return;
+    if (alerts.get(state.id) !== state || !enabled()) return;
     if (audio) {
       try { await playAudio(audio); return; } catch {}
     }
@@ -16,7 +16,7 @@ export function createAlertPlayer({ enabled, alarm, playAudio, speakText, showTe
     const id = data.incident_id || data.id || `${data.time}:${data.type}:${data.text}`;
     if (alerts.has(id)) return;
     showText(data.text, data);
-    const state = { text: data.text, started: false, ready: Promise.resolve(), timer: null };
+    const state = { id, text: data.text, started: false, ready: Promise.resolve(), timer: null };
     alerts.set(id, state);
     if (alerts.size > 100) { const first = alerts.keys().next().value; clearTimer(alerts.get(first).timer); alerts.delete(first); }
     if (replay || !enabled()) { state.started = true; return; }

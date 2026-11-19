@@ -5,8 +5,8 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(require.resolve('../public/js/tower.js'), 'utf8').replace(/^import .*;\r?$/gm, '');
 
-test('only an authorized socket reveals tower data and starts optional loads', async () => {
-  const { reconcileIncidents } = await import('../public/js/incident-history.mjs');
+test('only an authorized socket reveals tower data and starts optional loads', async t => {
+  const incidentHistory = await import('../public/js/incident-history.mjs');
   const monitoring = await import('../public/js/tower-monitoring.mjs');
   const byId = new Map(), events = new Map(), assetPaths = [];
   const el = () => ({ hidden: true, dataset: {}, addEventListener() {}, replaceChildren() {}, append() {}, remove() {} });
@@ -32,9 +32,81 @@ test('only an authorized socket reveals tower data and starts optional loads', a
       return socket;
     },
     fetch: async path => ({ ok: true, json: async () => path === '/api/airports' ? { airports: [] } : [] }),
-    createAlertPlayer: () => ({ receive() {}, update() {} }), reconcileIncidents,
+    createAlertPlayer: () => ({ receive() {}, clear() {} }), ...incidentHistory,
     AbortController, AbortSignal, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, window: {},
     console: { warn() {} },
+  });
+
+  await t.test('only an opted-in fresh warning speaks; recovery is visible without changing risk', async () => {
+    const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
+    const monitoring = await import('../public/js/tower-monitoring.mjs');
+    const elements = new Map(), events = new Map(), spoken = [];
+    const element = () => ({
+      dataset: {}, listeners: new Map(), children: [], hidden: true,
+      addEventListener(name, fn) { this.listeners.set(name, fn); },
+      setAttribute() {}, append(...nodes) { this.children.push(...nodes); },
+      replaceChildren(...nodes) { this.children = nodes; },
+    });
+    const document = {
+      getElementById(id) { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); },
+      createElement: element, addEventListener() {},
+      head: { append(node) { node.onerror(); } },
+    };
+    let started;
+    const connected = new Promise(resolve => { started = resolve; });
+    const scope = 'KAAA', now = Date.now();
+    const alert = (id, fields = {}) => ({ id, text: id, airport: scope, time: now, risk: 'red', ...fields });
+    const socket = {
+      connected: true,
+      on(name, fn) { events.set(name, fn); },
+      connect: started,
+      timeout() { return this; },
+      emit(name, _arg, respond) {
+        assert.equal(name, 'alert:replay');
+        respond(null, { ok: false, pending: [{ alert: alert('recovered pending'), state: 'retrying' }] });
+      },
+    };
+    const gain = { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } };
+    const speechSynthesis = { speak(utterance) { spoken.push(utterance.text); } };
+    vm.runInNewContext(source, {
+      ...monitoring, createAlertPlayer, ...incidentHistory, refreshSocketAuth() {},
+      document, location: { origin: 'https://test.invalid', search: '', protocol: 'https:' },
+      signIn: async () => ({ airport: scope, socketAuth: async () => ({ token: 'test' }), headers: async () => ({}) }),
+      io: () => socket,
+      fetch: async path => ({ ok: true, json: async () => path === '/api/airports' ? { scoped: true, airports: [{ code: scope }] } : [] }),
+      AudioContext: class {
+        currentTime = 0;
+        resume() {}
+        createOscillator() { return { frequency: {}, connect: () => gain, start() {}, stop() {} }; }
+        createGain() { return gain; }
+      },
+      SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
+      window: { speechSynthesis }, speechSynthesis,
+      AbortController, AbortSignal, URLSearchParams, clearTimeout, setInterval() {},
+      setTimeout: (fn, ms) => setTimeout(fn, ms === 900 ? 0 : ms),
+      console: { warn() {} },
+    });
+    await connected;
+    events.get('connect')();
+    assert.match(elements.get('alertSync').textContent, /unavailable/);
+    const [recovery] = elements.get('unacknowledgedAlerts').children;
+    assert.match(recovery.children[1].textContent, /Saved for retry/);
+    assert.equal(recovery.children[2].hidden, true);
+    events.get('alert_pending')(alert('recovered pending', { storage_state: 'unavailable' }));
+    events.get('connect')();
+    assert.match(recovery.children[1].textContent, /No retry scheduled/);
+    events.get('alert_pending')(alert('sound off', { fresh: true }));
+    elements.get('sound').listeners.get('click')();
+    events.get('alert')(alert('recovered pending'));
+    assert.equal(recovery.children[2].hidden, false);
+    events.get('alert_pending')(alert('old', { fresh: true, time: now - 60_000 }));
+    events.get('alert_pending')(alert('late confirmation', { storage_state: 'retrying' }));
+    events.get('alert_pending')(alert('other airport', { fresh: true, airport: 'KBBB' }));
+    events.get('alert_pending')(alert('fresh', { fresh: true }));
+    events.get('alert_pending')(alert('fresh', { fresh: true }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.deepEqual(spoken, ['fresh']);
+    assert.equal(elements.get('risk').dataset.risk, 'unavailable', 'history and alert messages do not set detector risk');
   });
   assert.equal(events.size, 0);
   releaseAuth({ airport: 'TEST', socketAuth: async () => ({ token: 'test' }), headers: async () => ({}) });

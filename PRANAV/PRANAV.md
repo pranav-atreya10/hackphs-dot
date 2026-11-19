@@ -556,6 +556,17 @@ The optional bird check samples eligible motion tracks, not all birds in view. A
 
 The tower pairs the detector state and decoded image by stream, sequence, and exact time. Unmatched frames remain usable for video playback, but do not receive a box from another frame or become verifier evidence. The verifier copies a bounded padded crop from the matched source; object size refers to the decoded JPEG or demo video, not the camera sensor or the resized model input. These changes do not alter model thresholds or establish an accuracy gain.
 
+## Site readiness and alert recovery
+
+The public copy and guide distinguish server-assigned video risk, coverage
+gaps and advisory reports. `/health` is liveness; `/ready` checks the detector,
+airport access, majority Mongo receipt/report storage and configured restart
+recovery. An explicitly provisioned private receipt file buffers incident
+metadata only. App Platform's ephemeral filesystem is not a supported spool.
+Fresh live warnings stay immediate; retries and replay stay visible but silent.
+ACK requires a majority-stored alert in the selected airport and preserves the
+first operator. See [the runbook](OPERATIONS.md) for the precise failure modes.
+
 ## Airport-scoped access and account transitions
 
 The tower HTTP data APIs and live rooms use the same airport access policy. Credentials cannot open a global view; operators select one authorized airport at a time. Mongo incident history, hourly detections and both chat providers use that scope. Rows with missing, null, or nonscalar airport ownership are excluded, not assigned to a default tenant.
