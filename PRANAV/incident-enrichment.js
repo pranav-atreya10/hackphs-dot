@@ -8,6 +8,18 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const iso = (value, fallback) => typeof value === 'string' && value.length < 50 && Number.isFinite(Date.parse(value))
   ? new Date(value).toISOString() : new Date(fallback).toISOString();
 
+function boundedBirdVerdict(value) {
+  const evidence = limit(value?.evidence, 200);
+  if (value?.status === 'unavailable') {
+    return { status: 'unavailable', verdict: null, isBird: null, confidence: null,
+      object: '', evidence, source: 'fallback', reason: limit(value.reason, 40) };
+  }
+  if (value?.status !== 'verified' || !['bird', 'not_bird', 'uncertain'].includes(value.verdict) ||
+      !Number.isFinite(value.confidence) || value.confidence < 0 || value.confidence > 1) return null;
+  return { status: 'verified', verdict: value.verdict, isBird: value.verdict === 'uncertain' ? null : value.verdict === 'bird',
+    confidence: value.confidence, object: limit(value.object, 80), evidence, source: 'gemini', model: limit(value.model, 80) };
+}
+
 function createIncidentJob(event, document, { retainEvidence = false } = {}) {
   const image = event.snapshot;
   const present = image !== null && image !== undefined && image !== '';
@@ -47,7 +59,8 @@ function createEnrichmentWorker({ journal, analyze, stamp, verify, project, allo
         const result = await analyze({ ...job.input, snapshot: imageUploadAllowed() ? job.evidence?.bytes : undefined });
         const report = { report: limit(result.report, 8000), gemini_label: limit(result.label, 320),
           report_source: limit(result.source, 40), report_model: limit(result.model, 80), report_state: 'stored' };
-        if (result.bird_verdict) report.bird_verdict = result.bird_verdict;
+        const birdVerdict = boundedBirdVerdict(result.bird_verdict);
+        if (birdVerdict) report.bird_verdict = birdVerdict;
         if (!report.report || !report.gemini_label || !report.report_source) throw new Error('Malformed incident report.');
         await step('project_report', { report });
       } else if (job.stage === 'project_report') {

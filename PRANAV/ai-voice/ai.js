@@ -172,24 +172,21 @@ async function tryModels(task, ask) {
 }
 
 /**
- * Prompt A1: ask Gemini to check the snapshot and write a three-sentence incident report.
- * Tries the main model, then the backup model, all within 10 seconds.
- * Never throws: if both fail (or there is no key or snapshot) it returns the fallback report.
+ * Bird and unidentified-object reports use detector readings plus a separate advisory
+ * image verdict. Only drone reports can use the image report prompt instead.
  * @param {object} event  camera event (camera_id, type, object_count, direction, confidence, risk, snapshot)
  * @returns {Promise<{label: string, report: string, source: 'gemini'|'fallback', model?: string}>}
  */
 async function analyzeEvent(event) {
   const fallback = fallbackReport(event);
   const image = stripDataUrl(event.snapshot);
-  const skip = imageFailure(image);
-  if (skip) return event.type === 'drone' ? fallback : { ...fallback, bird_verdict: unavailableBird(skip) };
-
-  const judging = event.type === 'drone' ? Promise.resolve(null)
-    : verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`);
-  const [{ answer }, judge] = await Promise.all([
-    tryModels('report', (model, limit) => askGeminiForReport(model, event, image, limit)), judging]);
-  const out = answer || fallback;
-  return judge ? { ...out, bird_verdict: judge } : out;
+  if (event.type !== 'drone') {
+    const bird_verdict = await verifyBird(image, `${event.type}, ${event.object_count} object(s), ${event.direction}`);
+    return { ...fallback, bird_verdict };
+  }
+  if (imageFailure(image)) return fallback;
+  const { answer } = await tryModels('report', (model, limit) => askGeminiForReport(model, event, image, limit));
+  return answer || fallback;
 }
 
 // ---------------------------------------------------------------------------------------------

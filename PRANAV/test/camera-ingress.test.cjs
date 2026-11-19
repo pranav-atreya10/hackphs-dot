@@ -96,7 +96,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   jpeg.set([255, 216], 0);
   jpeg.set([255, 217], jpeg.length - 2);
   const broadcast = { emit: (name, data) => messages.push([name, data]), get volatile() { return this; } };
-  let sendDetection;
+  let sendDetection, snapshot = jpeg.toString("base64");
   const context = {
     app: { post: (path, ...fns) => routes.set(path, fns.at(-1)) },
     express: { raw() {} }, bearerToken() {}, cameraAccess: async () => access,
@@ -115,7 +115,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
       remainingMs() { return 1000; }
       async frame(_jpeg, t, frame) {
         this.state = { t, generation: "detector-generation" };
-        const event = { type: "bird", risk: "red", snapshot: jpeg.toString("base64"), airport: "untrusted" };
+        const event = { type: "bird", risk: "red", snapshot, airport: "untrusted" };
         sendDetection = (candidate, state = this.state) => this.onEvent(event, candidate, state);
         sendDetection({ ...frame, t: String(t) });
         sendDetection({ ...frame, streamId: "retired-stream" });
@@ -185,6 +185,19 @@ test("authenticated capture uses its pinned mask and only the server can persist
   sendDetection(frame);
   assert.equal(records.length, 1, "late detector callbacks after stop must not persist");
 
+  snapshot = "x".repeat(800_000);
+  assert.equal((await post("/api/camera-config", config)).code, 200);
+  assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "8.625" })).code, 200);
+  const invalid = records[1];
+  assert.equal(invalid.enrichment.incident.snapshot_state, "invalid");
+  assert.equal(invalid.enrichment.evidence, null);
+  assert.equal(invalid.alert.risk, "red");
+  assert.equal(messages.findLast(([name]) => name === "alert")[1].id, invalid._id);
+  const invalidEvent = messages.findLast(([name]) => name === "camera:event")[1];
+  assert.equal(invalidEvent.risk, "red");
+  assert.equal(Object.hasOwn(invalidEvent, "snapshot"), false);
+  await post("/api/camera-stop", {});
+
   context.mongo = null;
   assert.equal((await post("/api/camera-config", config)).code, 200);
   assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "9.125" })).code, 200);
@@ -194,7 +207,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   assert.equal(Object.hasOwn(preview, "revision"), false, "memory-only alerts are not committed revisions");
   assert.equal(Object.hasOwn(preview, "snapshot"), false);
   assert.equal(context.memIncidents[0], preview);
-  assert.equal(records.length, 1);
+  assert.equal(records.length, 2);
 });
 
 test("a server detector motion overflow clears a usable state and suppresses evidence and events", async () => {

@@ -92,4 +92,7 @@ in MongoDB, visible only through the authenticated airport-scoped snapshot
 route. It does not authorize sending images to Google. Only
 `GEMINI_CLOUD_EVIDENCE_ENABLED=true` allows Gemini image processing. Neither
 switch is enabled by default, and missing or invalid evidence never blocks a
-warning. A confirmation of storage is not confirmation of a completed report.
+warning. Bird and unidentified-object reports use detector readings, with any
+Gemini image verdict stored separately as advisory context. The same image is
+not sent to a second report prompt. A confirmation of storage is not
+confirmation of a completed report.

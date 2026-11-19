@@ -328,7 +328,9 @@ function showIncident(d) {
 async function loadEvidence(d, container) {
   if (!d.airport) { container.textContent = 'No airport-scoped snapshot is available.'; return; }
   if (d.snapshot_state && d.snapshot_state !== 'stored') {
-    container.textContent = d.snapshot_state === 'pending' ? 'Snapshot storage is pending.' : 'No snapshot retained for this incident.';
+    container.textContent = d.snapshot_state === 'pending' ? 'Snapshot storage is pending.'
+      : d.snapshot_state === 'invalid' ? 'The snapshot did not pass validation and was not retained.'
+      : 'No snapshot retained for this incident.';
     return;
   }
   evidenceRequest?.abort();

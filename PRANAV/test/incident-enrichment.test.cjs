@@ -81,6 +81,26 @@ test('recovering after a crash between staging and projection reuses the bounded
   assert.equal(f.receipts.find(row => row.rev === 2).fields.report, 'observed');
 });
 
+test('bounded verified and unavailable bird verdicts survive durable staging and projection', async () => {
+  for (const [verdict, expected] of [
+    [{ status: 'verified', verdict: 'uncertain', confidence: 0.4, object: 'o'.repeat(90), evidence: 'e'.repeat(300), model: 'm'.repeat(120), unexpected: 'discard' },
+      { status: 'verified', verdict: 'uncertain', isBird: null, confidence: 0.4, object: 'o'.repeat(80), evidence: 'e'.repeat(200), model: 'm'.repeat(80), source: 'gemini' }],
+    [{ status: 'unavailable', verdict: 'bird', evidence: 'No eligible image.', reason: 'no_image' },
+      { status: 'unavailable', verdict: null, isBird: null, confidence: null, object: '', evidence: 'No eligible image.', source: 'fallback', reason: 'no_image' }],
+  ]) {
+    const f = fixture({ imageUploadAllowed: () => verdict.status === 'verified', analyze: async ({ snapshot }) => {
+      assert.equal(snapshot, verdict.status === 'verified' ? jpeg : undefined);
+      return { report: 'observed', label: 'bird', source: 'fallback', bird_verdict: verdict };
+    } });
+    f.saved.enrichment.input.type = 'bird';
+    await f.restart().runOne();
+    assert.deepEqual(f.saved.enrichment.report.bird_verdict, expected);
+    await f.restart().runOne();
+    assert.deepEqual(f.receipts.find(row => row.rev === 2).fields.bird_verdict, expected);
+    assert.equal(f.saved.enrichment.stage, 'complete');
+  }
+});
+
 test('crash after stamp reservation never re-submits; restart reconciles only the saved signature', async () => {
   let attempts = 0;
   const f = fixture({ stage: 'stamp',

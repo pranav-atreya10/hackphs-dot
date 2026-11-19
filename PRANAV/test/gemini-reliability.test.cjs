@@ -89,8 +89,8 @@ test('no key, invalid model output and exhausted timeouts have no bird verdict',
   });
 });
 
-test('incident verdict survives the report projection into storage and socket updates', async t => {
-  const { ai } = setup(t, { optIn: 'true', responses: [ok(valid), ok({ label: 'bird', report: 'Synthetic incident.' })] });
+test('a bird report uses detector text and sends the image only to the separate advisory judge', async t => {
+  const { ai, calls } = setup(t, { optIn: 'true', responses: [ok(valid)] });
   const { createPipeline } = require('../ai-voice/pipeline');
   const pipeline = createPipeline({ analyzeEvent: ai.analyzeEvent, solana: {}, shouldAlert: () => true });
   const events = [], saved = [];
@@ -99,5 +99,11 @@ test('incident verdict survives the report projection into storage and socket up
   });
   assert.equal(saved[0]?.bird_verdict?.verdict, 'bird');
   assert.equal(saved[0]?.bird_verdict?.status, 'verified');
+  assert.equal(saved[0]?.report_source, 'fallback');
+  assert.equal(calls.length, 1);
+  const [request] = calls;
+  const body = JSON.parse(request.opts.body);
+  assert.equal(body.contents[0].parts.filter(part => part.inlineData?.data === fakeImage).length, 1);
+  assert.ok(body.generationConfig.responseSchema.properties.verdict);
   assert.deepEqual(events.filter(([name]) => name === 'incident').at(-1)?.[1]?.bird_verdict, saved[0].bird_verdict);
 });
