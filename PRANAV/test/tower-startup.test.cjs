@@ -5,40 +5,79 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(require.resolve('../public/js/tower.js'), 'utf8').replace(/^import .*;\r?$/gm, '');
 
-test('only an authorized socket reveals tower data and starts optional loads', async t => {
+test('tower markup keeps the local advisory and Gemini consent separately off', () => {
+  const html = fs.readFileSync(require.resolve('../public/tower.html'), 'utf8');
+  assert.match(html, /id="birdCheck"[^>]+aria-pressed="false"[^>]*>Enable local video advisory/);
+  assert.match(html, /live video stream still goes through the server/);
+  assert.match(html, /id="birdCloudReviewControl" hidden/);
+  const consent = html.match(/<input id="birdCloudReview"[^>]*>/)?.[0] ?? '';
+  assert.match(consent, /type="checkbox"[^>]+disabled/);
+  assert.doesNotMatch(consent, /\schecked\b/);
+  assert.match(html, /allow the server to send eligible camera crops to Gemini/);
+});
+
+async function towerStartup(policy) {
   const incidentHistory = await import('../public/js/incident-history.mjs');
   const monitoring = await import('../public/js/tower-monitoring.mjs');
-  const byId = new Map(), events = new Map(), assetPaths = [];
-  const el = () => ({ hidden: true, dataset: {}, addEventListener() {}, replaceChildren() {}, append() {}, remove() {} });
+  const byId = new Map(), events = new Map(), assetPaths = [], reviewRequests = [];
+  const el = () => ({ hidden: true, dataset: {}, listeners: new Map(),
+    addEventListener(name, fn) { this.listeners.set(name, fn); }, replaceChildren() {}, append() {}, remove() {} });
   const document = {
     getElementById(id) { if (!byId.has(id)) byId.set(id, el()); return byId.get(id); },
     createElement: el, addEventListener() {},
     head: { append(node) { assetPaths.push(node.src || node.href); node.onerror(); } },
   };
-  let releaseAuth, socketStarted;
+  document.getElementById('birdCloudReview').checked = true; // Simulate a browser-restored form value.
+  let releaseAuth, socketStarted, verifier, feedOptions;
   const started = new Promise(resolve => { socketStarted = resolve; });
   const socket = {
     connected: false,
     on(name, fn) { events.set(name, fn); },
     connect() { socketStarted(); },
   };
-  vm.runInNewContext(source, {
+  const withFeedImports = source.replace(/import\(('\/js\/(?:feeds|visual-ai)\.js')\)/g, 'loadFeedFixture($1)');
+  vm.runInNewContext(withFeedImports, {
     ...monitoring, refreshSocketAuth() {},
     document, location: { origin: 'https://test.invalid', search: '', protocol: 'https:' },
     signIn: () => new Promise(resolve => { releaseAuth = resolve; }),
+    loadFeedFixture: async path => path === '/js/feeds.js' ? {
+      startFeeds(_events, options) { feedOptions = options; },
+    } : {
+      VisualBirdVerifier: class {
+        constructor(options) { this.options = options; this.judge = null; verifier = this; }
+        setJudge(judge) { this.judge = judge; }
+        onRemove(id) { this.removedCamera = id; }
+        reset() { this.resetCount = (this.resetCount ?? 0) + 1; }
+      },
+    },
     io: (name, options) => {
       assert.equal(name, '/tower');
       assert.equal(options.autoConnect, false);
       return socket;
     },
-    fetch: async path => ({ ok: true, json: async () => path === '/api/airports' ? { airports: [] } : [] }),
+    fetch: async (path, opts) => {
+      if (['/api/cloud-evidence-policy', '/api/verify-bird'].includes(path)) reviewRequests.push({ path, opts });
+      return { ok: true, json: async () => path === '/api/cloud-evidence-policy' ? policy : path === '/api/airports' ? { airports: [] } : [] };
+    },
     createAlertPlayer: () => ({ receive() {}, clear() {} }), ...incidentHistory,
     AbortController, AbortSignal, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, window: {},
     console: { warn() {} },
   });
+  return { document, events, assetPaths, reviewRequests, socket, started, releaseAuth,
+    get verifier() { return verifier; }, get feedOptions() { return feedOptions; } };
+}
+
+const authFixture = {
+  airport: 'TEST', socketAuth: async () => ({ token: 'test' }), headers: async () => ({ 'x-api-key': 'test' }),
+};
+
+test('only an authorized socket reveals tower data and starts optional loads', async t => {
+  const tower = await towerStartup({ birdJudge: 'gemini', cloudEvidenceEnabled: true, reviewEnabled: true });
+  const { document, events, assetPaths, reviewRequests, socket, started, releaseAuth } = tower;
 
   await t.test('only an opted-in fresh warning speaks; recovery is visible without changing risk', async () => {
     const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
+    const incidentHistory = await import('../public/js/incident-history.mjs');
     const monitoring = await import('../public/js/tower-monitoring.mjs');
     const elements = new Map(), events = new Map(), spoken = [];
     const element = () => ({
@@ -109,10 +148,12 @@ test('only an authorized socket reveals tower data and starts optional loads', a
     assert.equal(elements.get('risk').dataset.risk, 'unavailable', 'history and alert messages do not set detector risk');
   });
   assert.equal(events.size, 0);
-  releaseAuth({ airport: 'TEST', socketAuth: async () => ({ token: 'test' }), headers: async () => ({}) });
+  releaseAuth(authFixture);
   await started;
   assert.equal(document.getElementById('dashboard').hidden, true);
   assert.deepEqual(assetPaths, []);
+  assert.deepEqual(reviewRequests, []);
+  assert.equal(tower.verifier, undefined);
   socket.connected = true;
   events.get('connect')();
   await new Promise(resolve => setImmediate(resolve));
@@ -123,16 +164,76 @@ test('only an authorized socket reveals tower data and starts optional loads', a
   assert.match(document.getElementById('mapNote').textContent, /Loading|unavailable/);
   assert.equal(assetPaths.includes('/vendor/chart.umd.min.js'), false);
 
+  await t.test('Gemini review needs a separate opt-in and reuses tower scope', async () => {
+    const { verifier } = tower;
+    const cloudReview = document.getElementById('birdCloudReview');
+    assert.equal(verifier.options.button, document.getElementById('birdCheck'));
+    assert.equal(cloudReview.disabled, false);
+    assert.equal(document.getElementById('birdCloudReviewControl').hidden, false);
+    assert.equal(cloudReview.checked, false);
+    assert.equal(verifier.judge, null);
+    assert.deepEqual(reviewRequests.map(({ path }) => path), ['/api/cloud-evidence-policy']);
+
+    cloudReview.checked = true;
+    cloudReview.listeners.get('change')();
+    const ref = { cameraId: 'CAM', streamId: 'live', frameId: 4, trackId: 2 };
+    const review = new AbortController();
+    await verifier.judge(ref, review.signal);
+    const { path, opts } = reviewRequests.at(-1);
+    assert.equal(path, '/api/verify-bird');
+    assert.equal(opts.method, 'POST');
+    assert.equal(opts.headers['x-api-key'], 'test');
+    assert.equal(opts.headers['x-airport'], 'TEST');
+    assert.deepEqual(JSON.parse(opts.body), ref);
+
+    cloudReview.checked = false;
+    cloudReview.listeners.get('change')();
+    assert.equal(verifier.judge, null);
+    review.abort();
+    assert.equal(opts.signal.aborted, true);
+
+    tower.feedOptions.onRemove(ref.cameraId);
+    assert.equal(verifier.removedCamera, ref.cameraId);
+  });
+
   for (const [reason, status] of [
     ['transport close', 'Reconnecting…'],
     ['io client disconnect', 'Access ended; reload to reconnect'],
     ['io server disconnect', 'Access ended; reload to reconnect'],
   ]) {
+    const resets = tower.verifier.resetCount ?? 0;
     socket.connected = false;
     events.get('disconnect')(reason);
+    assert.equal(tower.verifier.resetCount, resets + 1);
     assert.equal(document.getElementById('conn').textContent, status);
     assert.equal(document.getElementById('risk').dataset.risk, 'unavailable');
     socket.connected = true;
     events.get('connect')();
+  }
+});
+
+test('server review policy keeps the local judge separate and never enables a disallowed cloud review', async t => {
+  for (const [name, policy, hasLocalJudge, showsConsent] of [
+    ['explicit local server judge', { birdJudge: 'local', cloudEvidenceEnabled: false, reviewEnabled: true }, true, false],
+    ['no cloud evidence permission', { birdJudge: 'gemini', cloudEvidenceEnabled: false, reviewEnabled: true }, false, false],
+    ['server review veto', { birdJudge: 'gemini', cloudEvidenceEnabled: true, reviewEnabled: false }, false, false],
+    ['server judge off', { birdJudge: 'off', cloudEvidenceEnabled: true, reviewEnabled: true }, false, false],
+    ['legacy cloud evidence policy', { cloudEvidenceEnabled: true }, false, true],
+  ]) {
+    await t.test(name, async () => {
+      const tower = await towerStartup(policy);
+      tower.releaseAuth(authFixture);
+      await tower.started;
+      tower.socket.connected = true;
+      tower.events.get('connect')();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(typeof tower.verifier.judge === 'function', hasLocalJudge);
+      assert.equal(tower.document.getElementById('birdCloudReviewControl').hidden, !showsConsent);
+      assert.deepEqual(tower.reviewRequests.map(({ path }) => path), ['/api/cloud-evidence-policy']);
+      if (hasLocalJudge) {
+        await tower.verifier.judge({ cameraId: 'CAM', streamId: 'live', frameId: 4, trackId: 2 }, new AbortController().signal);
+        assert.equal(tower.reviewRequests.at(-1).path, '/api/verify-bird');
+      }
+    });
   }
 });
