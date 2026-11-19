@@ -1,6 +1,6 @@
 # SkySentry
 
-SkySentry connects an iPhone camera to a live tower dashboard, detects moving birds and drones near a runway corridor, double-checks birds with a strict Gemini bird judge, and turns alerts into incident reports stored in MongoDB and Tiger Data. It is software only: no extra hardware, the tower beacon is drawn on screen. The Node server and deployed website are in `PRANAV`; the native iPhone app is in `ATHARV/ios`.
+SkySentry connects an iPhone camera to a live tower dashboard, detects moving birds and drones near a runway corridor, double-checks birds with a strict Gemini bird judge, and turns alerts into incident reports stored in MongoDB. It is software only: no extra hardware, the tower beacon is drawn on screen. The Node server and deployed website are in `PRANAV`; the native iPhone app is in `ATHARV/ios`.
 
 **Live site:** https://lancerhacks-rvs8r.ondigitalocean.app (deployed from `main` on DigitalOcean App Platform)
 
@@ -30,7 +30,7 @@ The first time someone opens the **Tower** or **Camera** page, a short guided to
 
 ### How an alert travels
 
-Camera (browser or iPhone app) → streams frames to the server → the server bot runs the detection engine (`VIVAN/detection`), or the camera or tower runs it if the server is busy → a yellow or red alert goes to the tower live. It's read out loud by the tower browser's voice, checked and written up by Gemini, stored in MongoDB (incidents) and Tiger Data (every detection, for the hourly chart), and drone reports are stamped on Solana devnet. Only a *new* alert becomes an incident; a camera's 2-second repeats don't.
+Camera (browser or iPhone app) → streams frames to the server → the server bot runs the detection engine (`VIVAN/detection`), or the camera or tower runs it if the server is busy → a yellow or red alert goes to the tower live. It's read out loud by the tower browser's voice, checked and written up by Gemini, stored in MongoDB (incidents, and every detection for the hourly chart), and drone reports are stamped on Solana devnet. Only a *new* alert becomes an incident; a camera's 2-second repeats don't.
 
 ## Run it locally
 
@@ -44,7 +44,7 @@ npm test                  # server, auth, airports, switch requests, pipeline
 
 On a Mac you can instead double-click **Restart SkySentry.command**; keep its terminal open while streaming. Phones need **https** to use their camera, so test phones against the live site.
 
-Other scripts: `npm run db:setup` (create the Tiger Data table and hourly rollup), `npm run sync-web` (copy Vivan's detection engine and Atharv's film/site into `PRANAV/public`), `npm run record-film` (render the film to MP4).
+Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's film/site into `PRANAV/public`), `npm run record-film` (render the film to MP4).
 
 ## Settings (`PRANAV/.env` locally, encrypted env vars in DigitalOcean)
 
@@ -55,15 +55,14 @@ Other scripts: `npm run db:setup` (create the Tiger Data table and hourly rollup
 | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Sign-in. On `*.ondigitalocean.app`, use the Clerk **Development** keys (`pk_test_` / `sk_test_`); production keys need a domain you own. |
 | `ADMIN_EMAILS` | Comma-separated emails of admins (must be verified in Clerk). |
 | `AIRPORT_CODES` | Fixed airports and join codes, e.g. `KPCT=pct-sky-4821`. Admins can add more on the admin page (saved in MongoDB). |
-| `MONGODB_URI` | Incident reports, admin-created airports, switch requests. |
-| `DATABASE_URL` | Tiger Data (TimescaleDB): every detection and the hourly chart. |
+| `MONGODB_URI` | Everything stored: incident reports, every detection (hourly chart; deleted after 8 days), bird verdicts, admin-created airports, switch requests. |
 | `GEMINI_API_KEY` (`GEMINI_MODEL`, `GEMINI_BACKUP_MODEL`) | Snapshot checks and incident reports. Without it, reports use a template. |
 | `OPENAI_API_KEY` (`OPENAI_MODEL`, `OPENAI_GUIDE_MODEL`) | Tower assistant and the landing-page chat. |
 | `SOLANA_SECRET_KEY` (`SOLANA_RPC_URL`) | Devnet stamp on drone reports. |
 | `SERVER_BOT`, `BOT_PRESET` | Server-side detection on streamed video (`on` by default). |
 | `AIRPORT_NAME`, `SITE_URL`, `CORS_ORIGIN`, `PORT` | Display name, sitemap origin, allowed origins, port. |
 
-**Check it's working:** `/health` shows each provider as `live`, `configured`, `failing (reason)` or a fallback. `/health/db` shows Tiger Data, MongoDB, Clerk and the airport count.
+**Check it's working:** `/health` shows each provider as `live`, `configured`, `failing (reason)` or a fallback. `/health/db` shows MongoDB, Clerk and the airport count.
 
 ## Repo layout
 

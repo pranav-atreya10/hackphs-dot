@@ -244,7 +244,7 @@ async function loadHourly() {
     chart.data.datasets[0].data = hours.map(h => val(h, 'bird', 'total_objects'));
     chart.data.datasets[1].data = hours.map(h => val(h, 'drone', 'events'));
     chart.update(); $('chartNote').textContent = rows.length ? (view ? 'Hourly totals cover every airport.' : '') : 'No detections in the last 24 hours yet.';
-  } catch (err) { $('chartNote').textContent = err.message === 'database not configured' ? 'Tiger Data is not connected yet, so the chart is empty.' : `Could not load the chart: ${err.message}`; }
+  } catch (err) { $('chartNote').textContent = err.message === 'database not configured' ? 'The database is not connected yet, so the chart is empty.' : `Could not load the chart: ${err.message}`; }
 }
 
 /* ---------- Ask SkySentry (copilot chat: OpenAI with tools, Gemini fallback) ---------- */
