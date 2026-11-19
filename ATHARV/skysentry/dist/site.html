@@ -255,6 +255,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 #film .glass,#film .callout .lb{background:rgba(251,248,242,.96)}
 #film .dash{background:rgba(14,28,46,.97)}
 #film .stage{border-radius:16px;box-shadow:0 1px 0 var(--line-s),0 24px 60px -24px rgba(60,40,20,.35)}
+#film:not(.film-started) :is(.caption,.transport,.bar,.hint,#assetLoader){display:none}
+.film-poster{position:absolute;inset:0;z-index:25;display:grid;align-content:center;justify-items:center;gap:14px;background:#13283d;color:white;text-align:center;padding:16px}
+.film-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.film-poster :is(a,span){position:relative}
+.film-poster span:not(:empty){padding:4px 8px;background:#13283d;border-radius:4px}
 #film .caption{font-family:var(--serif);font-size:clamp(1.05rem,2vw,1.3rem);color:var(--ink-s)}
 #film .btn{background:var(--card);border-color:var(--line-s);color:var(--ink-s);border-radius:99px}
 #film .btn.primary{background:var(--ink-s);border-color:var(--ink-s);color:var(--paper)}
@@ -362,6 +367,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
   <div class="top"><h1>SkySentry</h1><span>hackPHS 2026 · Into the skies</span></div>
 
   <div class="stage" id="stage">
+      <div class="film-poster" id="filmPoster">
+        <img src="./film-poster.svg" alt="" width="1280" height="720">
+        <a class="btn-s primary" id="filmLaunch" href="./index.html">Play the 100-second film</a>
+        <span id="filmLaunchStatus" role="status"></span>
+      </div>
     <canvas id="gl" aria-label="3D airfield animation"></canvas>
     <div class="vignette"></div>
     <div id="assetLoader"><span class="load-title">SKYSENTRY</span><span class="load-sub">PREPARING THE AIRFIELD</span><span class="load-track"></span><span class="load-note">Aircraft · materials · daylight</span></div>
@@ -605,7 +615,6 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="stack">
       <div><b>Browser voice</b><span>Speaks every alert in the tower</span></div>
       <div><b>Gemini</b><span>Verifies snapshots, writes reports, answers questions</span></div>
-      
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
       <div><b>MongoDB Atlas</b><span>Incident reports, snapshots and hourly charts</span></div>
       <div><b>Solana</b><span>Tamper-proof stamps on drone reports</span></div>
@@ -632,9 +641,8 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 </main>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
-import * as THREE from 'three';
-import { enhanceWorld } from './details.js';
-(() => {
+async function startFilm({userInitiated = false} = {}) {
+  const THREE = await import('three');
   const $ = id => document.getElementById(id);
   const stage = $("stage");
   if (typeof THREE === "undefined") { stage.insertAdjacentHTML("beforeend", '<div class="fail">The 3D view could not load. Check your connection and reload.</div>'); }
@@ -655,7 +663,7 @@ import { enhanceWorld } from './details.js';
     renderer.setPixelRatio(Math.min(1.15, window.devicePixelRatio || 1));
     renderer.info.autoReset=false;
     renderer.outputColorSpace = T.SRGBColorSpace; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
-    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFShadowMap;
     scene = new T.Scene();
     scene.fog = new T.FogExp2(0xcbdbe1, .00036);
     camera = new T.PerspectiveCamera(42, 16/9, 0.5, 6000);
@@ -871,7 +879,10 @@ import { enhanceWorld } from './details.js';
       n_phone: P0, n_server: SV.clone().add(new T.Vector3(-18, 13, 0)), n_tower: new T.Vector3(TW[0], 66, TW[2])
     };
     W.spon.forEach((s, i) => W.anchors["n_s"+i] = s.p.clone().add(new T.Vector3(20, 0, -6)));
-    detailReady = enhanceWorld({T, scene, renderer, W, ground, runwayMesh, taxiMesh, apronMesh, trees, bush, station, phone, TW, std, basic, mesh, box, rnd}).then(() => import("./cinema.js")).then(m => { W.cinema = m.enhanceCinema({T, scene, renderer, camera, W, sun, rnd}); resize(); }).catch(e => console.warn("Cinematic pass unavailable", e)).then(() => import("./models.js")).then(m => m.enhanceModels({T, scene, W, rnd})).catch(e => console.warn("Model pass unavailable", e)).then(() => import("./nature.js")).then(m => m.enhanceNature({T, scene, W, rnd, camera})).catch(e => console.warn("Nature pass unavailable", e)).then(() => import("./optimize.js")).then(m => m.optimizeScene({T,scene,W}));
+    detailReady = import("./film-enhancements.js").then(m => m.enhanceFilm({
+      T, scene, renderer, camera, W, sun, ground, runwayMesh, taxiMesh, apronMesh,
+      trees, bush, station, phone, TW, std, basic, mesh, box, resize
+    }));
   }
 
   /* ================= per-shot motion ================= */
@@ -1022,7 +1033,7 @@ import { enhanceWorld } from './details.js';
     b.setAttribute("aria-label", `Scene ${i+1}: ${s.name}`); b.innerHTML = `<i><b></b></i><span>${s.name}</span>`;
     b.onclick = () => go(i); bar.appendChild(b); return b;
   });
-  let perfFrames=0, perfStamp=performance.now();
+  let perfFrames=0, perfStamp=performance.now(), shadowStamp=perfStamp;
   let idx = 0, t = 0, gt = 0, playing = false, ended = false, last = performance.now(), lastCap = "", ready = false;
   function go(i) {
     idx = Math.max(0, Math.min(scenes.length - 1, i)); t = 0; ended = false;
@@ -1048,7 +1059,18 @@ import { enhanceWorld } from './details.js';
   }
   function loop(now) {
     if(playing)perfFrames++;
-    if(now-perfStamp>1200){stage.dataset.fps=String(Math.round(perfFrames*1000/(now-perfStamp)));stage.dataset.drawCalls=String(renderer?.info.render.calls||0);stage.dataset.triangles=String(renderer?.info.render.triangles||0);perfFrames=0;perfStamp=now;}
+    if (now - perfStamp > 1200) {
+      const fps = Math.round(perfFrames * 1000 / (now - perfStamp));
+      if (playing && renderer && fps < 40) renderer.shadowMap.autoUpdate = false;
+      stage.dataset.fps = String(fps);
+      stage.dataset.drawCalls = String(renderer?.info.render.calls || 0);
+      stage.dataset.triangles = String(renderer?.info.render.triangles || 0);
+      perfFrames = 0; perfStamp = now;
+    }
+    if (playing && renderer && !renderer.shadowMap.autoUpdate && now - shadowStamp >= 200) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowStamp = now;
+    }
     const dt = Math.max(0, Math.min(.25, (now - last)/1000)); last = now;
     if (playing) {
       t += dt; gt += dt;
@@ -1075,39 +1097,6 @@ import { enhanceWorld } from './details.js';
     else if (e.key === "ArrowRight") go(idx + 1);
     else if (e.key === "ArrowLeft") go(idx - 1);
   });
-  go(0); setPlaying(false); requestAnimationFrame(loop);
-  // The film can play with its generated base scene even if a detail asset stalls.
-  stage.dataset.assets = "loading";
-  let assetDeadline;
-  const filmReady = Promise.race([detailReady, new Promise(resolve => {
-    assetDeadline = setTimeout(() => {
-      stage.dataset.assets = "background";
-      $("assetStatus").textContent = "Base scenery is ready. Detailed aircraft and scenery continue loading in the background.";
-      resolve();
-    }, 8000);
-  })]);
-  filmReady.then(() => {
-    clearTimeout(assetDeadline);
-    ready = true; $("assetLoader").classList.add("loaded");
-    setTimeout(() => $("assetLoader").remove(), 650);
-    const start = new URLSearchParams(location.search);
-    const chapter = Math.min(7, Math.max(0, (Number(start.get('scene')) || 1) - 1));
-    go(chapter); t = Math.min(scenes[chapter].dur - .001, Math.max(0, Number(start.get('time')) || 0));
-    gt = scenes.slice(0,chapter).reduce((sum,s)=>sum+s.dur,0) + t;
-    last = performance.now(); setPlaying(!reduce && start.get('paused') !== '1'); frame();
-  }).catch(error => {
-    clearTimeout(assetDeadline);
-    console.error(error); ready = true; $("assetLoader").remove();
-    $("assetStatus").textContent = "Some detail assets could not load; base scene remains available.";
-    setPlaying(false);
-  });
-  detailReady.then(() => {
-    stage.dataset.assets = "ready";
-    if (ready) frame();
-  }).catch(error => {
-    stage.dataset.assets = "partial";
-    if (ready) console.warn("Detail assets unavailable; base film remains playable", error);
-  });
   // Keep overlays synchronized when paused, revisiting a chapter, or using reduced motion.
   let lastOverlayTime=-1, cachedAnimations=[], animationScene=-1;
   function syncOverlayAnimations() {
@@ -1124,7 +1113,58 @@ import { enhanceWorld } from './details.js';
   const credits = $("creditsToggle");
   credits.addEventListener("toggle", () => { if (credits.open) setPlaying(false); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) setPlaying(false); });
-})();
+
+  const start = new URLSearchParams(location.search);
+  const chapter = Math.min(scenes.length - 1, Math.max(0, (parseInt(start.get("scene"), 10) || 1) - 1));
+  ready = true;
+  go(chapter);
+  t = Math.min(scenes[chapter].dur - .001, Math.max(0, Number(start.get("time")) || 0));
+  gt = scenes.slice(0, chapter).reduce((sum, s) => sum + s.dur, 0) + t;
+  setPlaying((userInitiated || !reduce) && !document.hidden && (userInitiated || start.get("paused") !== "1"));
+  frame();
+  $("assetLoader").remove();
+  stage.dataset.assets = "background";
+  $("assetStatus").textContent = "Loading detailed scenery in the background.";
+  requestAnimationFrame(loop);
+  function finishAssets(loaded) {
+    stage.dataset.assets = loaded ? "ready" : "partial";
+    $("assetStatus").textContent = loaded ? "" : "Some scenery could not load; the film is still playable.";
+    if (!playing) frame();
+  }
+  detailReady.then(finishAssets, error => {
+    console.warn("Detail assets unavailable; base film remains playable", error);
+    finishAssets(false);
+  });
+}
+function showFilmError(error) {
+  console.error("Could not start the SkySentry film", error);
+  document.getElementById("stage").dataset.assets = "failed";
+  document.getElementById("assetLoader")?.remove();
+  document.getElementById("assetStatus").textContent = "The 3D film could not start. Check your connection and WebGL support, then reload to try again.";
+}
+
+const film = document.getElementById("film");
+const launch = document.getElementById("filmLaunch");
+const status = document.getElementById("filmLaunchStatus");
+let launching = false, failed = false;
+launch.addEventListener("click", async event => {
+  if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  if (launching) return;
+  launching = true;
+  status.textContent = "Starting film…";
+  try {
+    await startFilm({userInitiated: true});
+    film.classList.add("film-started");
+    if (document.activeElement === launch) document.getElementById("play").focus();
+    document.getElementById("filmPoster").remove();
+  } catch (error) {
+    showFilmError(error);
+    failed = true;
+    status.textContent = "The embedded film could not start.";
+    launch.textContent = "Try the standalone film";
+  }
+});
 </script>
 
 
@@ -1134,8 +1174,9 @@ import { enhanceWorld } from './details.js';
   const stage = document.getElementById("stage"), btn = document.getElementById("play");
   let autoPaused = false;
   new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
-    else if (e.isIntersecting && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
+    if (!stage.closest(".film-started")) return;
+    if (e.intersectionRatio < .25 && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
+    else if (e.intersectionRatio >= .25 && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
   }, {threshold: .25}).observe(stage);
   btn.addEventListener("click", e => { if (e.isTrusted) autoPaused = false; });
 })();

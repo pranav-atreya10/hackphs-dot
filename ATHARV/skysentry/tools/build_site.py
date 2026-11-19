@@ -4,9 +4,10 @@ The film's styles, stage markup and scripts are taken from dist/index.html so th
 site always plays the current film. Run: python3 tools/build_site.py
 """
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent / "dist"
-film = (ROOT / "index.html").read_text()
+film = (ROOT / "index.html").read_text(encoding="utf-8")
 
 body = film[film.index("<body>") + len("<body>"):] if "<body>" in film else film
 body = body.replace("</body>\n</html>", "").replace("</body></html>", "")
@@ -16,10 +17,45 @@ film_head = body[:head_end].replace("<title>SkySentry in Motion</title>", "")
 film_stage = body[head_end:script_start]
 film_scripts = body[script_start:]
 
+stage_tag = '<div class="stage" id="stage">'
+assert stage_tag in film_stage
+film_stage = film_stage.replace(stage_tag, stage_tag + """
+      <div class="film-poster" id="filmPoster">
+        <img src="./film-poster.svg" alt="" width="1280" height="720">
+        <a class="btn-s primary" id="filmLaunch" href="./index.html">Play the 100-second film</a>
+        <span id="filmLaunchStatus" role="status"></span>
+      </div>""", 1)
+
 # On a long page, Space should scroll unless the film is on screen.
 key_guard = 'document.addEventListener("keydown", e => {\n'
 assert key_guard in film_scripts
 film_scripts = film_scripts.replace(key_guard, key_guard + '    { const r = stage.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return; }\n', 1)
+
+launch = 'startFilm().catch(showFilmError);'
+assert launch in film_scripts
+film_scripts = film_scripts.replace(launch, """
+const film = document.getElementById("film");
+const launch = document.getElementById("filmLaunch");
+const status = document.getElementById("filmLaunchStatus");
+let launching = false, failed = false;
+launch.addEventListener("click", async event => {
+  if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  if (launching) return;
+  launching = true;
+  status.textContent = "Starting film…";
+  try {
+    await startFilm({userInitiated: true});
+    film.classList.add("film-started");
+    if (document.activeElement === launch) document.getElementById("play").focus();
+    document.getElementById("filmPoster").remove();
+  } catch (error) {
+    showFilmError(error);
+    failed = true;
+    status.textContent = "The embedded film could not start.";
+    launch.textContent = "Try the standalone film";
+  }
+});""", 1)
 
 SITE_HEAD = """<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -71,6 +107,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 #film .glass,#film .callout .lb{background:rgba(251,248,242,.96)}
 #film .dash{background:rgba(14,28,46,.97)}
 #film .stage{border-radius:16px;box-shadow:0 1px 0 var(--line-s),0 24px 60px -24px rgba(60,40,20,.35)}
+#film:not(.film-started) :is(.caption,.transport,.bar,.hint,#assetLoader){display:none}
+.film-poster{position:absolute;inset:0;z-index:25;display:grid;align-content:center;justify-items:center;gap:14px;background:#13283d;color:white;text-align:center;padding:16px}
+.film-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.film-poster :is(a,span){position:relative}
+.film-poster span:not(:empty){padding:4px 8px;background:#13283d;border-radius:4px}
 #film .caption{font-family:var(--serif);font-size:clamp(1.05rem,2vw,1.3rem);color:var(--ink-s)}
 #film .btn{background:var(--card);border-color:var(--line-s);color:var(--ink-s);border-radius:99px}
 #film .btn.primary{background:var(--ink-s);border-color:var(--ink-s);color:var(--paper)}
@@ -202,7 +243,7 @@ SITE_BODY = f"""
     <div class="steps3">
       <div class="step3">{ICON["eye"]}<h3>Sees birds</h3><p>A ready-made AI model runs in the phone’s browser and boxes every bird. Tracking counts them and shows which way each one is heading.</p><code>TensorFlow.js · COCO-SSD</code></div>
       <div class="step3">{ICON["ear"]}<h3>Hears drones</h3><p>Drones are hard to see but easy to hear. A sound model trained on background noise, drones and birds listens for the buzz.</p><code>Teachable Machine audio</code></div>
-      <div class="step3">{ICON["tower"]}<h3>Tells the tower</h3><p>Risky events reach the tower screen in seconds with a spoken alert, an AI-written incident report and a pin on the airport map.</p><code>Socket.IO · ElevenLabs · Gemini</code></div>
+      <div class="step3">{ICON["tower"]}<h3>Tells the tower</h3><p>Risky events reach the tower screen in seconds with a spoken alert, an AI-written incident report and a pin on the airport map.</p><code>Socket.IO · Gemini</code></div>
     </div>
   </section>
 
@@ -233,11 +274,11 @@ SITE_BODY = f"""
       </div>
       <ol class="journey">
         <li><em>Camera station</em><b>Detect and send</b><span>The phone spots birds or a drone, scores the risk and sends an event with type, count, direction and confidence.</span></li>
-        <li><em>Tiger Data</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
+        <li><em>MongoDB Atlas</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
         <li><em>Gemini</em><b>Verify with AI</b><span>For yellow and red events, Gemini checks the snapshot and writes a short incident report.</span></li>
         <li><em>MongoDB Atlas</em><b>Store the report</b><span>The report, snapshot and Gemini’s label are saved together.</span></li>
         <li><em>Solana devnet</em><b>Stamp drone reports</b><span>A hash of each drone report goes on chain, so nobody can quietly edit it later.</span></li>
-        <li><em>ElevenLabs</em><b>Give it a voice</b><span>The alert sentence becomes a spoken tower announcement.</span></li>
+        <li><em>Browser voice</em><b>Give it a voice</b><span>The alert sentence becomes a spoken tower announcement.</span></li>
         <li><em>Socket.IO</em><b>Tell the tower</b><span>The alert, report and audio arrive on the tower dashboard instantly.</span></li>
       </ol>
     </div>
@@ -246,11 +287,10 @@ SITE_BODY = f"""
   <section class="sec" id="stack">
     <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>Free tools, each doing a real job</h2></div>
     <div class="stack">
-      <div><b>ElevenLabs</b><span>Speaks every alert in the tower</span></div>
+      <div><b>Browser voice</b><span>Speaks every alert in the tower</span></div>
       <div><b>Gemini</b><span>Verifies snapshots, writes reports, answers questions</span></div>
-      <div><b>Tiger Data</b><span>Time-stamped detections and hourly charts</span></div>
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
-      <div><b>MongoDB Atlas</b><span>Incident reports with snapshots</span></div>
+      <div><b>MongoDB Atlas</b><span>Incident reports, snapshots and hourly charts</span></div>
       <div><b>Solana</b><span>Tamper-proof stamps on drone reports</span></div>
     </div>
   </section>
@@ -282,13 +322,22 @@ AUTOPAUSE = """
   const stage = document.getElementById("stage"), btn = document.getElementById("play");
   let autoPaused = false;
   new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
-    else if (e.isIntersecting && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
+    if (!stage.closest(".film-started")) return;
+    if (e.intersectionRatio < .25 && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
+    else if (e.intersectionRatio >= .25 && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
   }, {threshold: .25}).observe(stage);
   btn.addEventListener("click", e => { if (e.isTrusted) autoPaused = false; });
 })();
 </script>
 """
 
-(ROOT / "site.html").write_text("<title>SkySentry</title>\n" + film_head + SITE_HEAD + SITE_BODY + film_scripts + AUTOPAUSE)
-print("wrote", ROOT / "site.html")
+site = ROOT / "site.html"
+output = "<title>SkySentry</title>\n" + film_head + SITE_HEAD + SITE_BODY + film_scripts + AUTOPAUSE
+if sys.argv[1:] == ["--check"]:
+    if not site.exists() or site.read_text(encoding="utf-8") != output:
+        sys.exit("dist/site.html is stale; run python ATHARV/skysentry/tools/build_site.py")
+elif not sys.argv[1:]:
+    site.write_text(output, encoding="utf-8", newline="\n")
+    print("wrote", site)
+else:
+    sys.exit("Usage: build_site.py [--check]")

@@ -26,6 +26,8 @@ Matches Pranav's server: with Clerk configured, people sign in and finish sign-u
 ### Keeping copies in sync
 DigitalOcean only deploys `PRANAV/`, so Vivan's engine and the film are copied into `PRANAV/public` by `npm run sync-web` (`PRANAV/scripts/sync-web.mjs`). Edit them in `VIVAN/` and `ATHARV/`, then run the sync.
 
+The homepage shows a static film poster until Play is selected. The standalone film starts from generated scenery while the optional world, cinematic and model passes load concurrently. Nature patches the assembled materials before the optimizer batches geometry. The aircraft and environment use the original GLB and HDR files; the smaller decimated versions of the scanned props are retained.
+
 ### Phones need https
 Browsers only give a page the camera on `https://` (or `localhost`). Use the deployed DigitalOcean URL, or a temporary https tunnel to a laptop, for the phone camera.
 

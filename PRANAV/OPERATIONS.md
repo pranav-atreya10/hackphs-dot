@@ -28,7 +28,7 @@ After a deploy, check `/health` for server and bot status, `/health/db` for conf
 
 Before publishing changes, run `npm test` in `PRANAV` and ensure `npm ci` works with the builder's npm version. Commit `package.json` and `package-lock.json` together whenever dependencies change.
 
-`npm run sync-web` copies the upstream film and detector sources into the deployed public folder. It replaces `public/detection` and the landing page. If modifying the deployed detector directly, apply the corresponding change to `VIVAN/detection` before using that copy command.
+From the repository root, rebuild the landing source with `python ATHARV/skysentry/tools/build_site.py`, then run `npm --prefix PRANAV run sync-web -- --film` to update only the deployed film and landing. Use `--detector` for intentional detector updates. Sync updates managed files without deleting unrelated files; unexpected deployed detector files must be reviewed explicitly. `python ATHARV/skysentry/tools/build_site.py --check` and `npm --prefix PRANAV run check:web` report drift without writing files and run in GitHub CI, where all three folders are available.
 
 ## Account security and authenticator apps
 

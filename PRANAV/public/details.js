@@ -1,7 +1,6 @@
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { HDRLoader } from './vendor/loaders/HDRLoader.js';
 import { mergeGeometries } from './vendor/utils/BufferGeometryUtils.js';
-import { loadGltfJson, loadHdrJson } from './assetload.js';
 
 // Additive scenery pass. The source film still owns its layout, shots and timeline.
 export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMesh,apronMesh,trees,bush,station,phone,TW,std,basic,mesh,box,rnd}) {
@@ -29,23 +28,27 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   pending.push(Promise.all([
     load.loadAsync(asset('clean_asphalt_diff_1k.jpg')),
     load.loadAsync(asset('clean_asphalt_nor_gl_1k.jpg')),
-    load.loadAsync(asset('clean_asphalt_rough_1k.jpg')),
-    load.loadAsync(asset('grass_ground_diff_1k.jpg')),
-    loadHdrJson(T, HDRLoader, asset('derelict_airfield_01_1k.hdr.json'))
-  ]).then(([diff,normal,rough,grass,hdr])=>{
-    diff.colorSpace=grass.colorSpace=T.SRGBColorSpace;
-    [diff,normal,rough,grass].forEach(t=>{t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=maxAniso;});
-    grass.repeat.set(430,430);ground.material.color.setHex(0xa8bc87);ground.material.map=grass;ground.material.needsUpdate=true;
+    load.loadAsync(asset('clean_asphalt_rough_1k.jpg'))
+  ]).then(([diff,normal,rough])=>{
+    diff.colorSpace=T.SRGBColorSpace;
+    [diff,normal,rough].forEach(t=>{t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=maxAniso;});
     const surface=(obj,x,z,tint=0xb2b4b5)=>{
       const maps=[diff,normal,rough].map(t=>{const n=t.clone();n.repeat.set(x/4,z/4);n.needsUpdate=true;return n;});
       const m=new T.MeshStandardMaterial({color:tint,map:maps[0],normalMap:maps[1],roughnessMap:maps[2],roughness:.97,normalScale:new T.Vector2(.42,.42)});
       const side=std(0x6b706b,{roughness:1});obj.material=[side,side,m,side,side,side];
     };
     surface(runwayMesh,840,32,0x7c8389);surface(taxiMesh,740,16,0x969b9e);surface(apronMesh,340,70,0xb4b4ad);
+  }));
+  pending.push(load.loadAsync(asset('grass_ground_diff_1k.jpg')).then(grass=>{
+    grass.colorSpace=T.SRGBColorSpace;grass.wrapS=grass.wrapT=T.RepeatWrapping;grass.anisotropy=maxAniso;
+    if(!W.cinema)ground.material.color.setHex(0xa8bc87);
+    grass.repeat.set(430,430);ground.material.map=grass;ground.material.needsUpdate=true;
+  }));
+  pending.push(new HDRLoader().loadAsync(asset('derelict_airfield_01_1k.hdr')).then(hdr=>{
     hdr.mapping=T.EquirectangularReflectionMapping;
     const pmrem=new T.PMREMGenerator(renderer);W.environment=pmrem.fromEquirectangular(hdr);scene.environment=W.environment.texture;scene.environmentIntensity=.8;
     scene.environmentRotation.y=.55;
-    W.clouds.forEach(c=>c.visible=false);pmrem.dispose();
+    W.clouds.forEach(c=>c.visible=false);hdr.dispose();pmrem.dispose();
   }));
 
   // Soft cloud banks, kept above the fictional horizon; HDR is used for lighting only.
@@ -56,10 +59,10 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   for(let i=0;i<12;i++){const a=i*Math.PI/6;const cloud=plane(380+rnd()*220,180,cloudMat,Math.cos(a)*1450,340+rnd()*130,Math.sin(a)*1450,0,-a+Math.PI/2);cloud.lookAt(0,200,0);}
 
   // Replace only the lead plane's coarse visual shell; preserve its parent animation.
-  pending.push(loadGltfJson(new GLTFLoader(), asset('narrow-body-airliner.gltf.json')).then(gltf=>{
+  pending.push(new GLTFLoader().loadAsync(asset('narrow-body-airliner.glb')).then(gltf=>{
     const lead=W.plane, model=gltf.scene;
     model.name='Detailed airliner';model.scale.setScalar(1.15);model.position.y=-5.3;
-    lead.children.forEach(c=>c.visible=false);lead.add(model);
+    lead.children.forEach(c=>{if(c!==W.strobeGlow&&!W.landing?.includes(c))c.visible=false;});lead.add(model);
     const retract=new T.Group();retract.position.y=4.1;model.add(retract);
     const parts=[];
     model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.envMapIntensity=.75;}if(/^(Main_(diagonal|oleo|seated_oleo|through_axle|torque|wheel)|Nose_(drag|fork|oleo|through|wheel))/.test(o.name))parts.push(o);}});
@@ -224,5 +227,6 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   // All generated primitives have matching normal/uv attributes; instanced foliage stays separate.
   remove.forEach(o=>o.removeFromParent());scene.add(merged);
   const results=await Promise.allSettled(pending);const failed=results.filter(r=>r.status==='rejected');
-  if(failed.length){document.getElementById('assetStatus').textContent='Some detail assets could not load; base scene remains available.';failed.forEach(r=>console.error(r.reason));}
+  failed.forEach(r=>console.warn('World asset failed', r.reason));
+  return failed.length === 0;
 }
