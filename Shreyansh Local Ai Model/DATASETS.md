@@ -192,47 +192,6 @@ are therefore already optimistic, whatever new data is added. (The existing `lea
 found no pHash near-duplicates at distance 6 or less between Mendeley train and test, but that does
 not mean they come from different videos.)
 
-## 5. Real small-bird evidence intake
-
-**Status: no new footage or evaluation.** The Svanström 7/10/13 px rows shrink the same held-out
-videos and measure simulated distance, not independent sightings of originally tiny birds. Its
-native-size v4.1 test has no birds in the reported 7-15 px bin. Existing source-specific results are
-not a substitute for an independent airport evaluation at those sizes.
-
-Use AirBirds only for isolated, non-commercial research evaluation if the intended use and access
-terms are confirmed before obtaining media; otherwise leave it blocked (or obtain written permission
-from the rights holders). Keep permitted media private and separate from fit, tuning, weights,
-releases, and public galleries. Record the pinned revision, license, attribution and provenance.
-An upstream split or archive name is not proof of an independent recording. The same requirements
-for source provenance and leakage apply to any separately authorized field data.
-
-From this folder, run `python small_bird_preflight.py path-to-intake.json`. It reads local, private
-JSON metadata and prints coverage counts; it does not fetch, freeze, inspect images, or score
-anything. Supply:
-
-- `used_source_groups`: a nonempty, audited inventory of original recording/session IDs already
-  used in development, including training lineage, model selection, tuning and viewed evaluations.
-- `frames`: one object per original frame, with `source_group`, `frame_id`, `geometry: "native"`,
-  `frame_size: [width, height]`, and `bird_boxes_xyxy` (pixel `[x1, y1, x2, y2]` boxes; `[]` for a
-  verified bird-free frame). Use decoded native-frame dimensions to denormalize YOLO annotations;
-  never use the 32 px minimum crop, the 64 px model input, or a resized frame to assign size.
-
-Use the same canonical source-group ID for related captures and all copies or excerpts of a
-recording, across inventories and datasets. Resolve aliases and unknown provenance before intake;
-matching strings only detects overlap in the supplied inventory. Count the longest native box side
-in `<7`, `7-15` (both endpoints included), and `>15` px; these are not the benchmark's area-fraction
-tags. The check rejects non-native rows and known source-group overlap. It cannot grant permission,
-verify provenance, replace SHA-256/pHash checks or authorize a holdout run.
-
-Before reporting performance, approve and checksum-freeze an independent cohort under the
-[benchmark protocol](../benchmarks/BENCHMARK_PROTOCOL.md). Predefine size strata and minimum
-independent recording coverage per stratum. Report recall, bird-to-drone errors and counts by size;
-separate annotated-box classification from native full-frame tracking/detection (including missed
-tracks). Report 95% CIs from 1,000 fixed-seed bootstrap resamples of whole independent sessions,
-not crops, boxes or overlapping vote windows. Sparse or single-session bins are insufficient
-evidence regardless of frame count. Performance on a bird-only collection does not measure drone
-recall or operational false alarms per hour; those require independent truth and timed exposure.
-
 **Steps for each new dataset, before any training run:**
 
 1. **Source check (by name).** Search file names, metadata and READMEs for `pexels`, the 42 IDs
@@ -263,7 +222,8 @@ python 'Shreyansh Local Ai Model\sources\verify_corpus.py' --data-root 'D:\path\
 ```
 
 Omit `--data-root` to check the worktree's `data` directory. The verifier is read-only and does not
-need PyTorch, a GPU, or test media. It lists missing artifacts on failure. `--inventory-only` emits
+need PyTorch, a GPU, or test media. It checks a supplied bundle, not a crop preparation pipeline.
+No audited training bundle was materialized or verified here. `--inventory-only` emits
 the observed SHA-256 lock for review, **not permission to fit**. Only the normal mode (or the
 `sources.verify_corpus.verify_corpus(data_root)` API) enforces the audited evidence. Use the same
 read-only bundle for verification and training; retain the returned JSON with the run.
@@ -320,6 +280,47 @@ extracted files. Before any new provider fetch, verify licence, pinned sizes and
 archive + extraction + crop/memmap space with a reserve, and shared access from the trainer. Use one
 bounded staging root, not one copy per worktree. No crop files, source archives or audit receipts
 belong in Git.
+
+## 6. Real small-bird evidence intake
+
+**Status: no new footage or evaluation.** The Svanström 7/10/13 px rows shrink the same held-out
+videos and measure simulated distance, not independent sightings of originally tiny birds. Its
+native-size v4.1 test has no birds in the reported 7-15 px bin. Existing source-specific results are
+not a substitute for an independent airport evaluation at those sizes.
+
+Use AirBirds only for isolated, non-commercial research evaluation if the intended use and access
+terms are confirmed before obtaining media; otherwise leave it blocked (or obtain written permission
+from the rights holders). Keep permitted media private and separate from fit, tuning, weights,
+releases, and public galleries. Record the pinned revision, license, attribution and provenance.
+An upstream split or archive name is not proof of an independent recording. The same requirements
+for source provenance and leakage apply to any separately authorized field data.
+
+From this folder, run `python small_bird_preflight.py path-to-intake.json`. It reads local, private
+JSON metadata and prints coverage counts; it does not fetch, freeze, inspect images, or score
+anything. Supply:
+
+- `used_source_groups`: a nonempty, audited inventory of original recording/session IDs already
+  used in development, including training lineage, model selection, tuning and viewed evaluations.
+- `frames`: one object per original frame, with `source_group`, `frame_id`, `geometry: "native"`,
+  `frame_size: [width, height]`, and `bird_boxes_xyxy` (pixel `[x1, y1, x2, y2]` boxes; `[]` for a
+  verified bird-free frame). Use decoded native-frame dimensions to denormalize YOLO annotations;
+  never use the 32 px minimum crop, the 64 px model input, or a resized frame to assign size.
+
+Use the same canonical source-group ID for related captures and all copies or excerpts of a
+recording, across inventories and datasets. Resolve aliases and unknown provenance before intake;
+matching strings only detects overlap in the supplied inventory. Count the longest native box side
+in `<7`, `7-15` (both endpoints included), and `>15` px; these are not the benchmark's area-fraction
+tags. The check rejects non-native rows and known source-group overlap. It cannot grant permission,
+verify provenance, replace SHA-256/pHash checks or authorize a holdout run.
+
+Before reporting performance, approve and checksum-freeze an independent cohort under the
+[benchmark protocol](../benchmarks/BENCHMARK_PROTOCOL.md). Predefine size strata and minimum
+independent recording coverage per stratum. Report recall, bird-to-drone errors and counts by size;
+separate annotated-box classification from native full-frame tracking/detection (including missed
+tracks). Report 95% CIs from 1,000 fixed-seed bootstrap resamples of whole independent sessions,
+not crops, boxes or overlapping vote windows. Sparse or single-session bins are insufficient
+evidence regardless of frame count. Performance on a bird-only collection does not measure drone
+recall or operational false alarms per hour; those require independent truth and timed exposure.
 
 ---
 
