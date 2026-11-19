@@ -33,6 +33,32 @@ node test_parity.mjs /tmp/skynet_test.json     # logits must match PyTorch withi
 python3 crop_parity.py                         # JS crop must equal crops.cut pixel for pixel
 ```
 
+## Validate a v5 MobileNet ONNX candidate offline
+
+From this directory, in a Python environment with compatible `torch`, `torchvision`, `onnx`,
+`onnxruntime`, NumPy and Pillow, export a local checkpoint with `train_v5_mobilenet.py --export`
+and its matching `--arch`. Then check the exact file produced, not the parameter count:
+
+```powershell
+python validate_v5_onnx.py runs\v5_large\best.pt runs\v5_large\best.onnx
+python -B -m unittest -v test_v5_onnx
+```
+
+The validator requires one self-contained ONNX file at most 20,000,000 bytes and reports its
+SHA-256 and max logit error for CPU ONNX Runtime vs PyTorch at batch sizes 1 and 3
+(`rtol=1e-4`, `atol=1e-5`). The input `crop96_normalised` is float32 `[batch, 3, 96, 96]` in
+RGB channel order: use the shared `crops.square_for_box` and edge-padded `crops.cut` at 64x64,
+divide by 255, bilinearly resize to 96x96 with `align_corners=False`, then apply the ImageNet
+RGB mean `(0.485, 0.456, 0.406)` and std `(0.229, 0.224, 0.225)`.
+The output `logits` is float32 `[batch, 3]`, ordered `bird`, `drone`, `other`. Both batch axes must
+be dynamic. The synthetic smoke test uses temporary untrained checkpoints without downloads.
+The trainer's `dynamic_axes` export targets the legacy exporter; PyTorch 2.9+ defaults to Dynamo.
+
+This is export validation, not an accuracy or browser test. The browser asset manifest in
+`PRANAV/public/ai-models/README.md` documents the Apache-2.0 TensorFlow.js assets, not v5 rights.
+Torchvision's BSD-3-Clause and ONNX Runtime's MIT software licenses do not settle the
+ImageNet-pretrained weight terms or the training-source attribution obligations in `DATASETS.md`.
+
 ## Using it from visual-ai.js
 
 `classifyBox` takes the same video and normalised `{x, y, w, h}` box that `chooseBirdCandidate`
