@@ -37,8 +37,9 @@ export class BirdForecaster {
     for (const tr of tracks) {
       if (tr.cls !== 'bird') continue;
       const e = this.birds.get(tr.id);
-      if (e) e.last = t;
-      else this.birds.set(tr.id, { born: tr.born, last: t });
+      const n = tr.denseCount || 1; // a dense flock counts as all its birds
+      if (e) { e.last = t; e.n = n; }
+      else this.birds.set(tr.id, { born: tr.born, last: t, n });
     }
     for (const [id, e] of this.birds) if (t - e.last > c.windowSec + c.holdSec) this.birds.delete(id);
 
@@ -46,7 +47,7 @@ export class BirdForecaster {
     // (a track lost for a moment isn't "a bird left").
     const countAt = (T) => {
       let n = 0;
-      for (const e of this.birds.values()) if (e.born <= T && e.last >= T - c.holdSec) n++;
+      for (const e of this.birds.values()) if (e.born <= T && e.last >= T - c.holdSec) n += e.n;
       return n;
     };
     // Samples every sampleSec over the window, skipping the camera's first warmupSec

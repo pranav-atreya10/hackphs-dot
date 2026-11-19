@@ -11,7 +11,7 @@
 
 import { DEFAULTS, mergeConfig } from './config.js';
 import { MotionDetector } from './motion.js';
-import { BlobLabeler } from './blobs.js';
+import { BlobLabeler, countCores } from './blobs.js';
 import { Tracker } from './tracker.js';
 import { analyzeWingbeat } from './wingbeat.js';
 import { gravityArc, spinCheck } from './debris.js';
@@ -240,6 +240,7 @@ export class DetectionEngine {
     const audio = this.audioSummary();
     for (const tr of confirmed) {
       if (!tr.counted) { tr.counted = true; this.stats.tracksConfirmed++; }
+      this.updateDense(tr, t);
       tr.frameCount++;
       if (tr.frameCount % cfg.wingbeat.evalEvery === 0) {
         this.updateFlap(tr, analyzeWingbeat(tr.samples, cfg.wingbeat));
@@ -374,6 +375,34 @@ export class DetectionEngine {
     tr.profile = best;
   }
 
+  // Dense-flock check: count separate dark cores inside this track's blob (a murmuration merges
+  // into one outline). A real dense flock gives a steady count and a steady size; a ragged cloud edge
+  // gives counts that jump around (1, 4, 9, 2…) and a size that balloons or shrinks. So the track is a
+  // dense flock only when, over the last second, it was seen nearly every frame, at least
+  // `denseSteady` of the counts reach flocks.denseMin, and its size changed less than `denseMaxGrowth`x.
+  updateDense(tr, t) {
+    const f = this.cfg.flocks;
+    tr.coreHist = tr.coreHist || [];
+    if (tr.misses === 0) {
+      const n = tr.blob.area >= f.denseMinArea
+        ? countCores(tr.blob, this.labeler.labels, this.motion.diff, this.motion.w, { coreFrac: f.coreFrac, minLevel: this.cfg.motion.threshold })
+        : 1;
+      tr.coreHist.push([t, n, tr.blob.area]);
+    } else {
+      tr.coreHist.push([t, null, null]); // a missed frame breaks the steadiness
+    }
+    while (tr.coreHist.length && t - tr.coreHist[0][0] > f.denseWindowSec) tr.coreHist.shift();
+    tr.denseCount = 0;
+    const h = tr.coreHist;
+    if (h.length < f.denseMinReadings || h[h.length - 1][0] - h[0][0] < 0.8 * f.denseWindowSec) return;
+    if (h.some((x) => x[1] === null)) return;
+    const counts = h.map((x) => x[1]).sort((a, b) => a - b);
+    const areas = h.map((x) => x[2]);
+    const steady = counts.filter((n) => n >= f.denseMin).length / counts.length;
+    const growth = Math.max(...areas) / Math.max(1, Math.min(...areas));
+    if (steady >= f.denseSteady && growth <= f.denseMaxGrowth) tr.denseCount = counts[Math.floor(counts.length / 2)];
+  }
+
   // Debris check (debris.js). Smoothed like the wingbeat verdict so one odd reading can't flip it:
   // a verdict switches on above 0.5 and only switches off again below 0.25.
   updateDebris(tr) {
@@ -415,6 +444,12 @@ export class DetectionEngine {
       tr.cls = 'unknown';
       tr.conf = 0.4;
       tr.why = `spins end over end like debris (turned ${tr.maxTurnDeg || 0}°), so its size pulses are not a wingbeat`;
+      return;
+    }
+    if (tr.denseCount) {
+      tr.cls = 'bird';
+      tr.conf = 0.6;
+      tr.why = `dense flock: ~${tr.denseCount} birds merged into one outline`;
       return;
     }
     const cc = this.cfg.coco;
@@ -478,7 +513,7 @@ export class DetectionEngine {
     return {
       kind,
       id: o.id,
-      size: isFlock ? o.size : 1,
+      size: isFlock ? o.members.reduce((n, m) => n + (m.denseCount || 1), 0) : (o.denseCount || 1),
       classification: o.cls,
       confidence: o.conf,
       why: isFlock ? `${o.size} tracks flying together` : o.why,

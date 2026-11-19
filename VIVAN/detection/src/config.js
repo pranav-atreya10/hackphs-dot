@@ -99,6 +99,14 @@ export const DEFAULTS = {
     minSpeed: 4,           // px/s below which heading is ignored (hovering/soaring)
     minSize: 2,
     inferBirdAtSize: 3,    // a coherent group of 3+ unknowns is treated as birds
+    // Dense flocks (blobs.js countCores): birds packed so tightly their outlines merge into one blob.
+    denseMin: 5,           // a blob with 5+ separate dark cores is a dense flock of that many birds...
+    denseMinArea: 30,      // ...only checked for blobs this big (px)...
+    denseWindowSec: 1,     // ...using the middle value of the last 1 s of counts...
+    denseMinReadings: 8,   // ...once there are at least 8 of them, seen every frame (brief cloud-edge flickers don't count)
+    denseSteady: 0.8,      // 80% of those counts must reach denseMin (cloud edges jump around)
+    denseMaxGrowth: 2,     // and the blob's size may change at most 2x within that second (cloud edges balloon)
+    coreFrac: 0.5,         // a core = pixels at least 50% as contrasty as the blob's strongest pixel
   },
 
   corridor: {
