@@ -139,33 +139,59 @@ test('can serve untouched tracks on a still-fresh frame without enqueuing old wo
   assert.equal(s.pick(active, START + 1200), null);
 });
 
-test('rotates cameras and tracks despite a busy flock and changing payload order', async () => {
+test('contended tracks complete five-frame votes while busy worker ticks still rotate cameras', async () => {
   const { createV41Scheduler } = await scheduler;
-  const a = feed('crowded'), b = feed('quiet'), s = createV41Scheduler();
-  const flock = Array.from({ length: 60 }, (_, i) => track(i + 1, { is_flock: true }));
+  const tickMs = 350, expiryMs = 3000;
+  const workerMs = [180, 430, 250, 550, 210, 900, 330, 260];
   const dense = Array.from({ length: 12 }, (_, i) => track(101 + i, { dense: true }));
-  const served = new Set();
-  for (let i = 0; i < 16; i++) {
-    const now = START + i * 400;
-    const offset = (i * 13) % flock.length;
-    const latestA = frameFor(a, i + 1, now, [...dense, ...flock.slice(offset), ...flock.slice(0, offset)]);
-    const latestB = frameFor(b, i + 1, now, [track(1)]);
-    const job = s.pick(i % 3 === 1 ? feeds(b, a) : feeds(a, b), now);
-    if (i % 2 === 0) {
-      assert.equal(job.feed, a);
-      assert.equal(job.pair, latestA);
+  for (const size of [40, 60]) {
+    const a = feed('A'), b = feed('B'), s = createV41Scheduler();
+    const flock = Array.from({ length: size }, (_, i) => track(i + 1, { is_flock: true }));
+    const recent = new Map(), ready = new Set();
+    let freeAt = START, jobs = 0;
+    for (let i = 0; i * tickMs < 60_000; i++) {
+      const now = START + i * tickMs;
+      if (now < freeAt) continue;
+      const offset = (i * 13) % size;
+      frameFor(a, i + 1, now, [...dense, ...flock.slice(offset), ...flock.slice(0, offset)]);
+      frameFor(b, i + 1, now, [...flock].reverse());
+      const job = s.pick(i % 3 === 1 ? feeds(b, a) : feeds(a, b), now);
+      assert.equal(job.feed, jobs % 2 === 0 ? a : b);
+      assert.equal(job.pair, job.feed.birdEvidence);
       assert.equal(job.tracks.length, 8);
-      for (const id of ids(job)) {
-        assert.ok(id <= 60);
-        served.add(id);
+      freeAt = now + workerMs[jobs++ % workerMs.length];
+      for (const { id, key } of job.tracks) {
+        assert.ok(id <= size);
+        const previous = recent.get(key);
+        const { frameId } = job.pair.frame;
+        if (previous) assert.ok(frameId > previous.frameId);
+        // The voter measures expiry at result delivery against the prior dispatch.
+        const count = (previous && freeAt - previous.at < expiryMs ? previous.count : 0) + 1;
+        recent.set(key, { count, at: now, frameId });
+        if (count === 5) ready.add(key);
       }
-    } else {
-      assert.equal(job.feed, b);
-      assert.equal(job.pair, latestB);
-      assert.deepEqual(ids(job), [1]);
+    }
+    assert.equal(ready.size, size * 2, `2 x ${size} persistent tracks all complete a vote`);
+  }
+});
+
+test('an unfinished turn does not leak across detector or stream phases', async () => {
+  const { createV41Scheduler } = await scheduler;
+  for (const nextPhase of [{ generation: 'gen-2' }, { streamId: 'reconnected' }]) {
+    const a = feed('A'), active = feeds(a), s = createV41Scheduler();
+    const tracks = Array.from({ length: 16 }, (_, i) => track(i + 1));
+    const first = tracks.slice(0, 8).map(tr => tr.id), second = tracks.slice(8).map(tr => tr.id);
+    for (let i = 0; i < 4; i++) {
+      const now = START + i * 400;
+      frameFor(a, i + 1, now, tracks);
+      assert.deepEqual(ids(s.pick(active, now)), first);
+    }
+    for (let i = 0; i <= 5; i++) {
+      const now = START + (i + 4) * 400;
+      frameFor(a, i + 1, now, tracks, nextPhase);
+      assert.deepEqual(ids(s.pick(active, now)), i === 5 ? second : first);
     }
   }
-  assert.equal(served.size, flock.length, 'all persistently eligible tracks got a turn');
 });
 
 test('a persistent track gets turns even when each new frame adds more than one batch of arrivals', async () => {

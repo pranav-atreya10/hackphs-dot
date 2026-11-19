@@ -1,6 +1,7 @@
 import { MAX_FRAME_AGE, validBox } from './bird-evidence.js';
 
 const BOX_LIMIT = 8;
+const SAMPLES_PER_TURN = 5;
 const MIN_NATIVE_PX = 7; // Experimental advisory eligibility, not a reliability threshold.
 
 function isFresh(receivedAt, now) {
@@ -42,8 +43,9 @@ function eligibleTracks(pair) {
   return eligible;
 }
 
-// Call when ready to dispatch one job. A pick reserves its samples immediately; copy
-// the returned bitmap's pixels before yielding, since the feed still owns the bitmap.
+// Call when ready to dispatch one job. Each pick rotates cameras but keeps tracks
+// near the front for up to five distinct frames. This budgets attempts, not votes.
+// Copy the returned bitmap's pixels before yielding; the feed still owns it.
 export function createV41Scheduler() {
   const cameras = new Map();
   return {
@@ -68,7 +70,7 @@ export function createV41Scheduler() {
         let cursor = previous;
         if (cursor?.streamId !== streamId || cursor.generation !== generation) {
           cursor = { streamId, generation, frameId: -1, receivedAt: frameReceivedAt,
-            order: new Set(), sampled: new Set() };
+            order: new Map(), sampled: new Set() };
           cameras.set(cameraId, cursor);
         }
         if (frameId < cursor.frameId) continue;
@@ -79,11 +81,11 @@ export function createV41Scheduler() {
         }
 
         const eligible = eligibleTracks(pair);
-        // Ordered sets append newcomers behind waiting tracks, regardless of payload order.
-        for (const id of cursor.order) if (!eligible.has(id)) cursor.order.delete(id);
-        for (const id of eligible.keys()) cursor.order.add(id);
+        // The ordered map keeps partial turns ahead of newcomers without chasing payload order.
+        for (const id of cursor.order.keys()) if (!eligible.has(id)) cursor.order.delete(id);
+        for (const id of eligible.keys()) if (!cursor.order.has(id)) cursor.order.set(id, 0);
         const tracks = [];
-        for (const id of cursor.order) {
+        for (const id of cursor.order.keys()) {
           if (cursor.sampled.has(id)) continue;
           const tr = eligible.get(id);
           tracks.push({ ...tr, bbox: { ...tr.bbox }, key: JSON.stringify([cameraId, source, streamId, generation, id]) });
@@ -92,8 +94,9 @@ export function createV41Scheduler() {
         if (!tracks.length) continue;
         for (const { id } of tracks) {
           cursor.sampled.add(id);
-          cursor.order.delete(id);
-          cursor.order.add(id);
+          const attempts = cursor.order.get(id) + 1;
+          if (attempts === SAMPLES_PER_TURN) cursor.order.delete(id);
+          cursor.order.set(id, attempts % SAMPLES_PER_TURN);
         }
         cameras.delete(cameraId);
         cameras.set(cameraId, cursor);
