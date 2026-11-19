@@ -39,7 +39,7 @@
     const smallCtx = small.getContext('2d', { willReadFrequently: true });
 
     const engine = new DetectionEngine();
-    engine.setCorridor(sky.corridor);
+    engine.setCorridor(sky.corridor, { demo: true });
     const coco = new CocoVerifier(engine, { base: q.get('base') || undefined, backend: q.get('backend') || undefined });
 
     try {

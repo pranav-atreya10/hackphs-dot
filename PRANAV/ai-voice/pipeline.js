@@ -6,7 +6,7 @@ const { createSolana } = require('./solana');
 function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQuestion, solana = createSolana(), shouldAlert = createRateLimit(), settings = config } = {}) {
   // create() stores the incident; it's only called for a new alert. Cameras repeat a yellow/red event every couple
   // of seconds, and those repeats (inside the alert cooldown, same or lower risk) are not new incidents.
-  async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit }) {
+  async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit, allowImageReview = false }) {
     if (!ev || !['bird', 'drone', 'unknown'].includes(ev.type) || !['yellow', 'red'].includes(ev.risk) || !shouldAlert(ev)) return false;
     const send = (name, data) => { try { emit(name, data); } catch (err) { console.warn(`[pipeline] delivery failed: ${config.redact(err.message)}`); } };
     const created = Promise.resolve().then(create).catch(err => console.warn(`[pipeline] store failed: ${config.redact(err.message)}`));
@@ -24,8 +24,10 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     if (ev.risk === 'red') send('alert', { id: ev.id, incident_id: ev.id, text: alertText, audio: null,
       voice_pending: false, risk: ev.risk, type: ev.type, time: ev.receivedAt });
     const reportPromise = (async () => {
-      const report = await analyzeEvent({ ...ev, object_count: ev.flock_size || ev.object_count });
+      const report = await analyzeEvent({ ...ev, snapshot: allowImageReview ? ev.snapshot : null,
+        object_count: ev.flock_size || ev.object_count });
       const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
+      if (report.bird_verdict) fields.bird_verdict = report.bird_verdict;
       send('incident', { ...incident, ...fields });
       send('alert_update', { id: ev.id, incident_id: ev.id, label: report.label, report: report.report, report_source: report.source });
       await persist(fields);
@@ -46,8 +48,11 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   }
   function health() {
     const g = ai.geminiState || {};
-    return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
-        lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
+    const configured = Boolean(settings.GEMINI_API_KEY);
+    return { gemini: { configured, model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
+        state: !configured ? 'not_configured' : g.lastFailure ? 'unavailable' : g.lastSuccessAt ? 'available' : 'untested',
+        failure: !configured ? { reason: 'not_configured', httpStatus: null, action: ai.failureMessages.not_configured } : g.lastFailure,
+        lastError: g.lastError, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
       solana: solana.health() };
   }
   function status() {

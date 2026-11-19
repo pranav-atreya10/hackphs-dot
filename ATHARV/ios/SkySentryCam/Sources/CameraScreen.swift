@@ -7,8 +7,6 @@ struct CameraScreen: View {
 
     @AppStorage(SettingKey.sourcePref) private var sourcePref = SourcePreference.auto.rawValue
     @AppStorage(SettingKey.fillVideo) private var fillVideo = true
-    @AppStorage(SettingKey.corridorSide) private var corridorSide = SettingDefaults.corridorSide
-    @AppStorage(SettingKey.corridorWidth) private var corridorWidth = SettingDefaults.corridorWidth
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -28,10 +26,6 @@ struct CameraScreen: View {
                     } else {
                         DemoSkyView(store: stream.demoFrames, fill: fillVideo)
                     }
-                    OverlayView(state: stream.streaming && !stream.stateIsStale ? stream.state : nil,
-                                frameSize: stream.frameSize,
-                                corridor: StreamSettings.corridor(side: corridorSide, width: corridorWidth),
-                                fill: fillVideo)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
@@ -52,9 +46,12 @@ struct CameraScreen: View {
         .statusBarHidden(false)
         .onAppear {
             stream.activate(SourcePreference(rawValue: sourcePref) ?? .auto)
+        }
+        .task {
             // Testing hook: `xcrun simctl launch … -autoStart YES` starts streaming right away.
             if UserDefaults.standard.bool(forKey: "autoStart") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { stream.startStreaming() }
+                try? await Task.sleep(for: .milliseconds(500))
+                if !Task.isCancelled { stream.startStreaming() }
             }
         }
         .onDisappear { stream.shutdown() }
@@ -86,7 +83,7 @@ struct CameraScreen: View {
     private var topBar: some View {
         HStack(alignment: .top, spacing: 10) {
             roundButton("xmark", label: "Close camera") { dismiss() }
-            RiskBanner(streaming: stream.streaming, state: stream.state, bot: stream.bot, stale: stream.stateIsStale)
+            RiskBanner(streaming: stream.streaming, state: stream.state, bot: stream.bot, stale: stream.stateIsStale, simulation: stream.source != .camera)
                 .frame(maxWidth: 560)
             roundButton("gearshape.fill", label: "Settings") { showSettings = true }
         }
@@ -155,6 +152,7 @@ struct CameraScreen: View {
             .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 1))
         }
         .accessibilityIdentifier("startStop")
+        .disabled(stream.source != .camera)
     }
 
     private var sourceMenu: some View {
@@ -265,6 +263,7 @@ struct RiskBanner: View {
     let state: BotState?
     let bot: String?
     var stale = false
+    var simulation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -274,7 +273,7 @@ struct RiskBanner: View {
                     .font(Theme.serif(.headline, weight: .bold))
                 Spacer(minLength: 0)
                 if streaming, let bot {
-                    Text(bot == "server" ? "server bot" : "tower bot")
+                    Text(bot == "server" ? "server bot" : bot == "starting" ? "starting" : "unavailable")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
@@ -294,39 +293,39 @@ struct RiskBanner: View {
         .animation(.easeInOut(duration: 0.25), value: state?.risk)
     }
 
-    private var risk: String? { streaming ? state?.risk?.lowercased() : nil }
+    private var risk: String? { streaming && !stale && bot == "server" ? state?.risk?.lowercased() : nil }
 
     private var color: Color {
-        guard streaming, state != nil, !stale, state?.learning != true, state?.shake != true else { return Theme.ink.opacity(0.8) }
+        guard risk != nil, state?.learning != true, state?.shake != true else { return Theme.ink.opacity(0.8) }
         return Theme.riskColor(risk)
     }
 
     private var title: String {
+        if simulation { return "Simulation preview" }
         guard streaming else { return "Standby" }
-        guard state != nil || stale else { return "Connecting to the bot" }
-        if stale { return bot == "tower" ? "Tower is detecting" : "Waiting for fresh detections" }
+        if bot == "unavailable" { return "Detector unavailable" }
+        if bot == "starting" { return "Detector starting" }
+        if stale || state == nil { return "Waiting for fresh detections" }
         if state?.shake == true { return "Hold the camera still" }
         if state?.learning == true { return "Learning the sky" }
         switch risk {
         case "red": return "RED · Danger"
         case "yellow": return "YELLOW · Caution"
-        case "green": return "GREEN · Clear"
+        case "green": return "GREEN · No detections in video"
         default: return "Watching"
         }
     }
 
     private var detail: String {
-        guard streaming else { return "Tap Start to stream this view to the detection bot." }
-        if stale {
-            return bot == "tower"
-                ? "The server bot handed over; tower dashboards run detection for this feed, so no boxes come back to the phone."
-                : "The bot's last result is out of date; still streaming."
-        }
+        if simulation { return "Local preview only. Nothing is sent to the tower." }
+        guard streaming else { return "Tap Start to stream the rear camera." }
+        if bot == "unavailable" { return "Video may still be streaming, but the server is not providing detections." }
+        if bot == "starting" || stale { return "Waiting for a fresh server result. Server video detection does not check drone audio." }
         guard let state else { return "Sending frames; waiting for the first detections…" }
         if state.shake == true { return "Camera movement pauses detection. Prop the phone up; it resumes automatically." }
         if state.learning == true { return "The model is starting. Keep the camera steady for a moment." }
         if let p = state.primary { return p.summary }
         if let reason = state.reasons?.first, !reason.isEmpty { return reason }
-        return risk == "green" || risk == nil ? "Nothing near the runway." : "Holding the alert while the sky clears."
+        return risk == "green" ? "Nothing near the runway." : "No clear result from the detector."
     }
 }

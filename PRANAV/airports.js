@@ -3,8 +3,7 @@
 //   - the MongoDB "airports" collection: created, re-coded and deleted by admins on admin.html
 // Kept in memory (one server instance) and loaded from MongoDB at start-up.
 const crypto = require("crypto");
-
-const CODE_RE = /^[A-Z0-9]{3,5}$/;   // ICAO / FAA style, e.g. KPCT, KTTN, 39N
+const { hasCode } = require("./access");
 
 class AirportError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -14,7 +13,7 @@ function parseEnv(value) {
   const map = new Map();
   for (const pair of String(value || "").split(",")) {
     const [code, joinCode] = pair.split("=").map((s) => s.trim());
-    if (code && joinCode) map.set(code, { code, name: code, joinCode, source: "env" });
+    if (hasCode(code) && joinCode) map.set(code, { code, name: code, joinCode, source: "env" });
   }
   return map;
 }
@@ -60,7 +59,7 @@ function createAirports({ env = "", collection = async () => null, matches }) {
     async load() {
       const coll = await collection();
       if (!coll) return;
-      stored = new Map((await coll.find({}).toArray()).map((d) => [d._id, fromDoc(d)]));
+      stored = new Map((await coll.find({}).toArray()).filter((d) => hasCode(d._id) && !d.removedAt).map((d) => [d._id, fromDoc(d)]));
     },
 
     // The airport a join code belongs to, comparing every code so timing doesn't leak which one matched.
@@ -73,7 +72,7 @@ function createAirports({ env = "", collection = async () => null, matches }) {
     async create({ code, name, by }) {
       code = String(code || "").trim().toUpperCase();
       name = String(name || "").trim().slice(0, 80) || code;
-      if (!CODE_RE.test(code)) throw new AirportError(400, "airport code must be 3 to 5 letters or digits, e.g. KTTN");
+      if (!hasCode(code)) throw new AirportError(400, "airport code must be 3 to 5 letters or digits, e.g. KTTN");
       if (get(code)) throw new AirportError(409, `${code} already exists`);
       const coll = await need();
       const doc = { _id: code, name, joinCode: uniqueJoinCode(code), createdAt: new Date(), createdBy: by || null };
@@ -94,7 +93,7 @@ function createAirports({ env = "", collection = async () => null, matches }) {
 
     async remove(code) {
       editable(code);
-      await (await need()).deleteOne({ _id: code });
+      await (await need()).updateOne({ _id: code }, { $set: { removedAt: new Date() } });
       stored.delete(code);
     },
   };

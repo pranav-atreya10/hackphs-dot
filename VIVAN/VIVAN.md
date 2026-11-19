@@ -150,3 +150,11 @@ storm-cloud yellow, because the yellow is raised the moment a cloud edge is firs
 Waiting 0.5 s before an unknown raises yellow did remove it, but it also stopped thrown rocks from ever showing yellow, so
 that was removed too. **Open issue:** storm clouds → brief false yellow (`knownIssue` on the scene, skipped by the
 "every scene passes" test, still checked never to go red).
+# Corridor geometry and field qualification
+
+Corridor timing is an image-space projection, not runway arrival or a tracked
+physical location. The detector emits an approximate bearing, not a guessed target
+point or geographic path. Reports use the reviewed survey's ID when available.
+Batch reporting skips work when no consumer is subscribed and expires stale book-
+keeping. [Airport pilot qualification](../benchmarks/README.md#airport-pilot-qualification)
+requires independent field evidence; synthetic regressions do not qualify a site.

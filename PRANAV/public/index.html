@@ -8,7 +8,7 @@
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <script src="/js/theme.js"></script>
 </head>
 <body>
@@ -16,7 +16,7 @@
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 /* Layout: a 16:9 WebGL airfield stage (3D, camera moves per shot) with HTML HUD layers on top; captions + transport below. Single committed look: dark projector surround, daylight stage. */
 :root{
@@ -268,6 +268,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 #film .glass,#film .callout .lb{background:rgba(251,248,242,.96)}
 #film .dash{background:rgba(14,28,46,.97)}
 #film .stage{border-radius:16px;box-shadow:0 1px 0 var(--line-s),0 24px 60px -24px rgba(60,40,20,.35)}
+#film:not(.film-started) :is(.caption,.transport,.bar,.hint,#assetLoader){display:none}
+.film-poster{position:absolute;inset:0;z-index:25;display:grid;align-content:center;justify-items:center;gap:14px;background:#13283d;color:white;text-align:center;padding:16px}
+.film-poster img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.film-poster :is(a,span){position:relative}
+.film-poster span:not(:empty){padding:4px 8px;background:#13283d;border-radius:4px}
 #film .caption{font-family:var(--serif);font-size:clamp(1.05rem,2vw,1.3rem);color:var(--ink-s)}
 #film .btn{background:var(--card);border-color:var(--line-s);color:var(--ink-s);border-radius:99px}
 #film .btn.primary{background:var(--ink-s);border-color:var(--ink-s);color:var(--paper)}
@@ -376,6 +381,11 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
   <div class="top"><h1>SkySentry</h1><span>hackPHS 2026 · Into the skies</span></div>
 
   <div class="stage" id="stage">
+      <div class="film-poster" id="filmPoster">
+        <img src="./film-poster.svg" alt="" width="1280" height="720">
+        <a class="btn-s primary" id="filmLaunch" href="./film.html">Play the 100-second film</a>
+        <span id="filmLaunchStatus" role="status"></span>
+      </div>
     <canvas id="gl" aria-label="3D airfield animation"></canvas>
     <div class="vignette"></div>
     <div id="assetLoader"><span class="load-title"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</span><span class="load-sub">PREPARING THE AIRFIELD</span><span class="load-track"></span><span class="load-note">Aircraft · materials · daylight</span></div>
@@ -573,7 +583,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="steps3">
       <div class="step3"><svg aria-hidden="true" viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2"><path d="M3 18s5.5-9 15-9 15 9 15 9-5.5 9-15 9S3 18 3 18Z"/><circle cx="18" cy="18" r="4.5"/></svg><h3>Sees birds</h3><p>A ready-made AI model runs in the phone’s browser and boxes every bird. Tracking counts them and shows which way each one is heading.</p><code>TensorFlow.js · COCO-SSD</code></div>
       <div class="step3"><svg aria-hidden="true" viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linecap="round"><path d="M6 18h2M11 12v12M16 8v20M21 13v10M26 10v16M31 16v4"/></svg><h3>Hears drones</h3><p>Drones are hard to see but easy to hear. A sound model trained on background noise, drones and birds listens for the buzz.</p><code>Teachable Machine audio</code></div>
-      <div class="step3"><svg aria-hidden="true" viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linejoin="round"><path d="M11 9h14l-2 7H13Z"/><path d="M15 16v15h6V16M10 31h16"/><path d="M27 6c2 1.5 3 3.3 3 5.5M30 3c3 2.3 4.5 5 4.5 8.5" stroke-linecap="round"/></svg><h3>Tells the tower</h3><p>Risky events reach the tower screen in seconds with a spoken alert, an AI-written incident report and a pin on the airport map.</p><code>Socket.IO · Gemini</code></div>
+      <div class="step3"><svg aria-hidden="true" viewBox="0 0 36 36" fill="none" stroke="#c2643f" stroke-width="2" stroke-linejoin="round"><path d="M11 9h14l-2 7H13Z"/><path d="M15 16v15h6V16M10 31h16"/><path d="M27 6c2 1.5 3 3.3 3 5.5M30 3c3 2.3 4.5 5 4.5 8.5" stroke-linecap="round"/></svg><h3>Tells the tower</h3><p>Warnings reach the tower dashboard with a browser-spoken alert and an incident report. Camera coverage on the map is not a measured object location.</p><code>Socket.IO · Browser voice</code></div>
     </div>
   </section>
 
@@ -625,8 +635,8 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="risk" role="table" aria-label="Risk levels">
       <div class="risk-row head" role="row"><span role="columnheader">Level</span><span role="columnheader">When</span><span role="columnheader">What happens</span></div>
       <div class="risk-row r-go" role="row"><span class="lvl" style="color:#2f7a4d"><i style="background:var(--go)"></i>GREEN</span><p>No birds, no drone sound</p><p>Quiet status update every few seconds</p></div>
-      <div class="risk-row r-warn" role="row"><span class="lvl" style="color:#9a6a00"><i style="background:var(--warn)"></i>YELLOW</span><p>1 to 4 birds, not heading toward the runway</p><p>On-screen caution, snapshot checked by Gemini, logged</p></div>
-      <div class="risk-row r-stop" role="row"><span class="lvl" style="color:#b23a2c"><i style="background:var(--stop)"></i>RED</span><p>5 or more birds, any bird heading toward the runway, or any drone sound</p><p>Alarm, spoken alert, Gemini report and map pin; drone reports also get a Solana stamp</p></div>
+      <div class="risk-row r-warn" role="row"><span class="lvl" style="color:#9a6a00"><i style="background:var(--warn)"></i>YELLOW</span><p>Video motion warrants a caution</p><p>On-screen caution, optional Gemini image review, logged</p></div>
+      <div class="risk-row r-stop" role="row"><span class="lvl" style="color:#b23a2c"><i style="background:var(--stop)"></i>RED</span><p>Higher-risk video detection</p><p>Alarm, browser-spoken alert and incident report. Drone audio is not monitored.</p></div>
     </div>
   </section>
 
@@ -647,8 +657,8 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <ol class="journey">
         <li><em>Camera station</em><b>Detect and send</b><span>The phone spots birds or a drone, scores the risk and sends an event with type, count, direction and confidence.</span></li>
         <li><em>MongoDB Atlas</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
-        <li><em>Gemini</em><b>Verify with AI</b><span>For yellow and red events, Gemini checks the snapshot and writes a short incident report.</span></li>
-        <li><em>MongoDB Atlas</em><b>Store the report</b><span>The report, snapshot and Gemini’s label are saved together.</span></li>
+        <li><em>Gemini</em><b>Optional AI review</b><span>When the operator enables cloud evidence processing, Gemini can review eligible images and help write a report. Otherwise, reports use detector readings.</span></li>
+        <li><em>MongoDB Atlas</em><b>Store the report</b><span>Reports may include an incident snapshot and an advisory image review when available.</span></li>
         <li><em>Solana devnet</em><b>Stamp drone reports</b><span>A hash of each drone report goes on chain, so nobody can quietly edit it later.</span></li>
         <li><em>Browser voice</em><b>Give it a voice</b><span>The alert sentence becomes a spoken tower announcement.</span></li>
         <li><em>Socket.IO</em><b>Tell the tower</b><span>The alert, report and audio arrive on the tower dashboard instantly.</span></li>
@@ -685,8 +695,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>Free tools, each doing a real job</h2></div>
     <div class="stack">
       <div><b>Browser voice</b><span>Speaks every alert in the tower</span></div>
-      <div><b>Gemini</b><span>Verifies snapshots, writes reports, answers questions</span></div>
-      
+      <div><b>Gemini</b><span>Optional image review and text assistance</span></div>
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
       <div><b>MongoDB Atlas</b><span>Incident reports, snapshots and hourly charts</span></div>
       <div><b>Solana</b><span>Tamper-proof stamps on drone reports</span></div>
@@ -699,7 +708,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <details><summary>How accurate is it?</summary><p>The team measures it on a set of test clips before judging and reports the result, for example how many of 20 clips it caught. Treat it as an extra set of eyes, not a replacement for radar.</p></details>
       <details><summary>Can it see small, far-away birds?</summary><p>The free model works best when birds are reasonably large in the frame. A zoom lens or a model trained on sky footage would improve that.</p></details>
       <details><summary>Does it work at night?</summary><p>Not yet. Night detection would need a thermal camera, which is a natural next step.</p></details>
-      <details><summary>What about privacy?</summary><p>The camera points at the sky, and snapshots are saved only when there’s an alert.</p></details>
+      <details><summary>What about privacy?</summary><p>SkySentry sends detection data to its server and may store incident snapshots in MongoDB Atlas. By default, images are not sent to Google Gemini. If the deployment operator enables cloud evidence processing, Gemini may receive camera crops for advisory review and incident snapshots for reports.</p></details>
       <details><summary>Why use a blockchain?</summary><p>So drone incident records can’t be quietly changed later, which matters if they are used as evidence for police or the FAA.</p></details>
       <details><summary>Isn’t this already done?</summary><p>Big airports use radar and commercial counter-drone systems. SkySentry is a low-cost version for the small airports that can’t afford those.</p></details>
       <details><summary>What would it cost a real airport?</summary><p>A phone or cheap camera per runway, plus small cloud bills.</p></details>
@@ -713,9 +722,8 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 </main>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script>
 <script type="module">
-import * as THREE from 'three';
-import { enhanceWorld } from './details.js';
-(() => {
+async function startFilm({userInitiated = false} = {}) {
+  const THREE = await import('three');
   const $ = id => document.getElementById(id);
   const stage = $("stage");
   if (typeof THREE === "undefined") { stage.insertAdjacentHTML("beforeend", '<div class="fail">The 3D view could not load. Check your connection and reload.</div>'); }
@@ -732,7 +740,7 @@ import { enhanceWorld } from './details.js';
   const T = THREE, has3D = typeof T !== "undefined";
   let renderer, scene, camera, sun, W = {}, detailReady = Promise.resolve();
   if (has3D) {
-    renderer = new T.WebGLRenderer({canvas:$("gl"), antialias:false, powerPreference:"high-performance"}); // SMAA in the composer does the anti-aliasing; MSAA here was wasted work
+    renderer = new T.WebGLRenderer({canvas:$("gl"), antialias:true});
     renderer.setPixelRatio(Math.min(1.15, window.devicePixelRatio || 1));
     renderer.info.autoReset=false;
     renderer.outputColorSpace = T.SRGBColorSpace; renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
@@ -757,7 +765,7 @@ import { enhanceWorld } from './details.js';
     // lights
     scene.add(new T.HemisphereLight(0xdceaff, 0x726f45, .85));
     sun = new T.DirectionalLight(0xffe4b8, 2.5);
-    sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, {left:-240, right:240, top:240, bottom:-240, near:1, far:1400});
     sun.shadow.bias = -0.00015; sun.shadow.normalBias = .07; sun.shadow.radius = 3;
     scene.add(sun, sun.target);
@@ -952,7 +960,10 @@ import { enhanceWorld } from './details.js';
       n_phone: P0, n_server: SV.clone().add(new T.Vector3(-18, 13, 0)), n_tower: new T.Vector3(TW[0], 66, TW[2])
     };
     W.spon.forEach((s, i) => W.anchors["n_s"+i] = s.p.clone().add(new T.Vector3(20, 0, -6)));
-    detailReady = enhanceWorld({T, scene, renderer, W, ground, runwayMesh, taxiMesh, apronMesh, trees, bush, station, phone, TW, std, basic, mesh, box, rnd}).then(() => import("./cinema.js")).then(m => { W.cinema = m.enhanceCinema({T, scene, renderer, camera, W, sun, rnd}); resize(); }).catch(e => console.warn("Cinematic pass unavailable", e)).then(() => import("./models.js")).then(m => m.enhanceModels({T, scene, W, rnd})).catch(e => console.warn("Model pass unavailable", e)).then(() => import("./nature.js")).then(m => m.enhanceNature({T, scene, W, rnd, camera})).catch(e => console.warn("Nature pass unavailable", e)).then(() => import("./optimize.js")).then(m => m.optimizeScene({T,scene,W}));
+    detailReady = import("./film-enhancements.js").then(m => m.enhanceFilm({
+      T, scene, renderer, camera, W, sun, ground, runwayMesh, taxiMesh, apronMesh,
+      trees, bush, station, phone, TW, std, basic, mesh, box, resize
+    }));
   }
 
   /* ================= per-shot motion ================= */
@@ -1103,7 +1114,7 @@ import { enhanceWorld } from './details.js';
     b.setAttribute("aria-label", `Scene ${i+1}: ${s.name}`); b.innerHTML = `<i><b></b></i><span>${s.name}</span>`;
     b.onclick = () => go(i); bar.appendChild(b); return b;
   });
-  let perfFrames=0, perfStamp=performance.now();
+  let perfFrames=0, perfStamp=performance.now(), shadowStamp=perfStamp;
   let idx = 0, t = 0, gt = 0, playing = false, ended = false, last = performance.now(), lastCap = "", ready = false;
   function go(i) {
     idx = Math.max(0, Math.min(scenes.length - 1, i)); t = 0; ended = false;
@@ -1129,7 +1140,18 @@ import { enhanceWorld } from './details.js';
   }
   function loop(now) {
     if(playing)perfFrames++;
-    if(now-perfStamp>1200){const fpsNow=Math.round(perfFrames*1000/(now-perfStamp));if(playing&&ready&&renderer&&fpsNow<40&&renderer.shadowMap.autoUpdate){renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;setInterval(()=>{renderer.shadowMap.needsUpdate=true;},200);}stage.dataset.fps=String(fpsNow);stage.dataset.drawCalls=String(renderer?.info.render.calls||0);stage.dataset.triangles=String(renderer?.info.render.triangles||0);perfFrames=0;perfStamp=now;}
+    if (now - perfStamp > 1200) {
+      const fps = Math.round(perfFrames * 1000 / (now - perfStamp));
+      if (playing && renderer && fps < 40) renderer.shadowMap.autoUpdate = false;
+      stage.dataset.fps = String(fps);
+      stage.dataset.drawCalls = String(renderer?.info.render.calls || 0);
+      stage.dataset.triangles = String(renderer?.info.render.triangles || 0);
+      perfFrames = 0; perfStamp = now;
+    }
+    if (playing && renderer && !renderer.shadowMap.autoUpdate && now - shadowStamp >= 200) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowStamp = now;
+    }
     const dt = Math.max(0, Math.min(.25, (now - last)/1000)); last = now;
     if (playing) {
       t += dt; gt += dt;
@@ -1156,39 +1178,6 @@ import { enhanceWorld } from './details.js';
     else if (e.key === "ArrowRight") go(idx + 1);
     else if (e.key === "ArrowLeft") go(idx - 1);
   });
-  go(0); setPlaying(false); requestAnimationFrame(loop);
-  // The film can play with its generated base scene even if a detail asset stalls.
-  stage.dataset.assets = "loading";
-  let assetDeadline;
-  const filmReady = Promise.race([detailReady, new Promise(resolve => {
-    assetDeadline = setTimeout(() => {
-      stage.dataset.assets = "background";
-      $("assetStatus").textContent = "Base scenery is ready. Detailed aircraft and scenery continue loading in the background.";
-      resolve();
-    }, 8000);
-  })]);
-  filmReady.then(() => {
-    clearTimeout(assetDeadline);
-    ready = true; $("assetLoader").classList.add("loaded");
-    setTimeout(() => $("assetLoader").remove(), 650);
-    const start = new URLSearchParams(location.search);
-    const chapter = Math.min(7, Math.max(0, (Number(start.get('scene')) || 1) - 1));
-    go(chapter); t = Math.min(scenes[chapter].dur - .001, Math.max(0, Number(start.get('time')) || 0));
-    gt = scenes.slice(0,chapter).reduce((sum,s)=>sum+s.dur,0) + t;
-    last = performance.now(); setPlaying(!reduce && start.get('paused') !== '1'); frame();
-  }).catch(error => {
-    clearTimeout(assetDeadline);
-    console.error(error); ready = true; $("assetLoader").remove();
-    $("assetStatus").textContent = "Some detail assets could not load; base scene remains available.";
-    setPlaying(false);
-  });
-  detailReady.then(() => {
-    stage.dataset.assets = "ready";
-    if (ready) frame();
-  }).catch(error => {
-    stage.dataset.assets = "partial";
-    if (ready) console.warn("Detail assets unavailable; base film remains playable", error);
-  });
   // Keep overlays synchronized when paused, revisiting a chapter, or using reduced motion.
   let lastOverlayTime=-1, cachedAnimations=[], animationScene=-1;
   function syncOverlayAnimations() {
@@ -1205,7 +1194,58 @@ import { enhanceWorld } from './details.js';
   const credits = $("creditsToggle");
   credits.addEventListener("toggle", () => { if (credits.open) setPlaying(false); });
   document.addEventListener("visibilitychange", () => { if (document.hidden) setPlaying(false); });
-})();
+
+  const start = new URLSearchParams(location.search);
+  const chapter = Math.min(scenes.length - 1, Math.max(0, (parseInt(start.get("scene"), 10) || 1) - 1));
+  ready = true;
+  go(chapter);
+  t = Math.min(scenes[chapter].dur - .001, Math.max(0, Number(start.get("time")) || 0));
+  gt = scenes.slice(0, chapter).reduce((sum, s) => sum + s.dur, 0) + t;
+  setPlaying((userInitiated || !reduce) && !document.hidden && (userInitiated || start.get("paused") !== "1"));
+  frame();
+  $("assetLoader").remove();
+  stage.dataset.assets = "background";
+  $("assetStatus").textContent = "Loading detailed scenery in the background.";
+  requestAnimationFrame(loop);
+  function finishAssets(loaded) {
+    stage.dataset.assets = loaded ? "ready" : "partial";
+    $("assetStatus").textContent = loaded ? "" : "Some scenery could not load; the film is still playable.";
+    if (!playing) frame();
+  }
+  detailReady.then(finishAssets, error => {
+    console.warn("Detail assets unavailable; base film remains playable", error);
+    finishAssets(false);
+  });
+}
+function showFilmError(error) {
+  console.error("Could not start the SkySentry film", error);
+  document.getElementById("stage").dataset.assets = "failed";
+  document.getElementById("assetLoader")?.remove();
+  document.getElementById("assetStatus").textContent = "The 3D film could not start. Check your connection and WebGL support, then reload to try again.";
+}
+
+const film = document.getElementById("film");
+const launch = document.getElementById("filmLaunch");
+const status = document.getElementById("filmLaunchStatus");
+let launching = false, failed = false;
+launch.addEventListener("click", async event => {
+  if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  if (launching) return;
+  launching = true;
+  status.textContent = "Starting film…";
+  try {
+    await startFilm({userInitiated: true});
+    film.classList.add("film-started");
+    if (document.activeElement === launch) document.getElementById("play").focus();
+    document.getElementById("filmPoster").remove();
+  } catch (error) {
+    showFilmError(error);
+    failed = true;
+    status.textContent = "The embedded film could not start.";
+    launch.textContent = "Try the standalone film";
+  }
+});
 </script>
 
 
@@ -1215,8 +1255,9 @@ import { enhanceWorld } from './details.js';
   const stage = document.getElementById("stage"), btn = document.getElementById("play");
   let autoPaused = false;
   new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
-    else if (e.isIntersecting && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
+    if (!stage.closest(".film-started")) return;
+    if (e.intersectionRatio < .25 && btn.textContent === "Pause") { btn.click(); autoPaused = true; }
+    else if (e.intersectionRatio >= .25 && autoPaused && btn.textContent === "Play") { btn.click(); autoPaused = false; }
   }, {threshold: .25}).observe(stage);
   btn.addEventListener("click", e => { if (e.isTrusted) autoPaused = false; });
 })();
@@ -1225,6 +1266,5 @@ import { enhanceWorld } from './details.js';
 <script src="/js/guide.js" defer></script>
 <script src="/js/nav-account.js" defer></script>
 
-<script src="/js/reveal.js" defer></script>
 </body>
 </html>

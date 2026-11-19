@@ -58,7 +58,9 @@ export class DetectionEngine {
     if (patch.skyMask) this.motion.setSkyMask(this.cfg.skyMask.polygon);
   }
   setSkyMask(polyNorm) { this.setConfig({ skyMask: { polygon: polyNorm || [] } }); }
-  setCorridor(polyNorm) { this.setConfig({ corridor: { polygon: polyNorm || [] } }); }
+  setCorridor(polyNorm, { surveyId = null, demo = false } = {}) {
+    this.setConfig({ corridor: { polygon: polyNorm || [], surveyId, demo } });
+  }
   setCamera(cam) { this.setConfig({ camera: cam }); }
   getConfig() { return JSON.parse(JSON.stringify(this.cfg)); }
 
@@ -287,7 +289,9 @@ export class DetectionEngine {
       return p;
     });
     for (const g of groups) {
-      if (g.kind === 'track') trackById.get(g.id).eta_seconds = r1(g.eta_seconds);
+      if (g.kind === 'track') Object.assign(trackById.get(g.id), {
+        eta_seconds: r1(g.eta_seconds), eta_basis: g.eta_basis,
+      });
     }
     const flocksOut = groups.filter((g) => g.kind === 'flock').map((g) => publicGroup(g));
 
@@ -507,8 +511,11 @@ export class DetectionEngine {
     const vx = (isFlock ? o.vx : o.svx) / w, vy = (isFlock ? o.vy : o.svy) / h;
     const seX = o.seX / w, seY = o.seY / h;
     const bb = isFlock ? o.bbox : o.blob;
-    const poly = this.cfg.corridor.polygon;
-    const horizon = this.cfg.corridor.horizonSec;
+    const corridor = this.cfg.corridor;
+    const basis = corridor.demo === true ? 'synthetic_image_space_corridor'
+      : typeof corridor.surveyId === 'string' && corridor.surveyId.trim() ? 'image_space_corridor' : null;
+    const poly = basis ? corridor.polygon : [];
+    const horizon = corridor.horizonSec;
     const eta = etaToPolygon(x, y, vx, vy, poly, horizon);
     return {
       kind,
@@ -519,6 +526,7 @@ export class DetectionEngine {
       why: isFlock ? `${o.size} tracks flying together` : o.why,
       x, y, vx, vy,
       eta_seconds: eta,
+      eta_basis: eta === null ? null : basis,
       eta_range: etaRange(x, y, vx, vy, seX, seY, poly, horizon, this.cfg.corridor.etaSigma),
       bearing_deg: bearingFromX(x, cam.heading_deg, cam.hfov_deg),
       heading: motionHeading(vx, vy, cam.heading_deg),
@@ -557,6 +565,7 @@ export class DetectionEngine {
       eta_seconds: null,
       flock_id: tr.flockId,
       is_flock: !!tr.flockId,
+      dense: tr.denseCount > 1,
       missed: tr.misses > 0,
       age: r1(tr.t - tr.born),
       trail: tr.trail.map(([, px, py]) => [r3(px / w), r3(py / h)]),
@@ -601,7 +610,7 @@ export class DetectionEngine {
       coco_vague: s.cocoVague,               // answers like kite/frisbee that carry no evidence
       coco_agreement: s.cocoAgree + s.cocoDisagree ? r3(s.cocoAgree / (s.cocoAgree + s.cocoDisagree)) : null,
       ghosts_removed: s.ghosts,
-      debris_ignored: s.debris,              // tracks recognised as thrown/falling debris
+      debris_ignored: s.debris,              // legacy field: possible debris excluded from flocking, not risk
       stage_ms: Object.fromEntries(Object.entries(s.stageMs).map(([k, v]) => [k, r3(v)])),
     };
   }
@@ -609,7 +618,8 @@ export class DetectionEngine {
   // Most important group: drones, then the soonest corridor ETA, then the biggest flock.
   pickPrimary(groups) {
     const score = (g) => {
-      if (g.classification === 'rejected' || g.classification === 'debris') return -1;
+      if (g.classification === 'rejected') return -1;
+      if (g.classification === 'debris') return 0;   // advisory only; prefer any other active group
       let s = 0;
       if (g.classification === 'drone') s += 1e6;
       if (g.classification === 'bird') s += 1e4;
@@ -629,8 +639,16 @@ export class DetectionEngine {
 
     // track_batch: every confirmed track's recent positions, decimated to pointsPerSecond.
     if (rep.lastBatch === null) rep.lastBatch = t;
-    if (t - rep.lastBatch >= c.batchIntervalSec) {
+    const batchDue = t - rep.lastBatch >= c.batchIntervalSec;
+    if (batchDue) {
       rep.lastBatch = t;
+      if (rep.sentUpTo.size) {
+        const activeIds = new Set(this.tracker.tracks.map((tr) => tr.id));
+        for (const id of rep.sentUpTo.keys()) if (!activeIds.has(id)) rep.sentUpTo.delete(id);
+      }
+      for (const [id, at] of rep.crops) if (t - at >= c.cropMinIntervalSec) rep.crops.delete(id);
+    }
+    if (batchDue && this.listeners.get('track_batch')?.size) {
       const points = [];
       const minGap = 1 / c.pointsPerSecond;
       for (const tr of this.tracker.tracks) {
@@ -731,6 +749,7 @@ function publicGroup(g) {
     reason: g.why,
     x: r3(g.x), y: r3(g.y), vx: r3(g.vx), vy: r3(g.vy),
     eta_seconds: r1(g.eta_seconds),
+    eta_basis: g.eta_basis ?? null,
     eta_range: g.eta_range,
     bearing_deg: r1(g.bearing_deg),
     heading: g.heading,

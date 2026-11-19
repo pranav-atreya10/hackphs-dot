@@ -4,21 +4,21 @@
 //     ├─ every frame: relayed to towers as camera:frame, plus bot:state (tracks/flocks/risk) for the overlay
 //     └─ engine 'event' ──► snapshot crop from the full frame ──► relayCameraEvent (store, AI step, towers)
 //
-// The bot backs off when it can't keep up or fails; towers then run their own copy of the engine as a
-// fallback (see public/js/tower.js) and send events with detected_by = "tower".
+// The bot owns streamed detection. On failure it reports unavailable and retries on incoming frames.
 const sharp = require("sharp");
 const path = require("path");
 const { pathToFileURL } = require("url");
+const { randomUUID } = require("crypto");
 
 const ENABLED = (process.env.SERVER_BOT || "on") !== "off";
 const PROC_W = 320;                 // Vivan's engine is tuned for 320 px wide frames
-const BUDGET_MS = 60;               // average decode+detect time above this = overloaded, hand over to towers
+const BUDGET_MS = 60;
 const RETRY_MS = 20000;
-const DEFAULT_PRESET = process.env.BOT_PRESET || "phone_15fps";             // after handing over, try running on the server again this often
+const FRESH_MS = 3000;
+const DEFAULT_PRESET = process.env.BOT_PRESET || "phone_15fps";
 const enginePath = pathToFileURL(path.join(__dirname, "public/detection/index.js")).href;
 let enginePromise = null;
 const loadEngine = () => (enginePromise ??= import(enginePath));
-const COCO_LABELS = new Set(('person,bicycle,car,motorcycle,airplane,bus,train,truck,boat,traffic light,fire hydrant,stop sign,parking meter,bench,bird,cat,dog,horse,sheep,cow,elephant,bear,zebra,giraffe,backpack,umbrella,handbag,tie,suitcase,frisbee,skis,snowboard,sports ball,kite,baseball bat,baseball glove,skateboard,surfboard,tennis racket,bottle,wine glass,cup,fork,knife,spoon,bowl,banana,apple,sandwich,orange,broccoli,carrot,hot dog,pizza,donut,cake,chair,couch,potted plant,bed,dining table,toilet,tv,laptop,mouse,remote,keyboard,cell phone,microwave,oven,toaster,sink,refrigerator,book,clock,vase,scissors,teddy bear,hair drier,toothbrush').split(','));
 
 // Decode and resize in libvips' native worker pool instead of blocking every camera's HTTP/socket traffic.
 async function decode(buf) {
@@ -29,13 +29,20 @@ async function decode(buf) {
 }
 
 // Decode the original resolution only when an alert needs evidence.
-async function crop(buf, box) {
+async function crop(buf, box, options = {}) {
   const image = sharp(buf, { limitInputPixels: 16_777_216 });
   const { width: W, height: H } = await image.metadata();
+  if (options.review) {
+    const { x, y, w, h } = box;
+    if (![x, y, w, h].every(Number.isFinite) || x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > 1 || y + h > 1 ||
+        Math.max(w * W, h * H) < 24) return null;
+  }
   const x0 = Math.max(0, Math.floor(box.x * W)), y0 = Math.max(0, Math.floor(box.y * H));
   const cw = Math.min(W - x0, Math.ceil(box.w * W)), ch = Math.min(H - y0, Math.ceil(box.h * H));
   if (cw < 4 || ch < 4) return null;
-  return (await image.extract({ left: x0, top: y0, width: cw, height: ch }).jpeg({ quality: 75 }).toBuffer()).toString("base64");
+  const cropped = image.extract({ left: x0, top: y0, width: cw, height: ch });
+  if (options.review) cropped.resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true });
+  return (await cropped.jpeg({ quality: 75 }).toBuffer()).toString("base64");
 }
 
 // Small, overlay-only view of the engine state (tracks, flocks, primary, risk) sent with each frame.
@@ -43,24 +50,27 @@ function compact(st) {
   return {
     t: st.t, risk: st.risk.level, reasons: st.risk.reasons,
     // Why the bot may be waiting: still learning the background, or the camera is moving.
-    learning: !st.motion.ready, shake: !!st.motion.shake,
-    primary: st.primary && { size: st.primary.size, classification: st.primary.classification, eta_seconds: st.primary.eta_seconds, bearing_deg: st.primary.bearing_deg, flap_hz: st.primary.flap_hz, heading: st.primary.heading?.name, kind: st.primary.kind },
-    tracks: st.tracks.map((t) => ({ id: t.id, bbox: t.bbox, classification: t.classification, flap_hz: t.flap_hz, eta_seconds: t.eta_seconds, is_flock: t.is_flock, trail: t.trail.slice(-12) })),
-    flocks: st.flocks.map((f) => ({ id: f.id, bbox: f.bbox, size: f.size, eta_seconds: f.eta_seconds })),
+    learning: !st.motion.ready, shake: !!st.motion.shake, overflow: !!st.motion.overflow,
+    primary: st.primary && { size: st.primary.size, classification: st.primary.classification, eta_seconds: st.primary.eta_seconds, eta_basis: st.primary.eta_basis, bearing_deg: st.primary.bearing_deg, flap_hz: st.primary.flap_hz, heading: st.primary.heading?.name, kind: st.primary.kind },
+    tracks: st.tracks.map((t) => ({ id: t.id, bbox: t.bbox, classification: t.classification, flap_hz: t.flap_hz, eta_seconds: t.eta_seconds, eta_basis: t.eta_basis, is_flock: t.is_flock, missed: t.missed, dense: t.dense, trail: t.trail.slice(-12) })),
+    flocks: st.flocks.map((f) => ({ id: f.id, bbox: f.bbox, size: f.size, eta_seconds: f.eta_seconds, eta_basis: f.eta_basis })),
     fps: st.stats.fps, proc_ms: st.stats.proc_ms,
   };
 }
 
 class CameraBot {
-  constructor({ cameraId, onEvent, onState, onStatus }) {
-    Object.assign(this, { cameraId, onEvent, onState, onStatus });
-    this.engine = null; this.last = null; this.avgMs = 0; this.busy = false; this.dropped = 0;
+  constructor({ cameraId, onEvent, onState, onStatus, now = () => performance.now() }) {
+    Object.assign(this, { cameraId, onEvent, onState, onStatus, now });
+    this.engine = null; this.avgMs = 0; this.busy = false; this.dropped = 0;
     this.events = [];
-    this.active = ENABLED; this.reason = ENABLED ? null : "SERVER_BOT=off"; this.retryAt = 0; this.timed = 0;
+    this.mode = ENABLED ? "starting" : "unavailable";
+    this.reason = ENABLED ? "waiting for usable results" : "server detector disabled";
+    this.retryAt = 0; this.timed = 0;
+    this.state = null; this.resultAt = null; this.startedAt = null;
   }
 
-  configure({ camera, corridor, camera_id, preset }) {
-    this.config = { camera, corridor, camera_id, preset };
+  configure({ camera, corridor, surveyId, camera_id, preset }) {
+    this.config = { camera, corridor, surveyId, camera_id, preset };
     if (this.engine) this.apply();
   }
   apply() {
@@ -72,78 +82,109 @@ class CameraBot {
     if (presets.includes("phone_15fps")) this.engine.setConfig({ motion: { warmupFrames: 8, warmupAlpha: 0.4 } });
     if (c.camera) this.engine.setCamera(c.camera);
     if (c.camera_id) this.engine.setConfig({ camera_id: c.camera_id });
-    if (Array.isArray(c.corridor)) this.engine.setCorridor(c.corridor);
+    this.engine.setCorridor(c.corridor, { surveyId: c.surveyId });
   }
 
-  async frame(buf, t) {
-    if (!this.active) {
-      if (!ENABLED || Date.now() < this.retryAt) return false;
-      this.active = true; this.reason = null; this.avgMs = 0; this.timed = 0;   // take the camera back
-      console.log(`server bot for ${this.cameraId} is running again`);
-      this.onStatus();
+  async frame(buf, t, frame) {
+    this.expire();
+    if (!ENABLED || this.now() < this.retryAt) return false;
+    if (this.busy) { this.dropped++; return this.active; }
+    if (this.mode === "unavailable") {
+      this.avgMs = 0; this.timed = 0;
+      this.setMode("starting", "waiting for usable results");
     }
-    if (this.busy) { this.dropped++; return true; }   // still working on the previous frame: skip this one
     this.busy = true;
+    const started = this.startedAt = this.now();
     try {
       if (!this.engine) {
         const { DetectionEngine, PRESETS } = await loadEngine();
+        if (this.startedAt !== started) return false;
         this.presets = PRESETS;
         this.engine = new DetectionEngine({ camera_id: this.cameraId });
+        this.generation = randomUUID();
         this.apply();
         this.engine.on("event", (ev) => this.events.push(ev));
       }
-      const t0 = performance.now();   // timed after the engine has loaded, so start-up isn't counted as slowness
+      const t0 = this.now();
       const img = await decode(buf);
-      this.last = buf;
-      const st = this.engine.process(img, t);
-      this.state = compact(st);
-      this.onState(this.state);
-      for (const ev of this.events.splice(0)) {
+      if (this.startedAt !== started) return false;
+      if (this.now() - started >= FRESH_MS) {
+        this.stop("results timed out");
+        return false;
+      }
+      const state = compact(this.engine.process(img, t));
+      const ms = this.now() - t0;
+      this.avgMs = this.avgMs ? this.avgMs * 0.9 + ms * 0.1 : ms;
+      if (this.now() - started >= FRESH_MS) {
+        this.stop("results timed out");
+        return false;
+      }
+      if (++this.timed > 60 && this.avgMs > BUDGET_MS) {
+        this.stop("server detector overloaded");
+        return false;
+      }
+      this.resultAt = started;
+      const events = this.events.splice(0);
+      if (state.learning || state.shake || state.overflow) {
+        this.setMode("starting", state.overflow ? "scene motion overflow" : state.shake ? "camera moving" : "learning the background");
+        return false;
+      }
+      this.state = { ...state, generation: this.generation };
+      this.setMode("server", null);
+      this.onState(this.state, frame);
+      for (const ev of events) {
         if (ev.needs_snapshot && ev.crop_box) {
           try { ev.snapshot = await crop(buf, ev.crop_box); }
           catch (err) { console.warn(`snapshot for ${this.cameraId} unavailable: ${err.message}`); }
         }
+        if (!this.active) break;
         ev.detected_by = "server";
-        this.onEvent(ev);
+        this.onEvent(ev, frame, this.state);
       }
-      const ms = performance.now() - t0;
-      this.avgMs = this.avgMs ? this.avgMs * 0.9 + ms * 0.1 : ms;
-      if (++this.timed > 60 && this.avgMs > BUDGET_MS) this.stop(`overloaded (${Math.round(this.avgMs)} ms per frame)`);
     } catch (err) {
-      this.stop(`error: ${err.message}`);
+      console.warn(`server detector for ${this.cameraId} failed: ${err.message}`);
+      this.stop("processing failed; retrying on incoming frames");
     } finally {
-      this.busy = false;
+      this.busy = false; this.startedAt = null;
     }
     return this.active;
   }
 
-  stop(reason) {
-    if (!this.active) return;
-    this.active = false; this.reason = reason; this.retryAt = Date.now() + RETRY_MS;
-    console.warn(`server bot for ${this.cameraId} handed over to towers: ${reason}`);
+  get active() {
+    return this.mode === "server" && this.now() - this.resultAt < FRESH_MS;
+  }
+  expire() {
+    if (this.startedAt !== null && this.now() - this.startedAt >= FRESH_MS) {
+      this.stop("results timed out");
+    } else if (this.resultAt !== null && this.now() - this.resultAt >= FRESH_MS) {
+      this.invalidate("no fresh server results");
+    }
+  }
+  setMode(mode, reason) {
+    if (mode !== "server") this.state = null;
+    if (this.mode === mode && this.reason === reason) return;
+    this.mode = mode; this.reason = reason;
     this.onStatus();
   }
-  applyLabel(payload) {
-    if (!payload || typeof payload !== 'object') return false;
-    const { trackId, label, score, source, bbox, frameT } = payload;
-    if (!this.active || !this.engine || source !== 'coco' || !Number.isSafeInteger(trackId)) return false;
-    if (!Number.isFinite(score) || score < 0 || score > 1 || (label === null ? score !== 0 : !COCO_LABELS.has(label))) return false;
-    if (!Number.isFinite(frameT) || Math.abs(this.engine.lastT - frameT) > 2.5) return false;
-    if (!bbox || !['x', 'y', 'w', 'h'].every(k => Number.isFinite(bbox[k])) || bbox.w <= 0 || bbox.h <= 0 || bbox.x < 0 || bbox.y < 0 || bbox.x + bbox.w > 1.01 || bbox.y + bbox.h > 1.01) return false;
-    const track = this.engine.tracker.tracks.find(tr => tr.id === trackId && tr.confirmed);
-    if (!track) return false;
-    const b = this.state?.tracks.find(tr => tr.id === trackId)?.bbox;
-    if (!b) return false;
-    const shift = Math.hypot(b.x + b.w / 2 - bbox.x - bbox.w / 2, b.y + b.h / 2 - bbox.y - bbox.h / 2);
-    if (shift > Math.max(0.08, 2 * Math.max(b.w, b.h))) return false;
-    const ratio = bbox.w * bbox.h / (b.w * b.h);
-    if (ratio < 0.2 || ratio > 5) return false;
-    const intersection = Math.max(0, Math.min(b.x + b.w, bbox.x + bbox.w) - Math.max(b.x, bbox.x)) * Math.max(0, Math.min(b.y + b.h, bbox.y + bbox.h) - Math.max(b.y, bbox.y));
-    if (intersection / (b.w * b.h + bbox.w * bbox.h - intersection) < 0.1) return false;
-    this.engine.applyLabel(trackId, label, score, 'coco');
-    return true;
+  invalidate(reason) {
+    this.engine = null; this.state = null; this.resultAt = null;
+    this.startedAt = null;
+    this.events.length = 0;
+    this.setMode("unavailable", reason);
   }
-  status() { return { cameraId: this.cameraId, mode: this.active ? "server" : "tower", reason: this.reason, avg_ms: Math.round(this.avgMs), dropped: this.dropped }; }
+  stop(reason) {
+    this.retryAt = this.now() + RETRY_MS;
+    this.invalidate(reason);
+  }
+  status() {
+    const expired = this.resultAt !== null && this.now() - this.resultAt >= FRESH_MS;
+    return { cameraId: this.cameraId, mode: expired ? "unavailable" : this.mode,
+      reason: expired ? "no fresh server results" : this.reason, max_result_age_ms: FRESH_MS,
+      generation: this.active ? this.generation : null,
+      capabilities: { video: true, drone_audio: false }, avg_ms: Math.round(this.avgMs), dropped: this.dropped };
+  }
+  freshState() { return this.active ? this.state : null; }
+  remainingMs() { return this.active ? Math.max(0, FRESH_MS - (this.now() - this.resultAt)) : 0; }
 }
 
-module.exports = { CameraBot, BOT_ENABLED: ENABLED };
+module.exports = { CameraBot, BOT_ENABLED: ENABLED, cropBirdReview: (jpeg, box) => crop(jpeg, box, { review: true }) };

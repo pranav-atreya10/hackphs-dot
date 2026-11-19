@@ -1,6 +1,6 @@
 # Browser bird verification assets
 
-SkySentry serves these public pretrained assets from its own server so optional bird verification does not depend on a third-party CDN during a demo. Images are evaluated locally in the tower browser. The model is COCO-SSD, not a drone detector, and tiny distant birds may not produce a useful label.
+SkySentry serves these public pretrained assets from its own server. They load only when a tower operator enables the local check. The checked-in scripts, manifest, and weights total 19,887,101 bytes (about 19 MiB before transport compression). The model is COCO-SSD, not a drone detector, and tiny distant birds may not produce a useful label.
 
 Upstream assets:
 
@@ -11,4 +11,4 @@ Upstream assets:
 
 TensorFlow.js and TensorFlow.js Models are published by Google under the Apache 2.0 license. Original license headers are retained in the script files. Official projects: https://github.com/tensorflow/tfjs and https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd.
 
-The faster motion tracker stays active when verification is off or cannot load. A trained bird result supplements motion/wingbeat evidence; other labels never become an automatic drone verdict. This is a project demonstration, not a validated aviation safety system.
+The faster motion tracker stays active during model loading and inference. The browser does not upload crops for review. If cloud evidence review is explicitly enabled, the server can send an authenticated, frame-bound crop from a server-tracked camera to the provider. Local checks and cloud results are advisory, not a change to risk or a clearance. This is a project demonstration, not a validated aviation safety system.

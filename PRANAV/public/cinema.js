@@ -290,9 +290,7 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
       composer.render();
       // Adaptive quality: reduce resolution, then costly screen effects on slow machines.
       const now = performance.now(), dt = now - lastT; lastT = now; frames++;
-      // Steps down faster (anything under ~36 fps counts as slow) and one level further than before.
       if (dt > 28) slowFrames++;
-      // Judge every ~1.2 s of wall time (not every N frames), so a slow machine adapts within seconds.
       if (now - windowStart > 1200 && frames >= 4) { windowStart = now; if (slowFrames > frames * 0.4 && quality > -3) { quality--; composer.setPixelRatio(qualityRatio()); if(quality <= -2){bloom.enabled=false;smaa.enabled=false;} } frames = slowFrames = 0; }
     },
     resize(w, h) { composer.setPixelRatio(Math.min(qualityRatio(), Math.sqrt(1400000 / Math.max(1, w*h)))); composer.setSize(w, h); }

@@ -92,10 +92,13 @@ test('only new alerts become incidents: 2-second repeats are not stored, an esca
 });
 test('health reports a failing Gemini instead of just "configured"', () => {
   const ai = require('../ai-voice/ai');
-  const p = createPipeline({ settings: { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }, voice: { health: () => ({}) }, solana: { health: () => ({}) } });
-  Object.assign(ai.geminiState, { lastError: 'm: Gemini HTTP 404', lastErrorAt: 2, lastSuccessAt: 1 });
+  const p = createPipeline({ settings: { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }, solana: { health: () => ({}) } });
+  const failure = { reason: 'model', httpStatus: 404, action: 'Check the configured Gemini model IDs and project availability.' };
+  Object.assign(ai.geminiState, { lastError: 'm: Gemini HTTP 404', lastFailure: failure, lastErrorAt: 2, lastSuccessAt: 1 });
   assert.equal(p.status().gemini, 'failing (m: Gemini HTTP 404)');
-  Object.assign(ai.geminiState, { lastSuccessAt: 3 });
+  assert.equal(p.health().gemini.state, 'unavailable');
+  assert.deepEqual(p.health().gemini.failure, failure);
+  Object.assign(ai.geminiState, { lastError: null, lastFailure: null, lastSuccessAt: 3 });
   assert.equal(p.status().gemini, 'live');
   Object.assign(ai.geminiState, { lastError: null, lastErrorAt: 0, lastSuccessAt: 0 });
 });

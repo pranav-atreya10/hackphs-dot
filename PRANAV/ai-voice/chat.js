@@ -31,7 +31,7 @@ const TOOLS = [
     description: 'One incident report by its id, including its Solana stamp link.',
     parameters: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } } },
   { type: 'function', name: 'get_live_cameras',
-    description: 'Cameras streaming right now at this airport: current risk and reasons, whether the detector is still learning the background or the camera is shaking, the main track (classification, size, seconds to the runway, bearing) and track counts.',
+    description: 'Cameras streaming right now: current risk and reasons, camera status, main track classification and size, approximate bearing, projected image-mask entry (when available; not runway arrival), and track counts.',
     parameters: { type: 'object', additionalProperties: false, properties: {} } },
 ];
 // Short words the tower page shows while explaining what the copilot looked at.

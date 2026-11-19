@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 delete process.env.GEMINI_API_KEY;
+process.env.GEMINI_CLOUD_EVIDENCE_ENABLED = 'true';
 const { normalizeBirdVerdict, verifyBird, BIRD_RUBRIC } = require('../ai-voice/ai');
 
 test('confident bird stays a bird', () => {
@@ -10,18 +11,20 @@ test('confident bird stays a bird', () => {
 });
 
 test('low confidence answers become uncertain instead of guessing', () => {
-  assert.equal(normalizeBirdVerdict({ verdict: 'bird', confidence: 0.5 }, 'm').verdict, 'uncertain');
-  assert.equal(normalizeBirdVerdict({ verdict: 'not_bird', confidence: 0.69 }, 'm').verdict, 'uncertain');
+  for (const verdict of ['bird', 'not_bird']) {
+    const v = normalizeBirdVerdict({ verdict, confidence: 0.69, object: '', evidence: '' }, 'm');
+    assert.equal(v.status, 'verified'); assert.equal(v.verdict, 'uncertain'); assert.equal(v.isBird, null);
+  }
 });
 
-test('invalid verdicts and out-of-range confidence are clamped', () => {
-  const v = normalizeBirdVerdict({ verdict: 'maybe', confidence: 7 }, 'm');
-  assert.equal(v.verdict, 'uncertain'); assert.equal(v.confidence, 1); assert.equal(v.isBird, false);
-  assert.equal(normalizeBirdVerdict(null, 'm').verdict, 'uncertain');
+test('invalid verdicts and out-of-range confidence are rejected', () => {
+  for (const [verdict, confidence] of [['maybe', 0.8], ['bird', 7]]) {
+    assert.throws(() => normalizeBirdVerdict({ verdict, confidence, object: '', evidence: '' }, 'm'), { reason: 'invalid_response' });
+  }
 });
 
 test('drone look-alike is a non-bird', () => {
-  const v = normalizeBirdVerdict({ verdict: 'not_bird', confidence: 0.88, object: 'quadcopter drone' }, 'm');
+  const v = normalizeBirdVerdict({ verdict: 'not_bird', confidence: 0.88, object: 'quadcopter drone', evidence: 'Rotors' }, 'm');
   assert.equal(v.isBird, false); assert.equal(v.verdict, 'not_bird');
 });
 
@@ -29,7 +32,7 @@ test('rubric names the main look-alikes', () => {
   for (const w of ['drone', 'airplane', 'insect', 'leaf', 'kite', 'lens flare']) assert.match(BIRD_RUBRIC, new RegExp(w));
 });
 
-test('without a Gemini key the judge says uncertain, never a made-up answer', async () => {
+test('without a Gemini key the judge is unavailable, not uncertain', async () => {
   const v = await verifyBird('data:image/jpeg;base64,AAAA');
-  assert.equal(v.verdict, 'uncertain'); assert.equal(v.source, 'fallback'); assert.match(v.evidence, /not configured/);
+  assert.equal(v.verdict, null); assert.equal(v.status, 'unavailable'); assert.equal(v.reason, 'not_configured');
 });

@@ -1,4 +1,62 @@
 import Foundation
+import Security
+
+enum CameraCredentials {
+    private static let service = (Bundle.main.bundleIdentifier ?? "SkySentryCam") + ".camera"
+
+    private static func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+    }
+
+    private static func read(_ account: String) -> (OSStatus, String?) {
+        var q = query(account)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
+        return (status, (item as? Data).flatMap { String(data: $0, encoding: .utf8) })
+    }
+
+    private static func write(_ value: String, account: String) -> Bool {
+        let q = query(account)
+        let fields: [String: Any] = [kSecValueData as String: Data(value.utf8)]
+        let updated = SecItemUpdate(q as CFDictionary, fields as CFDictionary)
+        if updated != errSecItemNotFound { return updated == errSecSuccess }
+        var item = q.merging(fields) { _, value in value }
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func migrate(from defaults: UserDefaults = .standard) {
+        guard let legacy = defaults.string(forKey: SettingKey.apiKey) else { return }
+        let (status, _) = read("api-key")
+        if status == errSecSuccess || (status == errSecItemNotFound && write(legacy, account: "api-key")) {
+            defaults.removeObject(forKey: SettingKey.apiKey)
+        }
+    }
+
+    static var apiKey: String { read("api-key").1 ?? "" }
+
+    static func saveAPIKey(_ value: String) -> Bool {
+        // Store an empty value too, so clearing the field cannot restore a legacy key.
+        guard write(value, account: "api-key") else { return false }
+        UserDefaults.standard.removeObject(forKey: SettingKey.apiKey)
+        return true
+    }
+
+    static var deviceId: String? {
+        let (status, stored) = read("device-id")
+        if status == errSecSuccess, let stored, UUID(uuidString: stored) != nil { return stored }
+        guard status == errSecItemNotFound else { return nil }
+        let id = UUID().uuidString.lowercased()
+        var q = query("device-id")
+        q[kSecValueData as String] = Data(id.utf8)
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        let added = SecItemAdd(q as CFDictionary, nil)
+        if added == errSecDuplicateItem { return read("device-id").1 }
+        return added == errSecSuccess ? id : nil
+    }
+}
 
 /// UserDefaults keys shared by the @AppStorage properties and the streaming code.
 enum SettingKey {
@@ -20,7 +78,7 @@ enum SettingKey {
 /// Defaults registered at launch, so @AppStorage and StreamSettings.load() always agree.
 enum SettingDefaults {
     static let serverURL = "http://localhost:8095"
-    static let cameraId = "iphone-1"
+    static var cameraId: String { CameraCredentials.deviceId.map { "iphone-" + String($0.prefix(8)) } ?? "iPhone" }
     static let demoClip = "gulls-sky.mp4"
     static let heading = 90.0
     static let hfov = 65.0
@@ -32,7 +90,6 @@ enum SettingDefaults {
     static var all: [String: Any] {
         [
             SettingKey.serverURL: serverURL,
-            SettingKey.apiKey: "",
             SettingKey.airport: "",
             SettingKey.cameraId: cameraId,
             SettingKey.heading: heading,
@@ -65,6 +122,7 @@ enum SourcePreference: String, CaseIterable, Identifiable {
 struct StreamSettings: Equatable {
     var serverURL: String
     var apiKey: String
+    var deviceId: String?
     var airport: String
     var cameraId: String
     var heading: Double
@@ -88,9 +146,10 @@ struct StreamSettings: Equatable {
     static func load(from d: UserDefaults = .standard) -> StreamSettings {
         StreamSettings(
             serverURL: d.string(forKey: SettingKey.serverURL) ?? SettingDefaults.serverURL,
-            apiKey: d.string(forKey: SettingKey.apiKey) ?? "",
+            apiKey: CameraCredentials.apiKey,
+            deviceId: CameraCredentials.deviceId,
             airport: d.string(forKey: SettingKey.airport) ?? "",
-            cameraId: d.string(forKey: SettingKey.cameraId) ?? SettingDefaults.cameraId,
+            cameraId: d.string(forKey: SettingKey.cameraId).flatMap { $0 == "iphone-1" ? nil : $0 } ?? SettingDefaults.cameraId,
             heading: d.object(forKey: SettingKey.heading) as? Double ?? SettingDefaults.heading,
             hfov: d.object(forKey: SettingKey.hfov) as? Double ?? SettingDefaults.hfov,
             lat: d.object(forKey: SettingKey.lat) as? Double ?? SettingDefaults.lat,

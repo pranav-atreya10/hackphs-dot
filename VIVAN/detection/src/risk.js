@@ -2,9 +2,8 @@
 //
 //  red    : any drone, any bird flock of 5+, or any bird/flock under 30 s from the corridor
 //           or bird numbers rising fast enough that the forecast reaches a flock of 5+ (forecast.js)
-//  yellow : any confirmed bird, or bird numbers rising (or, by default, any unverified object so Gemini can check it)
-//  green  : nothing confirmed in the sky
-//  (debris, meaning thrown rocks and falling objects, never raises the level; it is only listed)
+//  yellow : confirmed birds, rising bird numbers, or unverified objects including possible debris
+//  green  : no active advisory
 //
 // The level rises immediately but only steps down after it has been lower for
 // `holdSec`, so the tower display and voice alerts don't flicker.
@@ -37,11 +36,12 @@ export class RiskEngine {
       raw = 2;
       reasons.push(`Drone sound (${audio.confidence} confidence)`);
     }
-    let debris = 0;
+    let debris = 0, unknown = 0;
     for (const g of groups) {
       const cls = g.classification;
       if (cls === 'rejected') continue;
-      if (cls === 'debris') { debris += g.size; continue; }
+      if (cls === 'debris') { debris += g.size; raw = Math.max(raw, 1); continue; }
+      if (cls === 'unknown') { unknown += g.size; raw = Math.max(raw, 1); continue; }
       if (cls === 'drone') {
         raw = 2;
         reasons.push(`Drone ${g.label}`);
@@ -52,11 +52,9 @@ export class RiskEngine {
         }
         if (g.eta_seconds !== null && g.eta_seconds <= c.etaRedSec) {
           raw = 2;
-          reasons.push(`${g.size > 1 ? `Flock of ${g.size}` : 'Bird'} ${g.label} ${Math.round(g.eta_seconds)} s from corridor`);
+          reasons.push(`${g.size > 1 ? `Flock of ${g.size}` : 'Bird'} ${g.label}: projected image-space corridor entry in ${Math.round(g.eta_seconds)} s`);
         }
         if (raw < 1) raw = 1;
-      } else if (c.unknownCountsYellow && raw < 1) {
-        raw = 1;
       }
     }
     if (forecast && forecast.trend === 'rising') {
@@ -71,11 +69,10 @@ export class RiskEngine {
     }
     if (raw === 1 && reasons.every((r) => r.startsWith('Bird numbers rising'))) {
       const birds = groups.filter((g) => g.classification === 'bird').reduce((s, g) => s + g.size, 0);
-      const unknown = groups.filter((g) => g.classification === 'unknown').reduce((s, g) => s + g.size, 0);
       if (birds) reasons.push(`${birds} bird${birds > 1 ? 's' : ''} in view`);
-      if (unknown) reasons.push(`${unknown} unverified object${unknown > 1 ? 's' : ''}`);
     }
-    if (debris) reasons.push(`${debris} falling object${debris > 1 ? 's' : ''} ignored (debris, not birds)`);
+    if (unknown) reasons.push(`${unknown} unverified object${unknown > 1 ? 's' : ''}`);
+    if (debris) reasons.push(`${debris} unverified object${debris > 1 ? 's' : ''} (possible debris)`);
 
     const cur = RANK[this.level];
     if (raw >= cur) {

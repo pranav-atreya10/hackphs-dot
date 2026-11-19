@@ -33,7 +33,12 @@
   .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
   .incidents button:hover b,.incidents button:focus-visible b{text-decoration:underline;text-underline-offset:3px} .incidents b{font:500 .95rem var(--sans)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
   #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
-  #beaconView{padding:8px 0} #beaconView:fullscreen{display:grid;place-items:center;background:var(--paper,#000);padding:6vmin} #beaconView:fullscreen>*{transform:scale(2.2)}
+  #beaconView{padding:8px 0} #beaconView:fullscreen{display:grid;align-content:center;justify-items:center;gap:12px;background:var(--paper,#000);padding:6vmin;text-align:center;font-size:clamp(1rem,3vw,2.4rem)}
+  #beaconLamps [data-text]{display:none}
+  #beaconLamps [data-arrow]{color:var(--mute)}
+  #beaconView:fullscreen #beaconLamps{margin-block:12px;transform:scale(1.7)}
+  #beaconCoverage{display:block;color:var(--mute)}
+  #towerDemo video{display:block;width:min(100%,520px);margin-top:8px}
   .side-airport{display:grid;gap:4px;padding:0 6px} .side-airport .side-label{margin:14px 4px 2px} .side-airport input{width:100%;font-size:.9rem}
   .side-airport input:disabled{opacity:1;color:var(--ink);background:var(--paper-2)} .side-airport .hint{margin:0 4px;min-height:1em;font-size:.78rem}
   form.ask{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 14px;background:var(--card);box-shadow:0 4px 20px -10px rgb(0 0 0/.15)}
@@ -82,7 +87,7 @@
   </div>
   <nav class="side-nav" aria-label="App"><a href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</a><a href="/admin.html" data-admin-only hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Admin</a><a href="/tower.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l-1.5 6h-7z"/><path d="M9.5 10v11h5V10M6 21h12"/></svg>Tower</a><a href="/camera.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="14" height="12" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3"/></svg>Camera</a></nav>
   <p class="side-label">Status</p>
-  <div class="side-status"><a class="pill side-risk" id="sideRisk" href="#risk" data-risk="green" aria-live="polite" title="Current risk · jump to the risk card"><span><b>GREEN</b> · Clear sky</span></a><span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No cameras</span></div>
+  <div class="side-status"><a class="pill side-risk" id="sideRisk" href="#risk" data-risk="unavailable" aria-live="polite" title="Current risk · jump to the risk card"><span><b>UNAVAILABLE</b> · No usable monitoring</span></a><span class="pill" id="conn">Connecting…</span><span class="pill" id="cams">No live cameras</span></div>
   <div class="side-airport" id="airportBox" hidden>
     <p class="side-label"><label for="airportSearch">Airport</label></p>
     <input id="airportSearch" type="search" list="airportList" placeholder="All airports" autocomplete="off" spellcheck="false">
@@ -96,7 +101,9 @@
   </div>
 </aside>
 <div class="page">
-<header class="page-head"><h1>Tower</h1><p>Live risk, camera feeds and alerts for the runway.</p></header>
+<header class="page-head"><h1>Tower</h1><p>Live risk, camera feeds and alerts for the runway.</p>
+  <p>SkySentry sends detection data to its server and may store incident snapshots in MongoDB Atlas. Only when the deployment operator enables cloud evidence processing may camera crops and incident snapshots also be sent to Google Gemini for review.</p>
+</header>
 <div id="auth" hidden></div>
 
 <main class="grid">
@@ -105,15 +112,21 @@
       <div id="feeds"></div>
       <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
       <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false">Enable trained bird check</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Bird check off · motion detection stays active.</span></div>
+      <p class="hint" id="birdReviewStatus" role="status" aria-live="polite"></p>
       <p class="hint">Optional trained model checks tracked objects for birds on this Mac. Camera images stay in this browser. Tiny objects may remain unknown; this model does not identify drones.</p>
     </section>
-    <div class="duo"><section class="card risk" id="risk" data-risk="green" aria-live="polite">
-      <span class="lvl" id="riskLvl">GREEN</span><span class="what" id="riskWhat">Clear sky</span><span class="why" id="riskWhy">Waiting for a camera</span>
+    <details class="card" id="towerDemo">
+      <summary>Preview recorded footage (demo)</summary>
+      <p class="hint">Recorded clip only. This preview does not use a camera or affect live risk, alerts, or the beacon.</p>
+      <video controls playsinline preload="none" data-src="/clips/gulls-sky.mp4" aria-label="Recorded demonstration footage of gulls"></video>
+    </details>
+    <div class="duo"><section class="card risk" id="risk" data-risk="unavailable" aria-live="polite">
+      <span class="lvl" id="riskLvl">UNAVAILABLE</span><span class="what" id="riskWhat">No usable monitoring</span><span class="why" id="riskWhy">Waiting for a tower connection</span>
     </section>
     <section class="card"><h2>Latest alert</h2><p id="alertText">No alerts yet.</p></section></div>
   </div>
   <div class="col">
-    <section class="card"><h2>Airport map</h2><div id="map"></div><p class="hint">Blue: cameras and what they can see. Pins: where each threat was, from the camera’s bearing.</p></section>
+    <section class="card"><h2>Airport map</h2><div id="map"></div><p class="hint">Blue: camera positions and approximate viewing directions. A camera bearing alone does not locate a target.</p></section>
     <section class="card phone" id="addCamera">
       <div id="qr" aria-label="QR code for the camera page"></div>
       <div><h2>Add a phone camera</h2><p class="hint">Scan with the phone, open the camera page, point it at the sky by the runway and press Start. <span class="mono" id="camUrl"></span></p></div>
@@ -123,7 +136,7 @@
     <summary>More: beacon, charts, reports, assistant, event log</summary>
     <div class="more-grid">
       <section class="card"><h2>Tower beacon</h2>
-      <div id="beaconView"></div>
+      <div id="beaconView"><div id="beaconLamps" aria-hidden="true" hidden></div><strong id="beaconReading">UNAVAILABLE · No usable monitoring</strong><span id="beaconCoverage">Waiting for a tower connection</span></div>
       <div class="row"><button class="ghost" id="beaconBtn" type="button">Full-screen beacon</button><span class="hint" id="beaconStatus">Software beacon running · no hardware needed. Put it full screen on a spare monitor in the tower.</span></div>
     </section>
       <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>

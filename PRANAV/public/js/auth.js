@@ -97,28 +97,6 @@ export async function requestSwitch(headers, to, note = '') {
 }
 
 // Admins can run a camera for any airport (handy for demos). They pick it once; it's remembered in this browser.
-const ADMIN_CAMERA_AIRPORT = 'skysentry.adminCameraAirport';
-async function pickCameraAirport({ mount, headers }) {
-  const { airports = [] } = await fetch('/api/airports', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
-  const saved = store.get(ADMIN_CAMERA_AIRPORT);
-  if (airports.some(a => a.code === saved)) return saved;
-  if (!airports.length) {
-    panel(mount, '<h2>No airports yet</h2><p>Create an airport on the <a href="/admin.html">admin page</a> first, then come back to start this camera.</p>');
-    throw new Error('no airports');
-  }
-  return new Promise(resolve => {
-    const options = airports.map(a => `<option value="${a.code}">${a.code}${a.name && a.name !== a.code ? ` · ${a.name.replace(/[<>&"]/g, '')}` : ''}</option>`).join('');
-    const card = panel(mount, `<h2>Which airport is this camera at?</h2>
-      <p>You’re an admin, so this camera can report to any airport. Its alerts go to that airport’s tower.</p>
-      <form id="pick"><label for="ap">Airport<select id="ap">${options}</select></label><button>Start this camera</button></form>`);
-    card.querySelector('#pick').addEventListener('submit', e => {
-      e.preventDefault();
-      const code = card.querySelector('#ap').value;
-      store.set(ADMIN_CAMERA_AIRPORT, code); resolve(code);
-    });
-  });
-}
-
 if (typeof document !== 'undefined' && document.documentElement) { showRoleLinks(store.get('skysentry.role')); showAccount(); }   // before sign-in finishes, so nothing flashes
 
 export function panel(mount, html) {
@@ -153,6 +131,23 @@ export function finishSetup({ mount, role = 'dashboard', headers, admin = false 
   });
 }
 
+export function refreshSocketAuth(socket, auth) {
+  if (auth.mode !== 'clerk') return;
+  let interval;
+  socket.on('connect', () => {
+    clearInterval(interval);
+    interval = setInterval(async () => {
+      try {
+        const { token } = await auth.socketAuth();
+        if (socket.connected && token) socket.emit('auth:refresh', { token });
+      } catch {
+        socket.disconnect();
+      }
+    }, 10_000);
+  });
+  socket.on('disconnect', () => clearInterval(interval));
+}
+
 export async function signIn({ role, mount, onStatus = () => {}, demo = false }) {
   const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
   const params = new URLSearchParams(location.search);
@@ -173,12 +168,10 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
     let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
 
-    // Admins use both pages without a join code: the tower for every airport, a camera for an airport they pick.
-    // (An admin who also joined an airport as this role uses that instead.)
-    const asAdmin = me.admin && !(me.role === role && me.airport);
-    const adminAirport = asAdmin && role === 'camera' ? await pickCameraAirport({ mount, headers }) : null;
+    // Administrator status allows selecting a tower airport, not publishing camera data.
+    const asAdmin = role === 'dashboard' && me.admin && !(me.role === role && me.airport);
     if (!asAdmin && (!me.role || !me.airport)) me = { ...me, ...(await finishSetup({ mount, role, headers, admin: me.admin })) };
-    // Demos work for every account: a tower account may run a demo clip through the camera page for its airport.
+    // A tower user may still open the local demo UI, but cannot obtain camera ingress authorization.
     const demoTower = demo && role === 'camera' && me.role === 'dashboard' && me.airport;
     if (!asAdmin && !demoTower && me.role !== role) {
       const mine = ROLE_LABEL[me.role], wanted = ROLE_LABEL[role], own = me.role === 'camera' ? 'camera' : 'tower';
@@ -201,8 +194,8 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
     store.set('skysentry.role', me.admin ? 'admin' : me.role);   // the landing page's Dashboard button and showRoleLinks read this
     showRoleLinks(me.admin ? 'admin' : me.role);
     mount.hidden = true;
-    const airport = asAdmin ? adminAirport : me.airport;
-    showAccount(asAdmin ? { role: 'admin', type: 'Admin', sub: airport || 'All airports' } : { role: me.role, type: ROLE_LABEL[me.role], sub: me.airport });
+    const airport = me.airport;
+    showAccount(asAdmin ? { role: 'admin', type: 'Admin', sub: airport || 'Select an airport' } : { role: me.role, type: ROLE_LABEL[me.role], sub: me.airport });
     if (me.admin) {   // pending switch requests, as a count on the Admin tab
       fetch('/api/admin/role-requests', { headers: await headers() }).then(r => r.json()).then(({ requests = [] }) => {
         for (const a of document.querySelectorAll('a[href="/admin.html"]')) {
@@ -213,10 +206,9 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
     }
     return {
       mode: 'clerk', role: me.admin ? 'admin' : me.role, airport,
-      label: asAdmin ? `Admin · ${airport || 'all airports'}` : `${me.airport} · signed in`,
-      socketAuth: async extra => ({ token: await token(), ...(adminAirport ? { airport: adminAirport } : {}), ...extra }),
-      changeAirport: adminAirport ? () => { store.set(ADMIN_CAMERA_AIRPORT, ''); location.reload(); } : null,
-      headers: adminAirport ? async () => ({ ...(await headers()), 'x-airport': adminAirport }) : headers,
+      label: asAdmin ? `Admin · ${airport || 'select an airport'}` : `${me.airport} · signed in`,
+      socketAuth: async extra => ({ token: await token(), ...extra }),
+      headers,
       manageAccount: () => clerk.openUserProfile(),
       signOut: () => clerk.signOut().then(forgetAccount).then(() => location.reload())
     };
@@ -227,13 +219,13 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
   if (role === 'camera') {
     let key = params.get('key') || store.get('skysentry.cameraKey');
     let airport = params.get('airport') || store.get('skysentry.airport');
-    if (!key) {
+    if (!key || !/^[A-Z0-9]{3,5}$/.test(airport || '')) {
       onStatus('Camera key needed');
       ({ key, airport } = await new Promise(resolve => {
         const card = panel(mount, `<h2>Connect this camera</h2>
           <p>${why} camera key from the server’s settings (<code>CAMERA_API_KEY</code>).</p>
           <form id="keyForm"><label for="ck">Camera key<input id="ck" type="password" required autocomplete="off"></label>
-          <label for="ap">Airport code (optional, e.g. KPCT)<input id="ap" value="${airport}" autocomplete="off"></label>
+          <label for="ap">Airport code (e.g. KPCT)<input id="ap" required autocomplete="off"></label>
           <button>Connect</button></form>`);
         card.querySelector('#keyForm').addEventListener('submit', e => {
           e.preventDefault();
@@ -252,7 +244,7 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
     };
   }
   let key = params.get('key') || store.get('skysentry.towerKey');
-  if (!key && clerkDown) {   // the server still wants a sign-in, so ask for the tower key instead of opening a dashboard that gets refused
+  if (!key && !cfg.demoTower) {
     onStatus('Tower key needed');
     key = await new Promise(resolve => {
       const card = panel(mount, `<h2>Open the tower</h2>
@@ -263,7 +255,7 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
   }
   if (key) store.set('skysentry.towerKey', key);
   mount.hidden = true; showRoleLinks(null);
-  showAccount({ role: 'dashboard', type: key ? 'Tower (key)' : 'Open dashboard', sub: 'All airports' });
+  showAccount({ role: 'dashboard', type: key ? 'Tower (key)' : 'Local demo tower', sub: 'One airport per connection' });
   return {
     mode: 'open', role: null, airport: null, label: key ? 'tower key' : 'open dashboard',
     socketAuth: async extra => ({ key: key || undefined, ...extra }),

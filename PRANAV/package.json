@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "test": "node --test test/*.test.cjs",
     "sync-web": "node scripts/sync-web.mjs",
+    "check:web": "node scripts/sync-web.mjs --check",
     "record-film": "node scripts/record-film.mjs"
   },
   "engines": {

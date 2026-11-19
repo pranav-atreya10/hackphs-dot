@@ -11,7 +11,6 @@ export const DEFAULTS = {
     heading_deg: 90,       // compass direction the camera faces (90 = east)
     hfov_deg: 65,          // horizontal field of view of the lens
     pitch_deg: 20,         // how far the camera is tilted up from the horizon
-    assumed_range_m: 400,  // guessed distance to targets, used only to draw map lines
   },
 
   motion: {
@@ -110,9 +109,11 @@ export const DEFAULTS = {
   },
 
   corridor: {
-    polygon: [],           // normalized [[x,y], ...] approach corridor drawn by the user
-    horizonSec: 60,        // ETAs beyond this are reported as "not heading in"
-    etaSigma: 2,           // ETA range = ETA with velocity nudged ±2 standard errors (~95%)
+    polygon: [],
+    surveyId: null,
+    demo: false,
+    horizonSec: 60,        // project no further than this
+    etaSigma: 2,           // heuristic velocity envelope, not a calibrated confidence interval
   },
 
   skyMask: {
@@ -152,7 +153,6 @@ export const DEFAULTS = {
     flockRed: 5,
     etaRedSec: 30,
     holdSec: 3,                // stay at a level this long before stepping down
-    unknownCountsYellow: true, // unverified objects raise yellow so Gemini can check them
   },
 
   audio: {
