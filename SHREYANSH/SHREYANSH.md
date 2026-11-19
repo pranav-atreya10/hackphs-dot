@@ -95,3 +95,12 @@ Datasets are not in git (data/ is ignored); the scripts re-download them and che
 size coverage and source-group overlap without loading media. See `Shreyansh Local Ai Model/DATASETS.md`
 for permission and evaluation requirements. Resized 7/10/13 px tests are stress proxies, not evidence
 of recall on real birds of those sizes.
+
+**v5 crop evaluation:** `eval_v4.py` scores a checkpoint already selected on validation data. Run from
+`Shreyansh Local Ai Model`, for example `python eval_v4.py --arch mobilenet_v3_large --checkpoint runs\v5_large\best.pt --out results\v5_large_crops`.
+`mobilenet_v3_small` and the default `skynetlite` are also supported. Each uses its training-time preprocessing;
+votes use softmax probabilities in bird/drone/other order without fitting calibration on test data. The crop report
+verifies the official frozen manifest without opening the field holdout, requires a new output directory, and
+records the checkpoint hash, crop/group counts and 95% group-bootstrap intervals. FBD-SV stays test-only and
+unscored unless `--fbd-pins` names a reviewed JSON file with `crops_sha256` and `metadata_sha256`. A never-seen
+headline additionally needs a leakage audit tied to the recorded checkpoint. No v5 benchmark result is implied.

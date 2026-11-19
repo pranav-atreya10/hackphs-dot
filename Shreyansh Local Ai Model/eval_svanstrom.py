@@ -20,6 +20,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from eval_metrics import rate  # noqa: E402
 from model import SkyNetLite  # noqa: E402
 from train import norm, to_tensor  # noqa: E402
 
@@ -38,22 +39,6 @@ def predict(ckpt, X):
         for i in range(0, len(X), 512):
             out.append(m(norm(to_tensor(np.ascontiguousarray(X[i:i + 512, 0])))).argmax(1))
     return torch.cat(out).numpy()
-
-
-def rate(mask_num, mask_den, clip, n_boot=1000, seed=0):
-    """Point value and clip-bootstrap 95% CI of sum(num)/sum(den)."""
-    if mask_den.sum() == 0:
-        return None
-    clips = np.unique(clip[mask_den])
-    num = np.array([mask_num[(clip == c) & mask_den].sum() for c in clips], float)
-    den = np.array([mask_den[clip == c].sum() for c in clips], float)
-    rng = np.random.default_rng(seed)
-    boots = []
-    for _ in range(n_boot):
-        i = rng.integers(0, len(clips), len(clips))
-        boots.append(num[i].sum() / max(den[i].sum(), 1))
-    return {"value": float(num.sum() / den.sum()), "ci95": [float(np.percentile(boots, 2.5)), float(np.percentile(boots, 97.5))],
-            "n": int(den.sum()), "clips": int(len(clips))}
 
 
 def main():
