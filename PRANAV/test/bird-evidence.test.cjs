@@ -121,15 +121,18 @@ test('feed overlay ignores late boxes on newer video while verifier keeps the ex
     await Promise.resolve();
     return frame;
   };
-  const state = (frame, generation = 'active') => handlers['bot:state']({
+  const state = (frame, generation = 'active', age = 10) => handlers['bot:state']({
     cameraId: 'A', ...detected(frame, [track(frame.frameId)], { generation, state: {
       t: frame.frameT, generation, risk: 'yellow', tracks: [track(frame.frameId)],
-    } }), mode: 'server', at: Date.now() - 10 + frame.frameId, remaining_ms: 1000,
+    } }), mode: 'server', at: Date.now() - age + frame.frameId, remaining_ms: 1000,
   });
   handlers['bot:status']({ cameraId: 'A', mode: 'server', generation: 'active' });
   const first = await send(1), next = await send(2);
   state(next, 'stale');
   assert.equal(feed.birdEvidence, null);
+  state(next, 'active', 2000);
+  assert.equal(feed.birdEvidence, null, 'an exact pair with an expired sender timestamp is not usable');
+  assert.equal(boxCalls.length, 0);
   state(first);
   assert.equal(feed.birdEvidence.frame.frameId, 1);
   assert.equal(boxCalls.length, 0, 'state for frame 1 must not draw on frame 2');

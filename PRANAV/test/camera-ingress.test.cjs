@@ -5,7 +5,9 @@ const { join } = require("node:path");
 const test = require("node:test");
 const { runInNewContext } = require("node:vm");
 const { cameraIdentity, createCameraRegistry, isDeviceId, isJPEG, isLiveSource } = require("../camera-ingress");
-const { surveyedCorridor } = require("../corridor-calibration");
+const { surveyedCorridor, sanitizeMetrics } = require("../corridor-calibration");
+const { createEventJournal } = require("../durable-events");
+const { createIncidentJob } = require("../incident-enrichment");
 
 test("camera identity is stable across start and stop but isolated by airport, principal, device and transport", () => {
   const access = { airport: "KPCT", principal: "camera-account" };
@@ -74,11 +76,13 @@ test("simulation, unspecified provenance and invalid frame envelopes fail admiss
   assert.equal(isJPEG(envelope.subarray(0, 99)), false);
 });
 
-test("authenticated capture can activate only its pinned mask and cannot write detector risk", async () => {
+test("authenticated capture uses its pinned mask and only the server can persist an exact detector frame", async () => {
   const source = readFileSync(join(__dirname, "..", "server.js"), "utf8");
   const start = source.indexOf('app.post("/api/camera-events"');
   const end = source.indexOf('io.on("connection"', start);
-  assert.ok(start >= 0 && end > start);
+  const relayStart = source.indexOf('function relayCameraEvent(');
+  const relayEnd = source.indexOf('const isPlainObject', relayStart);
+  assert.ok(start >= 0 && end > start && relayStart >= 0 && relayEnd > relayStart);
   const access = { airport: "KPCT", principal: "camera-account" };
   const deviceId = randomUUID(), session = randomUUID(), pose = {
     lat: 38, lon: -77, heading_deg: 90, hfov_deg: 60, pitch_deg: 0,
@@ -87,20 +91,52 @@ test("authenticated capture can activate only its pinned mask and cannot write d
   const approved = [[0, 0], [1, 0], [1, 1]];
   const routes = new Map(), cameraHandlers = new Map(), towerHandlers = new Map();
   const namespace = handlers => ({ on: (name, fn) => handlers.set(name, fn) });
-  const broadcast = { emit() {}, get volatile() { return this; } };
+  const messages = [], records = [];
+  const jpeg = Buffer.alloc(100);
+  jpeg.set([255, 216], 0);
+  jpeg.set([255, 217], jpeg.length - 2);
+  const broadcast = { emit: (name, data) => messages.push([name, data]), get volatile() { return this; } };
+  let sendDetection;
   const context = {
     app: { post: (path, ...fns) => routes.set(path, fns.at(-1)) },
     express: { raw() {} }, bearerToken() {}, cameraAccess: async () => access,
     cameras: namespace(cameraHandlers), towers: namespace(towerHandlers), installSocketAccess() {},
     setInterval: () => ({ unref() {} }), createCameraRegistry, cameraIdentity, isDeviceId, isJPEG, isLiveSource,
     isPlainObject: value => value !== null && typeof value === "object" && !Array.isArray(value),
-    towersFor: () => broadcast, towerRoom: airport => `airport:${airport}`, airports: new Set(["KPCT"]),
+    towersFor: airport => { assert.equal(airport, "KPCT"); return broadcast; },
+    towerRoom: airport => `airport:${airport}`, airports: new Set(["KPCT"]),
     surveyedCorridor, surveyedCorridors: [{ cameraId, airport: "KPCT", camera: pose, polygon: approved, surveyId: "survey" }],
-    randomUUID, CameraBot: class { configure() {} invalidate() {} },
-    relayCameraEvent: () => assert.fail("only a server detector may write risk"),
+    randomUUID, CameraBot: class {
+      constructor({ onEvent }) { this.onEvent = onEvent; }
+      configure() {}
+      invalidate() {}
+      status() { return { mode: "server" }; }
+      freshState() { return this.state; }
+      remainingMs() { return 1000; }
+      async frame(_jpeg, t, frame) {
+        this.state = { t, generation: "detector-generation" };
+        const event = { type: "bird", risk: "red", snapshot: jpeg.toString("base64"), airport: "untrusted" };
+        sendDetection = (candidate, state = this.state) => this.onEvent(event, candidate, state);
+        sendDetection({ ...frame, t: String(t) });
+        sendDetection({ ...frame, streamId: "retired-stream" });
+        sendDetection(frame, { ...this.state, generation: "retired-generation" });
+        sendDetection(frame);
+      }
+    },
+    mongo: true, pendingReceipts: new Set(), retainIncidentEvidence: true, createIncidentJob, sanitizeMetrics,
+    buildAlertText: () => "Bird warning", shouldAlert: () => true, drainEnrichment() {},
+    toText: x => typeof x === "string" ? x : null, toNumber: x => Number.isFinite(x) ? x : null,
+    journal: createEventJournal(fn => fn({ collection: name => ({
+      async insertOne(row, opts) {
+        assert.equal(name, "detections");
+        assert.equal(opts.writeConcern.w, "majority");
+        records.push(row);
+        return { acknowledged: true };
+      },
+    }) })),
     console: { log() {} },
   };
-  const registry = runInNewContext(`${source.slice(start, end)}\nliveCameras;`, context);
+  const registry = runInNewContext(`${source.slice(relayStart, relayEnd)}\n${source.slice(start, end)}\nliveCameras;`, context);
   const headers = { "x-camera-source": "live", "x-camera-device": deviceId, "x-camera-session": session };
   async function post(name, body, overrides = {}) {
     const res = { code: 200, status(code) { this.code = code; return this; }, json(value) { this.body = value; } };
@@ -125,6 +161,25 @@ test("authenticated capture can activate only its pinned mask and cannot write d
   handlers.get("camera:event")({}, reply => assert.equal(reply.ok, false));
   towerHandlers.get("connection")({ data: { airport: "KPCT" }, join() {}, on: (name, fn) => handlers.set(name, fn) });
   for (const name of ["tower:label", "tower:bot-event"]) handlers.get(name)({}, reply => assert.equal(reply.ok, false));
+  assert.equal(records.length, 0);
+
+  assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "8.125" })).code, 200);
+  const [, frame] = messages.find(([name]) => name === "camera:frame");
+  assert.equal(records.length, 1);
+  const [record] = records;
+  assert.equal(record.airport, "KPCT");
+  assert.equal(record.camera_id, cameraId);
+  assert.equal(record.enrichment.incident.airport, "KPCT");
+  assert.deepEqual({ ...record.enrichment.incident.detection }, {
+    streamId: frame.streamId, frameId: frame.frameId, generation: "detector-generation", t: 8.125,
+  });
+  assert.equal(record.enrichment.evidence.bytes, jpeg.toString("base64"));
+  const events = messages.filter(([name]) => name === "camera:event");
+  assert.equal(events.length, 1);
+  assert.equal(Object.hasOwn(events[0][1], "snapshot"), false);
+  await post("/api/camera-stop", {});
+  sendDetection(frame);
+  assert.equal(records.length, 1, "late detector callbacks after stop must not persist");
 });
 
 test("a server detector motion overflow clears a usable state and suppresses evidence and events", async () => {
