@@ -199,6 +199,16 @@ function showIncident(d) {
   const label = document.createElement('p'); label.innerHTML = '<b>Image review:</b> '; label.append(d.gemini_label ?? 'waiting for the report…');
   const report = document.createElement('p'); report.textContent = d.report ?? '';
   text.append(label, report);
+  if (d.bird_verdict?.status === 'verified') {
+    const p = document.createElement('p');
+    const { verdict, confidence, evidence } = d.bird_verdict;
+    p.textContent = `Gemini bird check: ${verdict.replace('_', ' ')} (${Math.round(confidence * 100)}%). ${evidence}`;
+    text.append(p);
+  } else if (d.bird_verdict?.status === 'unavailable') {
+    const p = document.createElement('p');
+    p.textContent = `Gemini bird check unavailable. ${d.bird_verdict.evidence}`;
+    text.append(p);
+  }
   if (d.report_hash) { const p = document.createElement('p'); p.textContent = `Report fingerprint: ${d.report_hash.slice(0, 16)}…`; text.append(p); }
   if (d.solana_error) { const p = document.createElement('p'); p.textContent = `Solana: ${d.solana_error}`; text.append(p); }
   else if (d.type === 'drone' && d.solana_status === 'hash only') { const p = document.createElement('p'); p.textContent = 'Report hashed locally. Connect a funded devnet wallet to stamp it on Solana.'; text.append(p); }
@@ -329,8 +339,13 @@ async function connect() {
     // The server emits the immediate red alert separately; announce it once by incident ID.
   });
   socket.on('incident', upsertIncident);
+  const cloudPolicy = api('/api/cloud-evidence-policy').catch(() => null);
   const visualBirds = new VisualBirdVerifier({ socket, button: $('birdCheck'), status: $('birdCheckStatus'),
-    judge: (image, context) => api('/api/verify-bird', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image, context }) }) });
+    judge: async (image, context) => {
+      if ((await cloudPolicy)?.cloudEvidenceEnabled !== true) return null;
+      const result = await api('/api/verify-bird', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image, context }) });
+      return result.status === 'verified' ? result : null;
+    } });
   // Warm the browser cache with the bird model while the tower is idle, so "Enable" is near-instant later.
   const warm = () => ['/ai-models/tf.min.js', '/ai-models/coco-ssd.min.js', '/ai-models/coco/model.json'].forEach(href => { const l = document.createElement('link'); l.rel = 'prefetch'; l.href = href; document.head.append(l); });
   ('requestIdleCallback' in window) ? requestIdleCallback(warm, { timeout: 4000 }) : setTimeout(warm, 3000);

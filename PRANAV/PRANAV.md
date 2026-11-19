@@ -512,3 +512,11 @@ Tiger Data stopped answering (paused), so everything now lives in MongoDB Atlas,
 - Website, film captions and docs now say MongoDB instead of Tiger Data.
 - Not tested against a real MongoDB here (no database available in this environment); after deploying, check that the
   tower's "Detections by hour" chart fills in.
+
+## Gemini reliability and camera evidence policy
+
+Gemini health now identifies authentication, quota, timeout and other provider
+failures, without exposing provider response details. Incident details show the
+stored Gemini bird verdict separately from a skipped or failed image check.
+Camera image processing by Gemini requires explicit deployment opt-in; see
+the [AI operator runbook](ai-voice/README.md#gemini-image-privacy-and-operator-runbook).

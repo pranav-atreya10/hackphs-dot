@@ -464,6 +464,7 @@ app.delete("/api/admin/airports/:code", requireAdmin, async (req, res) => {
 
 // Health check used by DigitalOcean to decide whether the app is up.
 app.get("/health", (req, res) => {
+  const { gemini } = ai.health();
   res.json({
     status: "ok",
     uptime: process.uptime(),
@@ -471,6 +472,7 @@ app.get("/health", (req, res) => {
     cameras: cameras.sockets.size,
     towers: towers.sockets.size,
     ai: { ...ai.status(), openai: chat.health().configured ? "configured" : "missing" },
+    gemini: { state: gemini.state, failure: gemini.failure, lastSuccess: gemini.lastSuccess },
     bot: BOT_ENABLED ? "server bot on" : "server bot off (towers detect)",
   });
 });
@@ -621,16 +623,19 @@ app.post("/api/guide", async (req, res) => {
 });
 
 // Gemini bird judge: { image: base64 JPEG crop or data URL, context?: string } ->
-// { verdict: "bird"|"not_bird"|"uncertain", isBird, confidence, object, evidence, source }.
+// Returns either a verified verdict or status:"unavailable" with no verdict.
 // The tower calls this as a second opinion when the on-device model is unsure. Rate-limited per tower.
 const birdJudgeLimit = createRequestLimit({ max: 30, windowMs: 60_000 });
-const { verifyBird } = require("./ai-voice/ai");
+const { verifyBird, cloudEvidenceEnabled } = require("./ai-voice/ai");
+app.get("/api/cloud-evidence-policy", requireDashboard, (req, res) => {
+  res.set("Cache-Control", "no-store").json({ cloudEvidenceEnabled });
+});
 app.post("/api/verify-bird", requireDashboard, async (req, res) => {
   if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip)) return res.status(429).json({ error: "too many checks; wait a minute" });
   const image = typeof req.body?.image === "string" ? req.body.image : "";
   if (!image || image.length > 900_000) return res.status(400).json({ error: "send image: a base64 JPEG under ~650 KB" });
   const verdict = await verifyBird(image, typeof req.body?.context === "string" ? req.body.context : "");
-  logBirdVerdict(verdict, req.airport ?? null);
+  if (verdict.status === "verified") logBirdVerdict(verdict, req.airport ?? null);
   res.json(verdict);
 });
 

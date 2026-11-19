@@ -625,7 +625,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="risk" role="table" aria-label="Risk levels">
       <div class="risk-row head" role="row"><span role="columnheader">Level</span><span role="columnheader">When</span><span role="columnheader">What happens</span></div>
       <div class="risk-row r-go" role="row"><span class="lvl" style="color:#2f7a4d"><i style="background:var(--go)"></i>GREEN</span><p>No birds, no drone sound</p><p>Quiet status update every few seconds</p></div>
-      <div class="risk-row r-warn" role="row"><span class="lvl" style="color:#9a6a00"><i style="background:var(--warn)"></i>YELLOW</span><p>1 to 4 birds, not heading toward the runway</p><p>On-screen caution, snapshot checked by Gemini, logged</p></div>
+      <div class="risk-row r-warn" role="row"><span class="lvl" style="color:#9a6a00"><i style="background:var(--warn)"></i>YELLOW</span><p>1 to 4 birds, not heading toward the runway</p><p>On-screen caution, optional Gemini image review, logged</p></div>
       <div class="risk-row r-stop" role="row"><span class="lvl" style="color:#b23a2c"><i style="background:var(--stop)"></i>RED</span><p>5 or more birds, any bird heading toward the runway, or any drone sound</p><p>Alarm, spoken alert, Gemini report and map pin; drone reports also get a Solana stamp</p></div>
     </div>
   </section>
@@ -647,7 +647,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <ol class="journey">
         <li><em>Camera station</em><b>Detect and send</b><span>The phone spots birds or a drone, scores the risk and sends an event with type, count, direction and confidence.</span></li>
         <li><em>MongoDB Atlas</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
-        <li><em>Gemini</em><b>Verify with AI</b><span>For yellow and red events, Gemini checks the snapshot and writes a short incident report.</span></li>
+        <li><em>Gemini</em><b>Optional AI review</b><span>When the operator enables cloud evidence processing, Gemini can review the snapshot and write a short incident report. Otherwise, reports use detector readings.</span></li>
         <li><em>MongoDB Atlas</em><b>Store the report</b><span>The report, snapshot and Gemini’s label are saved together.</span></li>
         <li><em>Solana devnet</em><b>Stamp drone reports</b><span>A hash of each drone report goes on chain, so nobody can quietly edit it later.</span></li>
         <li><em>Browser voice</em><b>Give it a voice</b><span>The alert sentence becomes a spoken tower announcement.</span></li>
@@ -699,7 +699,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <details><summary>How accurate is it?</summary><p>The team measures it on a set of test clips before judging and reports the result, for example how many of 20 clips it caught. Treat it as an extra set of eyes, not a replacement for radar.</p></details>
       <details><summary>Can it see small, far-away birds?</summary><p>The free model works best when birds are reasonably large in the frame. A zoom lens or a model trained on sky footage would improve that.</p></details>
       <details><summary>Does it work at night?</summary><p>Not yet. Night detection would need a thermal camera, which is a natural next step.</p></details>
-      <details><summary>What about privacy?</summary><p>The camera points at the sky, and snapshots are saved only when there’s an alert.</p></details>
+      <details><summary>What about privacy?</summary><p>SkySentry sends detection data to its server and may store incident snapshots in MongoDB Atlas. By default, images are not sent to Google Gemini. If the deployment operator enables cloud evidence processing, Gemini may receive camera crops for verification and incident snapshots for reports.</p></details>
       <details><summary>Why use a blockchain?</summary><p>So drone incident records can’t be quietly changed later, which matters if they are used as evidence for police or the FAA.</p></details>
       <details><summary>Isn’t this already done?</summary><p>Big airports use radar and commercial counter-drone systems. SkySentry is a low-cost version for the small airports that can’t afford those.</p></details>
       <details><summary>What would it cost a real airport?</summary><p>A phone or cheap camera per runway, plus small cloud bills.</p></details>

@@ -26,6 +26,7 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     const reportPromise = (async () => {
       const report = await analyzeEvent({ ...ev, object_count: ev.flock_size || ev.object_count });
       const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
+      if (report.bird_verdict) fields.bird_verdict = report.bird_verdict;
       send('incident', { ...incident, ...fields });
       send('alert_update', { id: ev.id, incident_id: ev.id, label: report.label, report: report.report, report_source: report.source });
       await persist(fields);
@@ -46,8 +47,11 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   }
   function health() {
     const g = ai.geminiState || {};
-    return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
-        lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
+    const configured = Boolean(settings.GEMINI_API_KEY);
+    return { gemini: { configured, model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
+        state: !configured ? 'not_configured' : g.lastFailure ? 'unavailable' : g.lastSuccessAt ? 'available' : 'untested',
+        failure: !configured ? { reason: 'not_configured', httpStatus: null, action: ai.failureMessages.not_configured } : g.lastFailure,
+        lastError: g.lastError, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
       solana: solana.health() };
   }
   function status() {
