@@ -150,3 +150,28 @@ storm-cloud yellow, because the yellow is raised the moment a cloud edge is firs
 Waiting 0.5 s before an unknown raises yellow did remove it, but it also stopped thrown rocks from ever showing yellow, so
 that was removed too. **Open issue:** storm clouds → brief false yellow (`knownIssue` on the scene, skipped by the
 "every scene passes" test, still checked never to go red).
+
+## Auto-tuning the engine settings (tools/autotune.mjs)
+
+**What it does.** Tries each of 20 detection settings a little higher and lower, one at a time, on the synthetic
+scenes (seeds 1–3), and keeps a change only if the total score improves by more than 1 point without adding a single
+miss, false alarm or wrong label. Then it compares defaults vs tuned once on fresh seeds 101–110 at 30 fps (laptop)
+and 15 fps (phone preset). Rule-defining settings (`risk.flockRed`, `risk.etaRedSec`) and ones the synthetic scenes
+can't judge (audio, COCO, corridor) are not tuned. Rerun: `node VIVAN/detection/tools/autotune.mjs`. The full
+report is `tuning/autotune-2026-11-19.json`.
+
+**Result: one change, `motion.threshold` 16 → 20** (every other setting was already at its best on these scenes):
+
+| Fresh seeds 101–110 (30 scenes × 10) | 16 (before) | 20 (after) |
+|---|---|---|
+| False alarms, 30 fps | 2 | **0** |
+| False alarms, 15 fps phone preset | 7 | **1** |
+| Missed hazards | 0 | 0 |
+| Wrong labels (the bag) | 2 / 2 | 2 / 2 |
+
+The false alarms were storm-cloud edges. **Trade-off:** the camera is slightly less sensitive to very faint objects.
+The grainy-camera and distant-flock scenes still pass, and on noisy cameras the threshold already rises by itself
+(`noiseK`), but real faint, far-away birds are the thing to watch. If they're missed, the `distant_birds` preset sets 12.
+
+**Known issues, now marked in `synthetic.js`:** the bag is labelled "bird" about 1 run in 4 (risk is still right),
+and storm clouds give a rare false yellow. The "every scene passes" test still demands the right risk level for the bag.
