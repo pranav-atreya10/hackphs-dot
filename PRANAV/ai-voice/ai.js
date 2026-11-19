@@ -235,8 +235,8 @@ async function verifyBird(snapshot, context = '') {
 const NO_DATA_ANSWER = "I don't have data on that.";
 const MAX_ROWS = 400; // 7 days x 24 hours x 2 types = 336, plus some room
 
-// Rows from Tiger Data's detections_hourly arrive as { hour: Date, type, events: '12', total_objects: '57' }
-// (the pg library returns big counts as text). Turn them into small, clean rows in airport local time.
+// Hourly rows arrive as { hour: Date, type, events, total_objects } (from MongoDB, or the in-memory fallback).
+// Turn them into small, clean rows in airport local time.
 function tidyRows(hourlyRows) {
   if (!Array.isArray(hourlyRows)) return [];
   return hourlyRows.slice(-MAX_ROWS).map(row => ({

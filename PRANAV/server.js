@@ -4,7 +4,6 @@ const crypto = require("crypto");
 const express = require("express");
 const compression = require("compression");
 const { Server } = require("socket.io");
-const { Pool } = require("pg");
 const { MongoClient } = require("mongodb");
 const { createClerkClient, verifyToken } = require("@clerk/express");
 
@@ -40,19 +39,14 @@ const AIRPORT_CODES_ENV = process.env.AIRPORT_CODES || "";
 // Admin accounts, by verified email, e.g. "you@example.com,teammate@example.com". Admins create airports and
 // join codes on admin.html and see every airport in the tower.
 const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
-// Tiger Data (TimescaleDB) connection string, e.g. postgres://tsdbadmin:<pw>@<host>:<port>/tsdb?sslmode=require
-const DATABASE_URL = process.env.DATABASE_URL || "";
-
-if (!DATABASE_URL) console.warn("DATABASE_URL is not set; events will not be stored");
-
-const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 5, connectionTimeoutMillis: 5000 }) : null;
-// An idle client losing its connection emits on the pool; without a listener that crashes the process.
-db?.on("error", (err) => console.error("postgres pool error:", err.message));
-
-// MongoDB Atlas connection string; incident reports (with snapshots) are stored here.
+// MongoDB Atlas connection string. Everything is stored here: incident reports (with snapshots), every detection
+// (for the hourly chart), bird verdicts, airports and account-switch requests.
 const MONGODB_URI = process.env.MONGODB_URI || "";
+// Detections are deleted automatically after this many days (keeps the Atlas free tier from filling up;
+// the chart needs 24 h and the assistant looks back 7 days).
+const DETECTION_DAYS = 8;
 
-if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents will not be stored");
+if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections will not be stored");
 
 // The driver connects lazily and reconnects on its own, except that some failures (e.g. Atlas closing the
 // connection because the caller's IP isn't allowed) close the client for good ("Topology is closed").
@@ -61,8 +55,12 @@ if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents will not be st
 let mongo = null;
 function newMongo() {
   mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
-  mongo.db("skysentry").collection("incidents").createIndex({ time: -1 })
+  const mdb = mongo.db("skysentry");
+  mdb.collection("incidents").createIndex({ time: -1 })
     .catch((err) => console.error("failed to index incidents:", err.message));
+  // TTL index: MongoDB removes each detection DETECTION_DAYS after its time.
+  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: DETECTION_DAYS * 86400 })
+    .catch((err) => console.error("failed to index detections:", err.message));
 }
 if (MONGODB_URI) newMongo();
 
@@ -101,8 +99,8 @@ const toNumber = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? 
 
 // Persist one relayed event (columns per the team plan's event format; the snapshot is not stored here).
 // Failures are logged, not thrown, so a DB outage never blocks the live relay.
-// Without DATABASE_URL the last 24 h of detections are kept in memory, so the tower chart still works in a
-// demo. With Tiger Data configured, the hypertable + continuous aggregate are the source of truth.
+// Without MONGODB_URI the last 24 h of detections are kept in memory, so the tower chart still works in a
+// demo. With MongoDB configured, the "detections" collection is the source of truth.
 const memDetections = [];
 function rememberDetection(event) {
   memDetections.push({ t: Number(event.receivedAt) || Date.now(), type: toText(event.type), n: toNumber(event.object_count) || 0 });
@@ -120,33 +118,27 @@ function memHourly() {
   return [...buckets.values()].sort((a, b) => a.hour.localeCompare(b.hour) || a.type.localeCompare(b.type));
 }
 
-// Every Gemini bird verdict is kept for the judges' audit trail: the full document in MongoDB
-// (skysentry.bird_verdicts) and one time-series row in Tiger Data (bird_checks hypertable).
+// Every Gemini bird verdict is kept for the judges' audit trail in MongoDB (skysentry.bird_verdicts).
 async function logBirdVerdict(v, airport) {
   const doc = { time: new Date(), airport, verdict: v.verdict, confidence: v.confidence, object: v.object, evidence: v.evidence, source: v.source, model: v.model || null };
   if (mongo) withMongo((mdb) => mdb.collection("bird_verdicts").insertOne(doc)).catch((err) => console.error("failed to store bird verdict:", err.message));
-  if (db) db.query("INSERT INTO bird_checks (time, airport, verdict, confidence, source) VALUES (now(), $1, $2, $3, $4)",
-    [airport, v.verdict, v.confidence, v.source]).catch((err) => console.error("failed to store bird check:", err.message));
 }
 
 async function storeDetection(event) {
   rememberDetection(event);
-  if (!db) return;
+  if (!mongo) return;
   const count = toNumber(event.object_count);
   try {
-    await db.query(
-      `INSERT INTO detections (time, camera_id, type, object_count, direction, confidence, risk)
-       VALUES (to_timestamp($1 / 1000.0), $2, $3, $4, $5, $6, $7)`,
-      [
-        event.receivedAt,
-        event.cameraId,
-        toText(event.type),
-        count === null ? null : Math.round(count),
-        toText(event.direction),
-        toNumber(event.confidence),
-        toText(event.risk),
-      ]
-    );
+    await withMongo((mdb) => mdb.collection("detections").insertOne({
+      time: new Date(Number(event.receivedAt) || Date.now()),
+      camera_id: toText(event.cameraId),
+      airport: toText(event.airport),
+      type: toText(event.type),
+      object_count: count === null ? null : Math.round(count),
+      direction: toText(event.direction),
+      confidence: toNumber(event.confidence),
+      risk: toText(event.risk),
+    }));
   } catch (err) {
     console.error(`failed to store event ${event.id}:`, err.message);
   }
@@ -497,24 +489,18 @@ async function dbStatus(check) {
 }
 
 app.get("/health/db", async (req, res) => {
-  const [tiger, mongodb] = await Promise.all([
-    db ? dbStatus(() => db.query("SELECT 1")) : "not configured",
-    mongo ? dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured",
-  ]);
+  const mongodb = mongo ? await dbStatus(() => withMongo((mdb) => mdb.command({ ping: 1 }))) : "not configured";
   const clerkStatus = clerk ? await dbStatus(() => clerk.users.getCount()) : "not configured";
-  res.json({ tiger, mongodb, clerk: clerkStatus, airports: airports.size });
+  res.json({ mongodb, clerk: clerkStatus, airports: airports.size });
 });
 
-// Hourly detection rollups (the detections_hourly continuous aggregate) for the last 24 hours.
+// Hourly detection totals for the last 24 hours (every camera).
 app.get("/api/hourly", requireDashboard, async (req, res) => {
-  if (!db) { res.set("X-Data-Source", "memory (set DATABASE_URL for Tiger Data)"); return res.json(memHourly()); }
+  if (!mongo) { res.set("X-Data-Source", "memory (set MONGODB_URI for MongoDB Atlas)"); return res.json(memHourly()); }
   try {
-    const { rows } = await db.query(
-      "SELECT * FROM detections_hourly WHERE hour > now() - interval '24 hours' ORDER BY hour, type"
-    );
-    res.json(rows);
+    res.json(await readHourly(24));
   } catch (err) {
-    console.error("failed to read detections_hourly:", err.message);
+    console.error("failed to read hourly detections:", err.message);
     res.status(500).json({ error: "query failed" });
   }
 });
@@ -536,14 +522,17 @@ app.get("/api/incidents", requireDashboard, async (req, res) => {
   }
 });
 
-// Hourly detection totals for the last `hours` hours (optionally one type). Empty when Tiger Data isn't set up.
+// Hourly detection totals for the last `hours` hours (optionally one type), grouped in MongoDB:
+// [{ hour: Date, type, events, total_objects }], oldest first. Empty when MongoDB isn't set up.
 async function readHourly(hours, type = null) {
-  if (!db) return [];
-  const { rows } = await db.query(
-    "SELECT hour, type, events, total_objects FROM detections_hourly WHERE hour > now() - make_interval(hours => $1) AND ($2::text IS NULL OR type = $2) ORDER BY hour",
-    [hours, type]
-  );
-  return rows;
+  if (!mongo) return [];
+  const match = { time: { $gt: new Date(Date.now() - hours * 3600_000) }, type: type || { $type: "string" } };
+  return withMongo((mdb) => mdb.collection("detections").aggregate([
+    { $match: match },
+    { $group: { _id: { hour: { $dateTrunc: { date: "$time", unit: "hour" } }, type: "$type" }, events: { $sum: 1 }, total_objects: { $sum: { $ifNull: ["$object_count", 0] } } } },
+    { $project: { _id: 0, hour: "$_id.hour", type: "$_id.type", events: 1, total_objects: 1 } },
+    { $sort: { hour: 1, type: 1 } },
+  ]).toArray());
 }
 
 // Incident fields the chatbot may see (never the snapshot), with times in airport local time.
@@ -560,7 +549,7 @@ const clamp = (v, lo, hi, fallback) => (Number.isInteger(v) ? Math.min(hi, Math.
 // (null = every airport, for TOWER_API_KEY or sign-in off), the same as /api/incidents and the socket rooms.
 const chatTools = {
   async get_hourly_stats({ hours, type } = {}) {
-    if (!db) return { error: "the detections database is not connected" };
+    if (!mongo) return { error: "the detections database is not connected" };
     const rows = await readHourly(clamp(hours, 1, 168, 24), oneOf(type, ["bird", "drone"]));
     return { note: "totals cover every camera", rows: rows.map((r) => ({ hour: localHourLabel(r.hour), type: r.type, events: Number(r.events) || 0, total_objects: Number(r.total_objects) || 0 })) };
   },

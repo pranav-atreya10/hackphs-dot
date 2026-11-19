@@ -495,3 +495,20 @@ Spoken tower alerts now always use the tower browser's own voice (`speechSynthes
   so `npm run sync-web` doesn't bring the old text back).
 - `SHREYANSH/` and `ATHARV/skysentry/app/` (the original prototypes, not run by the site) were left as they are.
 - Tests: the ElevenLabs test was replaced by one checking a red alert is spoken straight away, once. 91/91 pass.
+
+## Tiger Data replaced by MongoDB
+
+Tiger Data stopped answering (paused), so everything now lives in MongoDB Atlas, which already held the incidents.
+- **Detections** (`server.js` → `storeDetection`): every relayed camera event is saved to `skysentry.detections`
+  (time, camera, airport, type, count, direction, confidence, risk). A TTL index deletes each one after 8 days
+  (`DETECTION_DAYS`), so the Atlas free tier doesn't fill up; the chart needs 24 h and the assistant 7 days.
+- **Hourly chart and assistant stats** (`readHourly`): a MongoDB aggregation groups detections by hour and type
+  (`$dateTrunc`, needs MongoDB 5+; Atlas runs 7/8) into the same `{ hour, type, events, total_objects }` rows as before,
+  so `/api/hourly`, the tower chart and the chat tools didn't change.
+- **Bird verdicts** were already saved in MongoDB (`bird_verdicts`); the extra Tiger `bird_checks` row is gone.
+- Removed: the `pg` package, `DATABASE_URL`, `npm run db:setup`, `db/schema.sql` and `db/setup.js`.
+  `/health/db` now shows `{ mongodb, clerk, airports }`.
+- Without `MONGODB_URI`, the last 24 h of detections are still kept in memory so the chart works in a demo.
+- Website, film captions and docs now say MongoDB instead of Tiger Data.
+- Not tested against a real MongoDB here (no database available in this environment); after deploying, check that the
+  tower's "Detections by hour" chart fills in.

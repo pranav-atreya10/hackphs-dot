@@ -466,7 +466,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       </div>
       <div class="callout node" data-a="n_phone" data-n="0"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Camera station<small>Detects, scores risk, sends events</small></div></div></div>
       <div class="callout node l" data-a="n_server" data-n="1"><div class="cin fi" style="--d:.9s"><i class="ln"></i><i class="dot"></i><div class="lb">API server<small>Node.js · Socket.IO · DigitalOcean</small></div></div></div>
-      <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Tiger Data<small>Every event, timestamped</small></div></div></div>
+      <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Event log<small>Every event, timestamped</small></div></div></div>
       <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Gemini<small>Checks snapshots, writes reports</small></div></div></div>
       <div class="callout node" data-a="n_s2" data-n="4"><div class="cin fi" style="--d:1.3s"><i class="ln"></i><i class="dot"></i><div class="lb">MongoDB Atlas<small>Reports + snapshots</small></div></div></div>
       <div class="callout node" data-a="n_s3" data-n="5"><div class="cin fi" style="--d:1.4s"><i class="ln"></i><i class="dot"></i><div class="lb">Solana devnet<small>Tamper-proof drone stamps</small></div></div></div>
@@ -490,7 +490,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
           </div>
         </div>
         <div class="col">
-          <div class="tile fi" style="--d:2s"><span class="k"><span>DETECTIONS BY HOUR · TIGER DATA</span><span>SAMPLE</span></span>
+          <div class="tile fi" style="--d:2s"><span class="k"><span>DETECTIONS BY HOUR · MONGODB</span><span>SAMPLE</span></span>
             <div class="chart"><div class="ax"><span>12</span><span>8</span><span>4</span><span>0</span></div><div class="bars" id="bars"></div></div>
           </div>
           <div class="split">
@@ -511,7 +511,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
         <h2 class="fu" style="--d:.3s">SkySentry</h2>
         <p class="fu" style="--d:.9s">An extra set of eyes for the airports that can’t afford a million-dollar system.</p>
         <span class="sign fi" style="--d:2s">BUILT IN 24 HOURS · HACKPHS 2026</span>
-        <span class="sp fi" style="--d:2.6s">Gemini · Tiger Data · DigitalOcean · MongoDB Atlas · Solana</span>
+        <span class="sp fi" style="--d:2.6s">Gemini · DigitalOcean · MongoDB Atlas · Solana</span>
       </div>
     </div>
   </div>
@@ -590,7 +590,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       </div>
       <ol class="journey">
         <li><em>Camera station</em><b>Detect and send</b><span>The phone spots birds or a drone, scores the risk and sends an event with type, count, direction and confidence.</span></li>
-        <li><em>Tiger Data</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
+        <li><em>MongoDB Atlas</em><b>Save the stream</b><span>Every event is stored with a timestamp, and hourly summaries feed the tower’s charts.</span></li>
         <li><em>Gemini</em><b>Verify with AI</b><span>For yellow and red events, Gemini checks the snapshot and writes a short incident report.</span></li>
         <li><em>MongoDB Atlas</em><b>Store the report</b><span>The report, snapshot and Gemini’s label are saved together.</span></li>
         <li><em>Solana devnet</em><b>Stamp drone reports</b><span>A hash of each drone report goes on chain, so nobody can quietly edit it later.</span></li>
@@ -605,9 +605,9 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="stack">
       <div><b>Browser voice</b><span>Speaks every alert in the tower</span></div>
       <div><b>Gemini</b><span>Verifies snapshots, writes reports, answers questions</span></div>
-      <div><b>Tiger Data</b><span>Time-stamped detections and hourly charts</span></div>
+      
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
-      <div><b>MongoDB Atlas</b><span>Incident reports with snapshots</span></div>
+      <div><b>MongoDB Atlas</b><span>Incident reports, snapshots and hourly charts</span></div>
       <div><b>Solana</b><span>Tamper-proof stamps on drone reports</span></div>
     </div>
   </section>
@@ -963,7 +963,7 @@ import { enhanceWorld } from './details.js';
       }},
     {id:"s5", name:"Risk engine", dur:10, cap:[[0,"Green: a clear sky, so just a quiet status update."],[3.6,"Yellow: a few birds, not heading for the runway. Caution on screen."],[6.6,"Red: a flock, birds heading for the runway, or any drone. Alarm and voice alert."]],
       hud:t => { const n = t < 3.6 ? 0 : t < 6.6 ? 3 : 8; $("riskCount").textContent = "BIRDS IN VIEW: " + n; }},
-    {id:"s6", name:"Alert journey", dur:22, cap:[[0,"Here’s how one alert travels through SkySentry."],[2,"1 · Detect and send. The camera spots birds or a drone and sends an event."],[4.8,"2 · Save the stream. Tiger Data stores every event and powers the hourly charts."],[7.6,"3 · Verify with AI. Gemini checks the snapshot and writes an incident report."],[10.4,"4 · Store the report. MongoDB Atlas keeps the report and its snapshot."],[13.2,"5 · Stamp drone reports. A hash goes on Solana devnet so nobody can quietly edit it."],[16,"6 · Give it a voice. The tower’s browser reads the alert out loud."],[18.8,"7 · Tell the tower. Socket.IO pushes everything to the tower screen instantly."]],
+    {id:"s6", name:"Alert journey", dur:22, cap:[[0,"Here’s how one alert travels through SkySentry."],[2,"1 · Detect and send. The camera spots birds or a drone and sends an event."],[4.8,"2 · Save the stream. MongoDB Atlas stores every event and powers the hourly charts."],[7.6,"3 · Verify with AI. Gemini checks the snapshot and writes an incident report."],[10.4,"4 · Store the report. MongoDB Atlas keeps the report and its snapshot."],[13.2,"5 · Stamp drone reports. A hash goes on Solana devnet so nobody can quietly edit it."],[16,"6 · Give it a voice. The tower’s browser reads the alert out loud."],[18.8,"7 · Tell the tower. Socket.IO pushes everything to the tower screen instantly."]],
       hud:t => {
         let step = -1; s6starts.forEach((s, i) => { if (t >= s) step = i; });
         stepLis.forEach((li, i) => { li.classList.toggle("cur", i === step); li.classList.toggle("done", i < step); });
