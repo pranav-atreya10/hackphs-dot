@@ -106,12 +106,9 @@ function collecting(s, count) {
   assert.doesNotMatch(s.status.textContent, /object \d+\s*:\s*(bird|drone|other)\b/i);
 }
 
-test('model stays unloaded until enable, shows loading progress, and stops on disable', async t => {
+test('model stays unloaded until enable, shows loading while pending, and stops on disable', async t => {
   const pending = deferred(), tile = feed();
-  const client = worker({ load: progress => {
-    progress('Downloading weights');
-    return pending.promise;
-  } });
+  const client = worker({ load: () => pending.promise });
   const s = setup(t, { createClient: () => client });
   s.publish(tile);
   await s.verifier.tick();
@@ -122,7 +119,7 @@ test('model stays unloaded until enable, shows loading progress, and stops on di
   await nextTurn();
   assert.deepEqual(s.clients, [client]);
   assert.equal(s.status.dataset.state, 'loading');
-  assert.match(s.status.textContent, /Downloading weights/);
+  assert.match(s.status.textContent, /Loading v4\.1.*motion detection stays active/i);
   await s.verifier.tick();
   assert.equal(client.calls.length, 0, 'loading cannot start inference');
 

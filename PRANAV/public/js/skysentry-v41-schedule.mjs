@@ -47,6 +47,10 @@ function eligibleTracks(pair) {
 export function createV41Scheduler() {
   const cameras = new Map();
   return {
+    clear(cameraId) {
+      if (cameraId === undefined) cameras.clear();
+      else cameras.delete(cameraId);
+    },
     pick(feeds, now = Date.now()) {
       if (!Number.isFinite(now)) return null;
       for (const [id, cursor] of cameras) {
