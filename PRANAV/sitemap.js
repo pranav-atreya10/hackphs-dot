@@ -3,7 +3,6 @@
 // Host header can't inject markup.
 const PAGES = [
   { path: '/', changefreq: 'weekly', priority: '1.0' },
-  { path: '/demo.html', changefreq: 'monthly', priority: '0.8' },
   { path: '/film.html', changefreq: 'monthly', priority: '0.7' },
   { path: '/tower.html', changefreq: 'monthly', priority: '0.5' },
   { path: '/camera.html', changefreq: 'monthly', priority: '0.5' },

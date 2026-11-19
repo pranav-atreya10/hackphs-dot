@@ -55,7 +55,7 @@ writeFileSync(join(pub, 'film.html'), themed(decorative(loader(filmPage)), 'film
 let site = readFileSync(join(film, 'site.html'), 'utf8');
 const nav = '<a href="#film">Film</a><a href="#why">Why</a><a href="#how">How it works</a><a href="#risk">Risk levels</a><a href="#system">System</a><a href="#faq">FAQ</a>';
 if (!site.includes(nav)) throw new Error('site.html nav changed; update sync-web.mjs');
-site = site.replace(nav, '<a href="#film">Film</a><a href="#how">How it works</a><a href="/demo.html">Demos</a><a href="#faq">FAQ</a>');
+site = site.replace(nav, '<a href="#film">Film</a><a href="#how">How it works</a><a href="#faq">FAQ</a>');
 const live = readFileSync(fileURLToPath(new URL('./live-section.html', import.meta.url)), 'utf8');
 const anchor = '<section class="sec" id="stack">';
 if (!site.includes(anchor)) throw new Error('site.html #stack section missing; update sync-web.mjs');
