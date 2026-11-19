@@ -1,56 +1,97 @@
 """v4: fine-tune v3 on ALL sources (Mendeley, Svanström + every source in data/shreyansh_crops_v4/).
 
     python3 train_v4.py --name v4 --init runs/v3/best.pt --epochs 8 --minutes 100     # resumable
+    python3 train_v4.py --dry-run --weights klim_skagen:3,svanstrom:3,openimages:1    # metadata only
 
 Sources are picked up automatically: every <source>_train_X.npy in data/shreyansh_crops_v4 (made by
 sources/<source>.py with sources/common.py). Sources ending in "_testonly" are never trained on.
-Each epoch samples a balanced mix so no single source dominates: up to SOURCE_CAP samples per source
-(Svanström counts double: real distant sky footage). One random version per sample [jittered, jittered, tiny].
+Each epoch draws up to SOURCE_CAP samples per source before applying repeats (Svanström defaults to x2).
+Changing repeats also changes the optimizer steps per epoch.
+One random version per sample [jittered, jittered, tiny].
 Best epoch = highest mean balanced accuracy over all sources' SELECT parts plus the Mendeley holdout and
 the Svanström select clips. Test parts are never read here.
 """
 import argparse
 import json
-import math
 import sys
 import time
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 
 import numpy as np
-import torch
-import torch.nn.functional as F
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from model import SkyNetLite  # noqa: E402
-from train import fast, norm, to_tensor  # noqa: E402
-from train_v2 import augment, evaluate  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE.parent / "data"
 SOURCE_CAP = 30000
 
 
-def load_sources():
-    train, select = [], []
-    train.append(("mendeley", np.load(DATA / "shreyansh_crops_v2" / "fit_X.npy", mmap_mode="r"), np.load(DATA / "shreyansh_crops_v2" / "fit_y.npy"), 1))
-    select.append(("mendeley", np.load(DATA / "shreyansh_crops_v2" / "holdout_X.npy", mmap_mode="r"), np.load(DATA / "shreyansh_crops_v2" / "holdout_y.npy")))
-    v3 = DATA / "shreyansh_crops_v3"
-    train.append(("svanstrom", np.load(v3 / "svan_train_X.npy", mmap_mode="r"), np.load(v3 / "svan_train_meta.npz")["y"], 2))
-    select.append(("svanstrom", np.load(v3 / "svan_select_X.npy", mmap_mode="r"), np.load(v3 / "svan_select_meta.npz")["y"]))
-    v4 = DATA / "shreyansh_crops_v4"
-    for f in sorted(v4.glob("*_train_X.npy")):
-        name = f.name[:-len("_train_X.npy")]
+def load_sources(data=None, *, metadata_digest=None):
+    data = DATA if data is None else Path(data)
+    metadata_only = metadata_digest is not None
+
+    def read(prefix, label_suffix="_meta.npz", *, required=False):
+        label_file = prefix.with_name(prefix.name + label_suffix)
+        labels = label_file
+        if metadata_only:
+            payload = label_file.read_bytes()
+            metadata_digest.update(f"{label_file.parent.name}:{label_file.name}\0".encode())
+            metadata_digest.update(sha256(payload).digest())
+            labels = BytesIO(payload)
+        if label_suffix == "_meta.npz":
+            with np.load(labels) as meta:
+                if "y" not in meta:
+                    raise ValueError(f"{label_file}: missing label array 'y'")
+                y = meta["y"]
+        else:
+            y = np.load(labels)
+        if (not isinstance(y, np.ndarray) or y.ndim != 1 or y.dtype.kind not in "iu"
+                or np.any((y < 0) | (y > 2))):
+            raise ValueError(f"{label_file}: expected a 1D array of integer labels 0, 1, or 2")
+        if required and not len(y):
+            raise ValueError(f"{label_file}: required split is empty")
+        X = None if metadata_only or not len(y) else np.load(
+            prefix.with_name(prefix.name + "_X.npy"), mmap_mode="r")
+        return X, y.astype(np.int64, copy=False)
+
+    v2, v3, v4 = (data / f"shreyansh_crops_v{v}" for v in (2, 3, 4))
+    train = [("mendeley", *read(v2 / "fit", "_y.npy", required=True), 1),
+             ("svanstrom", *read(v3 / "svan_train", required=True), 2)]
+    select = [("mendeley", *read(v2 / "holdout", "_y.npy", required=True)),
+              ("svanstrom", *read(v3 / "svan_select", required=True))]
+    suffix = "_meta.npz" if metadata_only else "_X.npy"
+    for f in sorted(v4.glob(f"*_train{suffix}")):
+        name = f.name.removesuffix(f"_train{suffix}")
         if name.endswith("_testonly"):
             continue
-        y = np.load(v4 / f"{name}_train_meta.npz")["y"]
+        X, y = read(v4 / f"{name}_train")
         if len(y):
-            train.append((name, np.load(f, mmap_mode="r"), y, 1))
-        sf = v4 / f"{name}_select_X.npy"
-        if sf.exists():
-            ys = np.load(v4 / f"{name}_select_meta.npz")["y"]
+            train.append((name, X, y, 1))
+        if (v4 / f"{name}_select{suffix}").exists():
+            Xs, ys = read(v4 / f"{name}_select")
             if len(ys):
-                select.append((name, np.load(sf, mmap_mode="r"), ys))
+                select.append((name, Xs, ys))
     return train, select
+
+
+def apply_source_weights(train, recipe):
+    sources = {n for n, *_ in train}
+    overrides = {}
+    for entry in recipe.split(",") if recipe else ():
+        source, _, repeat = entry.partition(":")
+        source, repeat = source.strip(), repeat.strip()
+        try:
+            w = int(repeat)
+        except ValueError:
+            w = 0
+        if w < 1:
+            raise ValueError(f"--weights expects source:positive_integer entries, got {entry!r}")
+        if source not in sources:
+            raise ValueError(f"--weights names an unavailable training source: {source!r}")
+        if source in overrides:
+            raise ValueError(f"--weights repeats the entry for {source!r}")
+        overrides[source] = w
+    return [(n, X, y, overrides.get(n, w)) for n, X, y, w in train]
 
 
 def main():
@@ -62,23 +103,52 @@ def main():
     ap.add_argument("--batch", type=int, default=256)
     ap.add_argument("--lr", type=float, default=1.5e-3)
     ap.add_argument("--seed", type=int, default=44)
-    ap.add_argument("--weights", default="", help="extra repeat per source, e.g. klim_skagen:3,svanstrom:3")
+    ap.add_argument("--weights", default="", help="override source repeat counts, e.g. klim_skagen:3,svanstrom:3")
+    ap.add_argument("--data-dir", default=str(DATA), help="root containing shreyansh_crops_v2/v3/v4")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the sampling plan from train/select metadata; no crops or training")
     a = ap.parse_args()
+    if a.batch < 1 or a.epochs < 1:
+        ap.error("--batch and --epochs must be positive")
+    digest = sha256() if a.dry_run else None
+    try:
+        train, select = load_sources(a.data_dir, metadata_digest=digest)
+        train = apply_source_weights(train, a.weights)
+    except (OSError, ValueError, KeyError) as exc:
+        ap.error(str(exc))
+    if a.dry_run:
+        missing_select = {n for n, *_ in train} - {n for n, *_ in select}
+        if missing_select:
+            ap.error(f"missing or empty select metadata for: {', '.join(sorted(missing_select))}")
+
+    sizes = [min(len(y), SOURCE_CAP) * w for _, _, y, w in train]
+    per_epoch = sum(sizes)
+    steps = (per_epoch + a.batch - 1) // a.batch
+    print("training sources:", ", ".join(f"{n} {len(y)} (x{w})" for n, _, y, w in train), f"| per epoch {per_epoch}")
+    print("select sets:", ", ".join(f"{n} {len(y)}" for n, _, y in select))
+    if digest is not None:
+        for (n, _, y, _), size in zip(train, sizes):
+            bird, drone, other = np.bincount(y, minlength=3)
+            print(f"{n}: bird={bird} drone={drone} other={other} | draws/epoch={size}")
+        print(f"train/select metadata SHA-256: {digest.hexdigest()}")
+        print(f"dry run: seed={a.seed} batch={a.batch} epochs={a.epochs} lr={a.lr} "
+              f"minutes={a.minutes} init={a.init} | steps/epoch={steps}")
+        return
+
+    import torch
+    import torch.nn.functional as F
+
+    sys.path.insert(0, str(HERE))
+    from model import SkyNetLite
+    from train import fast, norm, to_tensor
+    from train_v2 import augment, evaluate
+
     torch.set_num_threads(2)
     run = HERE / "runs" / a.name
     run.mkdir(parents=True, exist_ok=True)
-    train, select = load_sources()
-    extra = dict((k, int(v)) for k, v in (kv.split(":") for kv in a.weights.split(",") if kv))
-    train = [(n, X, y, extra.get(n, w)) for n, X, y, w in train]
-    plan = []  # (source index, row index) for one epoch, fixed size so the LR schedule is stable
-    sizes = [min(len(y) * w, SOURCE_CAP * w) for _, _, y, w in train]
-    per_epoch = int(sum(sizes))
-    steps = math.ceil(per_epoch / a.batch)
     yall = np.concatenate([y for _, _, y, _ in train])
     counts = np.bincount(yall, minlength=3)
     weights = torch.tensor(counts.sum() / (3 * counts), dtype=torch.float32)
-    print("training sources:", ", ".join(f"{n} {len(y)} (x{w})" for n, _, y, w in train), f"| per epoch {per_epoch}")
-    print("select sets:", ", ".join(f"{n} {len(y)}" for n, _, y in select))
     torch.manual_seed(a.seed)
     model = SkyNetLite().to(memory_format=torch.channels_last)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=5e-4)
