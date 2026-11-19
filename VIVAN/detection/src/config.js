@@ -72,6 +72,7 @@ export const DEFAULTS = {
     hzTolerance: 0.25,    // consecutive beat-rate readings must agree within 25%
     minConsistent: 2,     // ...this many times in a row (2 = three matching readings) before "flapping"
     smoothing: 0.35,      // how quickly the per-track verdict follows new analyses
+    minRepeat: 0.3,       // the beat must match itself again two periods later (bags line up once by chance, wings keep going)
   },
 
   // Debris check (see debris.js): thrown rocks and tumbling debris are not birds.
@@ -98,6 +99,14 @@ export const DEFAULTS = {
     minSpeed: 4,           // px/s below which heading is ignored (hovering/soaring)
     minSize: 2,
     inferBirdAtSize: 3,    // a coherent group of 3+ unknowns is treated as birds
+    // Dense flocks (blobs.js countCores): birds packed so tightly their outlines merge into one blob.
+    denseMin: 5,           // a blob with 5+ separate dark cores is a dense flock of that many birds...
+    denseMinArea: 30,      // ...only checked for blobs this big (px)...
+    denseWindowSec: 1,     // ...using the middle value of the last 1 s of counts...
+    denseMinReadings: 8,   // ...once there are at least 8 of them, seen every frame (brief cloud-edge flickers don't count)
+    denseSteady: 0.8,      // 80% of those counts must reach denseMin (cloud edges jump around)
+    denseMaxGrowth: 2,     // and the blob's size may change at most 2x within that second (cloud edges balloon)
+    coreFrac: 0.5,         // a core = pixels at least 50% as contrasty as the blob's strongest pixel
   },
 
   corridor: {
@@ -121,6 +130,22 @@ export const DEFAULTS = {
     // COCO labels that just mean "small thing in the air" (it calls dark blobs frisbees):
     // shown in the UI, but they neither upgrade nor penalise and don't count toward agreement.
     uninformative: ['kite', 'frisbee', 'sports ball'],
+  },
+
+  // Bird-count forecaster (forecast.js): birds gathering in view raise the level before a flock forms.
+  forecast: {
+    enabled: true,
+    windowSec: 20,        // fit the trend over this much recent history
+    sampleSec: 0.5,       // record the bird count this often
+    holdSec: 2,           // a bird stays counted 2 s after it was last seen (a briefly lost track isn't "a bird left")
+    warmupSec: 1.5,       // birds already in view in the first 1.5 s after start-up are the baseline, not arrivals
+    minSpanSec: 6,        // need this much history before judging a trend
+    horizonSec: 15,       // forecast this far ahead
+    minSlopePerMin: 6,    // rising = at least 6 more birds per minute...
+    sigma: 2,             // ...clearly above zero (slope minus 2 standard errors > 0)...
+    minRise: 2,           // ...at least 2 more birds than the lowest count in the window...
+    minSteps: 2,          // ...arriving at 2+ separate moments (one group arriving at once is not a trend)
+    redMinRise: 3,        // red needs 3+ more birds AND a forecast reaching risk.flockRed
   },
 
   risk: {

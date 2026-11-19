@@ -120,6 +120,139 @@ export const SCENARIOS = {
     corridor: [],
     build(add) { add(circler(150, 110, 40, 7, 3, 7)); },
   },
+  // Forecaster scenes: the bird count changes over time.
+  birds_gathering: {
+    expectClass: 'bird', expectTrend: 'rising',
+    describe: 'Gulls arrive one after another (4 within ~8 s), spread out, never a flock of 5: forecast should warn red',
+    durationSec: 16,
+    expected: 'red',
+    corridor: [],
+    build(add, rng) {
+      const ys = [45, 105, 165, 215];
+      ys.forEach((y, i) => add(bird(-10 - 25 * i, y, 10, rng() * 2 - 1, 3.2 + rng() * 0.6, rng() * 6.28, 6)));
+    },
+  },
+  birds_leaving: {
+    expectClass: 'bird', forbidTrend: 'rising',
+    describe: 'Four gulls fly out of view one after another: the count falls, so no forecast warning',
+    durationSec: 16,
+    expected: 'yellow',
+    corridor: [],
+    build(add, rng) {
+      const ys = [45, 105, 165, 215];
+      ys.forEach((y, i) => add(bird(150 + 35 * i, y, 12, rng() * 2 - 1, 3.2 + rng() * 0.6, rng() * 6.28, 6)));
+    },
+  },
+  // ---------- Edge cases: rare situations (edge: true). ----------
+  hover_drone_silent: {
+    edge: true, forbidClass: 'bird',
+    describe: 'A drone hovering almost perfectly still, no sound: must still be noticed (yellow)',
+    durationSec: 10, expected: 'yellow', corridor: [],
+    build(add) { add(hover(160, 80)); },
+  },
+  hover_drone_loud: {
+    edge: true, forbidClass: 'bird', expectClass: 'drone',
+    describe: 'The same hovering drone with drone sound: red, and the object itself should be called a drone',
+    durationSec: 10, expected: 'red', audioDrone: true, corridor: [],
+    build(add) { add(hover(160, 80)); },
+  },
+  close_gull: {
+    edge: true, expectClass: 'bird',
+    describe: 'A gull passing close to the camera: wings ~100 px across',
+    durationSec: 8, expected: 'yellow', corridor: [],
+    build(add) { add(bird(-40, 120, 45, -2, 2.8, 0, 50)); },
+  },
+  soaring_hawk: {
+    edge: true, forbidClass: 'drone',
+    describe: 'A hawk gliding in slow circles without flapping (steady outline, no sound)',
+    durationSec: 12, expected: 'yellow', corridor: [],
+    build(add) { add(glider(160, 110, 50, 10, 9)); },
+  },
+  swift: {
+    edge: true,
+    describe: 'A small swift crossing fast (90 px/s) and beating its wings ~8 Hz',
+    durationSec: 5, expected: 'yellow', corridor: [],
+    build(add) { add(bird(-10, 90, 90, 6, 8, 0, 4)); },
+  },
+  birds_crossing: {
+    edge: true, expectClass: 'bird',
+    describe: 'Two gulls cross paths in an X (the tracker must not swap or merge them)',
+    durationSec: 10, expected: 'yellow', corridor: [],
+    build(add) { add(bird(40, 60, 22, 12, 3.4, 0, 7)); add(bird(280, 60, -22, 12, 3.0, 1.5, 7)); },
+  },
+  exposure_jump: {
+    edge: true, expectFlock: 0,
+    describe: 'Empty sky; the camera auto-exposure suddenly brightens 20% at 5 s and back at 8 s: must stay green',
+    durationSec: 12, expected: 'green', corridor: [],
+    exposure: (t) => (t >= 5 && t < 8 ? 1.2 : 1),
+    build() {},
+  },
+  noisy_flock: {
+    edge: true, expectFlock: 6, expectClass: 'bird',
+    describe: 'The V of 6 geese filmed on a grainy, low-light camera (3x the sensor noise)',
+    durationSec: 12, expected: 'red', noise: 9,
+    corridor: [[0.72, 0], [1, 0], [1, 1], [0.72, 1]],
+    build(add, rng) {
+      const offsets = [[0, 0], [-13, -8], [-13, 8], [-26, -16], [-26, 16], [-39, -24]];
+      offsets.forEach(([dx, dy]) => add(bird(30 + dx, 110 + dy, 21, -1, 4 + rng() * 0.6 - 0.3, rng() * 6.28, 5.5)));
+    },
+  },
+  drone_and_flock: {
+    edge: true, expectClass: 'drone',
+    describe: 'A drone (with sound) and a flock of 5 birds in view at the same time',
+    durationSec: 10, expected: 'red', audioDrone: true, corridor: [],
+    build(add, rng) {
+      add(drone(240, 60));
+      for (let i = 0; i < 5; i++) add(bird(20 + (i % 3) * 14, 150 + Math.floor(i / 3) * 12, 18, -1, 3.6 + rng() * 0.5, rng() * 6.28, 6));
+    },
+  },
+  insect: {
+    edge: true, forbidClass: 'bird',
+    describe: 'An insect near the lens: small dark speck darting in random zig-zags',
+    durationSec: 6, expected: 'yellow', corridor: [],
+    build(add, rng) { add(insect(100, 100, rng)); },
+  },
+  bird_approaching: {
+    edge: true, expectClass: 'bird',
+    describe: 'A gull flying straight toward the camera: it grows from tiny to large while flapping ~3.5 Hz',
+    durationSec: 8, expected: 'yellow', corridor: [],
+    build(add) { add(looming(170, 100, 3.5)); },
+  },
+  murmuration: {
+    edge: true, expectClass: 'bird',
+    describe: '30 starlings packed tightly (outlines touch and merge): must still be red, not "one big object"',
+    durationSec: 10, expected: 'red', corridor: [],
+    build(add, rng) {
+      for (let i = 0; i < 30; i++) add(bird(60 + (i % 6) * 6 + rng() * 3, 70 + Math.floor(i / 6) * 5 + rng() * 3, 16, 2, 6 + rng() * 2, rng() * 6.28, 2.6));
+    },
+  },
+  storm_clouds: {
+    edge: true, expectFlock: 0,
+    // Known open issue: a fast cloud edge is briefly tracked as an unknown object, raising a false yellow
+    // (never red). Excluded from the "every scene passes" test until fixed; see VIVAN.md.
+    knownIssue: 'false yellow from cloud edges',
+    describe: 'Empty sky with dark, fast storm clouds (3x the contrast, 4x the speed): must stay green',
+    durationSec: 12, expected: 'green', corridor: [], cloudAmp: 3, cloudSpeed: 4,
+    build() {},
+  },
+  shaky_flock: {
+    edge: true, expectClass: 'bird',
+    describe: 'The V of 6 geese filmed from a pole swaying in the wind (picture jitters ~2 px)',
+    durationSec: 12, expected: 'red',
+    corridor: [[0.72, 0], [1, 0], [1, 1], [0.72, 1]],
+    shake: (t) => [2 * Math.sin(t * 23) + Math.sin(t * 41), 1.5 * Math.sin(t * 29 + 1)],
+    build(add, rng) {
+      const offsets = [[0, 0], [-13, -8], [-13, 8], [-26, -16], [-26, 16], [-39, -24]];
+      offsets.forEach(([dx, dy]) => add(bird(30 + dx, 110 + dy, 21, -1, 4 + rng() * 0.6 - 0.3, rng() * 6.28, 5.5)));
+    },
+  },
+  shaky_empty: {
+    edge: true, expectFlock: 0,
+    describe: 'Empty sky from the same swaying pole: the clouds jitter, nothing is flying: must stay green',
+    durationSec: 12, expected: 'green', corridor: [],
+    shake: (t) => [2 * Math.sin(t * 23) + Math.sin(t * 41), 1.5 * Math.sin(t * 29 + 1)],
+    build() {},
+  },
 };
 
 // ---------- object models (positions in px at 320x240; scaled to the output size) ----------
@@ -204,6 +337,55 @@ function circler(cx, cy, r, periodSec, hz, span) {
   };
 }
 
+// Drone hovering in place: tiny position wobble (GPS hold), steady size.
+function hover(x0, y0) {
+  return { type: 'drone', at(t) { return { x: x0 + 0.8 * Math.sin(t * 1.3), y: y0 + 0.6 * Math.sin(t * 0.9 + 1), rx: 4.2, ry: 2.6, dark: 0.6 }; } };
+}
+
+// Bird gliding in circles with wings held still (no wingbeat).
+function glider(cx, cy, r, periodSec, span) {
+  return {
+    type: 'bird',
+    at(t) {
+      const a = (2 * Math.PI * t) / periodSec;
+      return { x: cx + r * Math.sin(a), y: cy - 0.5 * r * Math.cos(a), rx: span, ry: span * 0.2, dark: 0.55, angle: 0.15 * Math.sin(a) };
+    },
+  };
+}
+
+// Insect near the lens: darts in a new random direction every 0.1-0.4 s.
+function insect(x0, y0, rng) {
+  const legs = [];
+  let t = 0, x = x0, y = y0;
+  while (t < 30) {
+    const d = 0.1 + rng() * 0.3, a = rng() * 6.28, v = 60 + rng() * 80;
+    legs.push({ t, d, x, y, vx: v * Math.cos(a), vy: v * Math.sin(a) });
+    x = Math.min(300, Math.max(20, x + v * Math.cos(a) * d));
+    y = Math.min(220, Math.max(20, y + v * Math.sin(a) * d));
+    t += d;
+  }
+  return {
+    type: 'insect',
+    at(tt) {
+      const L = legs.find((l) => tt < l.t + l.d) || legs[legs.length - 1];
+      const f = Math.min(L.d, tt - L.t);
+      return { x: Math.min(300, Math.max(20, L.x + L.vx * f)), y: Math.min(220, Math.max(20, L.y + L.vy * f)), rx: 2.2, ry: 1.6, dark: 0.7 };
+    },
+  };
+}
+
+// Bird flying toward the camera: grows from span 3 to ~30 px while flapping.
+function looming(x0, y0, hz) {
+  const b = bird(0, 0, 0, 0, hz, 0, 1);
+  return {
+    type: 'bird',
+    at(t) {
+      const s = b.at(t), span = 3 * Math.exp(0.29 * t);
+      return { ...s, x: x0 + 2 * t, y: y0 + s.y * span / 7, rx: s.rx * span, ry: s.ry * span };
+    },
+  };
+}
+
 function bag(x0, y0, rng) {
   // Smooth random noise with UNEVEN knot spacing (0.07-0.3 s, like gusty wind).
   // Evenly spaced knots accidentally create a rhythm at 1/(2 x spacing).
@@ -242,7 +424,7 @@ export class SyntheticSky {
     this.scenarioName = scenario;
     this.scenario = SCENARIOS[scenario];
     if (!this.scenario) throw new Error(`Unknown scenario ${scenario}`);
-    this.noise = noise;
+    this.noise = this.scenario.noise ?? noise;
     this.rng = mulberry32(seed);
     this.objects = [];
     this.scenario.build((o) => this.objects.push(o), this.rng);
@@ -260,7 +442,7 @@ export class SyntheticSky {
       }
     }
     this.clouds = clouds
-      ? Array.from({ length: 3 }, () => ({ x: this.rng() * width, y: this.rng() * height * 0.8, r: (40 + this.rng() * 40) * this.scale, vx: (2 + this.rng() * 3) * this.scale, amp: 18 + this.rng() * 12 }))
+      ? Array.from({ length: 3 }, () => ({ x: this.rng() * width, y: this.rng() * height * 0.8, r: (40 + this.rng() * 40) * this.scale, vx: (2 + this.rng() * 3) * this.scale * (this.scenario.cloudSpeed || 1), amp: (18 + this.rng() * 12) * (this.scenario.cloudAmp || 1) }))
       : [];
   }
 
@@ -273,17 +455,19 @@ export class SyntheticSky {
     const { width: w, height: h, data, base } = this;
     const rng = this.rng;
     const nz = this.noise;
+    const g = this.scenario.exposure ? this.scenario.exposure(t) : 1; // auto-exposure gain
     for (let i = 0, j = 0, k = 0; i < w * h; i++, j += 4, k += 3) {
       const n = (rng() * 2 - 1) * nz;
-      data[j] = base[k] + n;
-      data[j + 1] = base[k + 1] + n;
-      data[j + 2] = base[k + 2] + n;
+      data[j] = base[k] * g + n;
+      data[j + 1] = base[k + 1] * g + n;
+      data[j + 2] = base[k + 2] * g + n;
       data[j + 3] = 255;
     }
-    for (const c of this.clouds) this.drawCloud(c.x + c.vx * t, c.y, c.r, c.amp);
+    const [sx, sy] = this.scenario.shake ? this.scenario.shake(t).map((v) => v * this.scale) : [0, 0]; // camera jitter
+    for (const c of this.clouds) this.drawCloud(c.x + c.vx * t + sx, c.y + sy, c.r, c.amp);
     for (const o of this.objects) {
       const s = o.at(t);
-      this.drawEllipse(s.x * this.scale, s.y * this.scale, s.rx * this.scale, s.ry * this.scale, s.dark, s.bright, s.angle || 0);
+      this.drawEllipse(s.x * this.scale + sx, s.y * this.scale + sy, s.rx * this.scale, s.ry * this.scale, s.dark, s.bright, s.angle || 0);
     }
     return { data, width: w, height: h };
   }

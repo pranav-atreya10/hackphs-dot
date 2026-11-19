@@ -11,7 +11,7 @@ export function isoAt(wallSec) {
 }
 
 // primary: the most important group right now (see DetectionEngine.pickPrimary), or null.
-export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop }) {
+export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop, forecast }) {
   const cam = cfg.camera;
   const active = groups.filter((g) => g.classification !== 'rejected' && g.classification !== 'debris');
   const objectCount = active.reduce((s, g) => s + g.size, 0);
@@ -36,6 +36,9 @@ export function buildEvent({ cfg, risk, primary, groups, wallNow, evidence, crop
     flock_id: primary && primary.kind === 'flock' ? primary.id : null,
     heading: primary && primary.heading ? primary.heading.name : null,
     reasons: risk.reasons,
+    // Bird-count trend: { trend: 'rising'|'steady'|'falling'|'learning'|'off', birds_now, per_min, predicted, horizon_sec }
+    forecast: forecast ? { trend: forecast.trend, birds_now: forecast.birds_now, per_min: forecast.per_min,
+      predicted: forecast.predicted, horizon_sec: forecast.horizon_sec } : null,
     camera: { lat: cam.lat, lon: cam.lon, heading_deg: cam.heading_deg, hfov_deg: cam.hfov_deg },
     needs_snapshot: !!crop,
     crop_box: crop || null,   // normalized {x, y, w, h}; the browser adapter fills `snapshot`

@@ -132,3 +132,46 @@ function finalize(c) {
     minX: c.minX, minY: c.minY, maxX: c.maxX + 1, maxY: c.maxY + 1,
   };
 }
+
+// Dense-flock check: how many separate dark cores are inside one blob?
+// Birds packed tightly (a murmuration) merge into one outline, but each bird is still a darker
+// spot with lighter sky between it and its neighbours. A plane, drone or single bird is one solid
+// shape. We keep only the blob's pixels that are at least `coreFrac` of its strongest contrast
+// and count the separate pieces (8-connected) of at least `minCorePx` pixels.
+// labels: the labeler's label image; diff: |gray - background|.
+export function countCores(b, labels, diff, w, { coreFrac = 0.5, minLevel = 0, minCorePx = 2 } = {}) {
+  const parts = new Set(b.parts);
+  const x0 = b.minX, x1 = b.maxX, y0 = b.minY, y1 = b.maxY; // maxX/maxY exclusive
+  const bw = x1 - x0, bh = y1 - y0;
+  if (bw <= 0 || bh <= 0) return 0;
+  let peak = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const p = y * w + x;
+    if (parts.has(labels[p]) && diff[p] > peak) peak = diff[p];
+  }
+  const level = Math.max(minLevel, coreFrac * peak);
+  const mask = new Uint8Array(bw * bh);
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const p = y * w + x;
+    if (parts.has(labels[p]) && diff[p] >= level) mask[(y - y0) * bw + (x - x0)] = 1;
+  }
+  let cores = 0;
+  const stack = [];
+  for (let i = 0; i < mask.length; i++) {
+    if (mask[i] !== 1) continue;
+    let size = 0;
+    mask[i] = 2; stack.push(i);
+    while (stack.length) {
+      const q = stack.pop(); size++;
+      const qy = (q / bw) | 0, qx = q - qy * bw;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = qx + dx, ny = qy + dy;
+        if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+        const r = ny * bw + nx;
+        if (mask[r] === 1) { mask[r] = 2; stack.push(r); }
+      }
+    }
+    if (size >= minCorePx) cores++;
+  }
+  return cores;
+}

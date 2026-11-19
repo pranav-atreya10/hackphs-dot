@@ -1,7 +1,8 @@
 // Risk engine: green / yellow / red with hysteresis.
 //
 //  red    : any drone, any bird flock of 5+, or any bird/flock under 30 s from the corridor
-//  yellow : any confirmed bird (or, by default, any unverified object so Gemini can check it)
+//           or bird numbers rising fast enough that the forecast reaches a flock of 5+ (forecast.js)
+//  yellow : any confirmed bird, or bird numbers rising (or, by default, any unverified object so Gemini can check it)
 //  green  : nothing confirmed in the sky
 //  (debris, meaning thrown rocks and falling objects, never raises the level; it is only listed)
 //
@@ -26,7 +27,8 @@ export class RiskEngine {
 
   // groups: [{ kind: 'flock'|'track', size, classification, eta_seconds, label }]
   // audio: { active, confidence }
-  evaluate(groups, audio, t) {
+  // forecast: BirdForecaster snapshot (optional)
+  evaluate(groups, audio, t, forecast = null) {
     const c = this.cfg;
     const reasons = [];
     let raw = 0;
@@ -57,7 +59,17 @@ export class RiskEngine {
         raw = 1;
       }
     }
-    if (raw === 1 && !reasons.length) {
+    if (forecast && forecast.trend === 'rising') {
+      const msg = `Bird numbers rising: ${forecast.birds_now} now, ~${Math.round(forecast.predicted)} in ${forecast.horizon_sec} s`;
+      if (forecast.red_ready && forecast.predicted >= c.flockRed) {
+        raw = 2;
+        reasons.push(`${msg} (forecast reaches a flock of ${c.flockRed}+)`);
+      } else {
+        if (raw < 1) raw = 1;
+        reasons.push(msg);
+      }
+    }
+    if (raw === 1 && reasons.every((r) => r.startsWith('Bird numbers rising'))) {
       const birds = groups.filter((g) => g.classification === 'bird').reduce((s, g) => s + g.size, 0);
       const unknown = groups.filter((g) => g.classification === 'unknown').reduce((s, g) => s + g.size, 0);
       if (birds) reasons.push(`${birds} bird${birds > 1 ? 's' : ''} in view`);
