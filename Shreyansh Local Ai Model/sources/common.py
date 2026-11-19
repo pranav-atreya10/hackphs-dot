@@ -12,10 +12,11 @@ Every source script does the same three things:
 Parts: "train" (3 versions per object: [jittered, jittered, tiny], like prepare_v2.py) and "select" / "test"
 (1 centre crop at the real size). Every full frame also gives background squares that touch no object (other).
 Use leak_check() before training: pHash Hamming <= 6 against the frozen Mendeley test images and the
-Svanström test frames means a near-duplicate; those images are dropped.
+Svanström test frames means a near-duplicate; both reference sets are required.
 Splits go by GROUP (never frames of one video on two sides): split_part(group_key) gives a fixed
 80 / 10 / 10 train / select / test split from a stable hash of the group id.
 """
+import hashlib
 import json
 import sys
 import zlib
@@ -42,8 +43,16 @@ def split_part(group_key):
     return "test" if h < 10 else "select" if h < 20 else "train"
 
 
+def is_test_only(source):
+    name = source.casefold()
+    compact = "".join(c for c in name if c.isalnum())
+    return compact.startswith("fbdsv") or name.endswith("_testonly")
+
+
 class CropWriter:
     def __init__(self, source, part, cap=None, bg_per_image=1, seed=0):
+        if part != "test" and is_test_only(source):
+            raise ValueError(f"{source} is test-only; refusing to write {part} crops")
         self.source, self.part = source, part
         self.cap = cap or CAP[part]
         self.bg = bg_per_image
@@ -125,17 +134,31 @@ def leak_check(images, max_hamming=6):
     """Return the indices of PIL images that are near-duplicates of any frozen test image (Mendeley test,
     Svanström test frames). Uses the same pHash rule as benchmarks/leakage_check.py."""
     global _REF
+    cache = OUT / "svan_test_phash.npy"
+    if _REF is None and not cache.is_file():
+        raise FileNotFoundError(f"Missing Svanstrom test pHash cache: {cache}; cannot check leakage")
     import imagehash
     if _REF is None:
+        svan = np.load(cache, mmap_mode="r", allow_pickle=False)
+        if not isinstance(svan, np.memmap) or svan.dtype != np.uint64 or svan.ndim != 1 or not svan.size:
+            raise ValueError(f"Invalid Svanstrom test pHash cache: {cache}")
+        man = json.loads((REPO / "benchmarks" / "test_sets.json").read_text(encoding="utf-8"))
+        items = man["tiers"]["dataset"]["visual"]["items"]
+        if not items:
+            raise ValueError("Frozen Mendeley visual manifest is empty; cannot check leakage")
         ref = []
-        man = json.loads((REPO / "benchmarks" / "test_sets.json").read_text())
-        for it in man["tiers"]["dataset"]["visual"]["items"]:
-            with Image.open(REPO / it["path"]) as im:
-                ref.append(int(str(imagehash.phash(im)), 16))
-        cache = OUT / "svan_test_phash.npy"
-        if cache.exists():
-            ref += np.load(cache).tolist()
-        _REF = np.array(ref, dtype=np.uint64)
+        test_dir = (REPO / "data" / "mendeley" / "Dataset" / "test" / "images").resolve()
+        for it in items:
+            p = (REPO / it["path"]).resolve()
+            if not p.is_relative_to(test_dir):
+                raise ValueError(f"Unexpected Mendeley leakage reference: {it['path']}")
+            with p.open("rb") as f:
+                if hashlib.file_digest(f, "sha256").hexdigest() != it["sha256"]:
+                    raise ValueError(f"Frozen Mendeley image changed: {p}; cannot check leakage")
+                f.seek(0)
+                with Image.open(f) as im:
+                    ref.append(int(str(imagehash.phash(im)), 16))
+        _REF = np.concatenate((np.array(ref, dtype=np.uint64), svan))
     bad = []
     for i, im in enumerate(images):
         h = np.uint64(int(str(imagehash.phash(im)), 16))

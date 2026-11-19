@@ -83,6 +83,10 @@ used only for testing, as a camera the model has never seen. Also: a 30-60 s fli
 (`flight_forecast.js`), a script to rename the person-named folders (`rename-folders.sh`), and a Gemini comparison
 script (not run: the key is free tier).
 
+**v5 corpus preflight:** The [train/SELECT verification guide](../Shreyansh%20Local%20Ai%20Model/DATASETS.md#5-v5-trainselect-preflight)
+defines the ten-source bundle, file hashes, group checks and review evidence required before a fit. It
+does not download data or open FBD-SV; that frozen dataset stays reserved for the unseen-source result.
+
 **Results (best model v4.1, footage never trained on):** voting over 5 frames of a track, never-seen-camera birds
 91.0% with 2.1% false alarms; Svanström birds 96.1%, drones 96.0%, false alarms 1.0%. Small objects (7-13 px) and
 planes/helicopters are still below the 95% target. Earlier versions scored 95%+ on Mendeley but only 1.5% on
