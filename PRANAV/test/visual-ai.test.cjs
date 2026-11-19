@@ -19,8 +19,8 @@ function feed(cameraId = 'iphone', source = 'server') {
   };
 }
 
-function frame(tile, { frameId = 5, trackId = 1, generation = 'generation-a', dense = false } = {}) {
-  const streamId = `${tile.cameraId}-stream`;
+function frame(tile, { frameId = 5, trackId = 1, generation = 'generation-a', dense = false,
+  streamId = `${tile.cameraId}-stream` } = {}) {
   const frameT = frameId / 10, frameReceivedAt = Date.now();
   const track = { id: trackId, classification: 'unknown', bbox: { x: .25, y: .25, w: .2, h: .2 }, dense };
   const state = { generation, t: frameT, tracks: [track], risk: 'yellow', reasons: ['existing detector warning'] };
@@ -229,6 +229,53 @@ test('replacing a track discards its partial vote even if its ID reappears', asy
   collecting(s, 1);
 });
 
+test('a resumed track cannot use an unprocessed frame that predates the gap', async t => {
+  const tile = feed(), s = setup(t);
+  await s.verifier.enable();
+  await s.sample(tile, { frameId: 1 });
+  s.advance();
+  s.publish(tile, { frameId: 2 });
+  const earlier = tile.birdEvidence;
+  tile.botState = { ...tile.botState, t: .3, tracks: [] };
+  s.verifier.onFeed(tile);
+  tile.botState = { ...earlier.state, t: .4 };
+  s.verifier.onFeed(tile);
+  assert.equal(tile.birdEvidence, earlier, 'the new state has no matched bitmap yet');
+  await s.verifier.tick();
+  assert.equal(s.clients[0].calls.length, 1);
+  await s.sample(tile, { frameId: 4 });
+  collecting(s, 1);
+});
+
+for (const [phase, invalidate, nextFrame] of [
+  ['stream change', () => {}, { streamId: 'replacement-stream', frameId: 1 }],
+  ['config change', (tile, s) => { tile.birdEpoch = 1; tile.birdEvidence = null; s.verifier.onFeed(tile); }, { frameId: 6 }],
+  ['offline transition', (tile, s) => { tile.offline = true; s.verifier.onFeed(tile); tile.offline = false; }, { frameId: 6 }],
+  ['disconnect', (_tile, s) => s.verifier.reset(), { frameId: 6 }],
+]) {
+  test(`${phase} discards partial votes and in-flight evidence`, async t => {
+    const tile = feed(), pending = deferred();
+    const client = worker({ classify: (_frame, boxes) => client.calls.length === 5 ? pending.promise : predictions(boxes) });
+    const s = setup(t, { createClient: () => client });
+    await s.verifier.enable();
+    for (let frameId = 1; frameId <= 4; frameId++) await s.sample(tile, { frameId });
+    collecting(s, 4);
+    s.advance();
+    s.publish(tile, { frameId: 5 });
+    const old = s.verifier.tick();
+    assert.equal(client.calls.length, 5);
+
+    invalidate(tile, s);
+    s.publish(tile, nextFrame);
+    pending.resolve(predictions(client.calls[4].boxes, DRONE));
+    await old;
+    assert.notEqual(s.status.dataset.state, 'active');
+    await s.verifier.tick();
+    assert.equal(client.calls.length, 6);
+    collecting(s, 1);
+  });
+}
+
 test('a model fetch failure keeps motion detection active and retry creates a fresh worker', async t => {
   const tile = feed();
   const broken = worker({ load: async () => { throw new Error('Weights unavailable'); } });
@@ -253,6 +300,42 @@ test('a model fetch failure keeps motion detection active and retry creates a fr
   assert.equal(s.clients[1].calls.length, 1);
   collecting(s, 1);
   assert.deepEqual(tile.labelWrites, []);
+});
+
+test('revoking review consent aborts its request and ignores late replies while local inference continues', async t => {
+  const tile = feed(), response = deferred();
+  let request;
+  const s = setup(t, { judge: (ref, signal) => {
+    request = { ref, signal };
+    return response.promise;
+  } });
+  await s.verifier.enable();
+  await s.sample(tile, { frameId: 1 });
+  assert.match(s.reviewStatus.textContent, /pending/);
+  s.verifier.setJudge(null);
+  assert.equal(request.signal.aborted, true);
+  response.resolve(reviewResult(request.ref, 'bird'));
+  await response.promise;
+  assert.equal(s.reviewStatus.textContent, '');
+  await s.sample(tile, { frameId: 2 });
+  collecting(s, 2);
+});
+
+test('a configured local server judge stays separate and a mismatched review receipt is unavailable', async t => {
+  const tile = feed();
+  let matches = false;
+  const s = setup(t, { judge: async ref => {
+    const result = reviewResult(ref, 'uncertain');
+    if (!matches) result.evidenceRef.t += .01;
+    return { ...result, source: 'local' };
+  } });
+  await s.sample(tile, { frameId: 1 });
+  assert.match(s.reviewStatus.textContent, /unavailable/);
+  matches = true;
+  s.advance(3500);
+  await s.sample(tile, { frameId: 2 });
+  assert.match(s.reviewStatus.textContent, /Local-model advisory.*uncertain.*Not a clearance/);
+  assert.deepEqual(s.clients, []);
 });
 
 function reviewResult(ref, verdict) {

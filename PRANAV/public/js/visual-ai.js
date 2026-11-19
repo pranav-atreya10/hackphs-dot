@@ -108,6 +108,7 @@ export class VisualBirdVerifier {
     run?.client?.close();
     this.scheduler.clear();
     this.votes.clear();
+    for (const scope of this.scopes.values()) delete scope.voteFrame;
     this.local = null;
     this.updateButton();
   }
@@ -139,13 +140,17 @@ export class VisualBirdVerifier {
     const generation = feed.detector ? feed.detector.generation : state?.generation;
     if (!streamId || !generation) return null;
     const sameStream = feed.birdStateStreamId === undefined || feed.birdStateStreamId === streamId;
-    const tracks = sameStream && fresh(feed.lastFrameAt, this.now()) ? tracksIn(state) : [];
-    return { streamId, generation, epoch: feed.birdEpoch, trackIds: new Set(tracks.filter(usableTrack).map(tr => tr.id)) };
+    const tracks = sameStream && Number.isFinite(state?.t) && fresh(feed.lastFrameAt, this.now()) ? tracksIn(state) : [];
+    const epoch = feed.birdEpoch, previous = this.scopes.get(feed.cameraId);
+    const samePhase = previous?.streamId === streamId && previous.generation === generation && previous.epoch === epoch;
+    // The detector stream can advance before a matching bitmap arrives. Do not warm a resumed ID with a pre-gap pair.
+    const started = samePhase ? previous.tracks : new Map();
+    return { streamId, generation, epoch, tracks: new Map(tracks.filter(usableTrack).map(tr => [tr.id, started.get(tr.id) ?? state.t])) };
   }
 
   retains(item, feed, context = this.context(feed)) {
     return Boolean(feed === item.feed && this.sameScope(item, context) &&
-      context.trackIds.has(item.tuple.trackId));
+      context.tracks.get(item.tuple.trackId) <= item.tuple.frameT);
   }
 
   sameScope(item, context) {
@@ -162,16 +167,16 @@ export class VisualBirdVerifier {
     }
     if (context) {
       context.voteFrame = previous?.voteFrame;
-      if (context.voteFrame && [...previous.trackIds].some(id => !context.trackIds.has(id))) {
+      if (context.voteFrame && [...previous.tracks.keys()].some(id => !context.tracks.has(id))) {
         // Narrow the active frame's roster without replacing its handle or accepting a lost track again.
-        this.votes.prune({ ...context.voteFrame, liveTrackIds: [...context.trackIds] });
+        this.votes.prune({ ...context.voteFrame, liveTrackIds: [...context.tracks.keys()] });
       }
       this.scopes.set(cameraId, context);
     }
     const job = this.run?.job;
     if (job?.tuple.cameraId === cameraId) {
       if (job.feed !== feed || !this.sameScope(job, context)) job.active.clear();
-      else for (const id of job.active) if (!context.trackIds.has(id)) job.active.delete(id);
+      else for (const id of job.active) if (!context.tracks.has(id)) job.active.delete(id);
     }
     if (this.local?.tuple.cameraId === cameraId && !this.isCurrent(this.local, context)) this.clearLocal();
     if (this.review?.tuple.cameraId === cameraId) {
@@ -217,17 +222,17 @@ export class VisualBirdVerifier {
     const item = this.frameItem(feed, pair);
     if (!item) return;
     const scope = this.scopes.get(feed.cameraId);
-    const tracks = candidate.tracks.filter(tr => scope.trackIds.has(tr.id)).map(tr => ({ id: tr.id, bbox: { ...tr.bbox } }));
+    const tracks = candidate.tracks.filter(tr => scope.tracks.get(tr.id) <= item.tuple.frameT);
     if (!tracks.length) return;
     const job = run.job = { ...item, active: new Set(tracks.map(tr => tr.id)) };
     try {
-      const input = snapshotClassifierFrame(pair);
-      if (!input) return;
       const { cameraId, streamId, generation, frameId, frameT } = item.tuple;
       const voteFrame = { cameraId, streamId, generation, frameId, captureTime: frameT };
-      const handle = this.votes.prune({ ...voteFrame, liveTrackIds: [...scope.trackIds] });
+      const handle = this.votes.prune({ ...voteFrame, liveTrackIds: [...scope.tracks.keys()] });
       if (handle.status !== 'active') return;
       scope.voteFrame = voteFrame;
+      const input = snapshotClassifierFrame(pair);
+      if (!input) return;
       // The client returns results in submitted order, not identity. This job owns the tuple and copied boxes.
       const results = await run.client.classify(input, tracks.map(tr => tr.bbox));
       if (this.run !== run || !job.active.size || this.feeds.get(cameraId) !== feed || !fresh(item.frameReceivedAt, this.now())) return;
@@ -236,7 +241,7 @@ export class VisualBirdVerifier {
       if (!Array.isArray(results) || results.length !== tracks.length) throw new Error('inference returned the wrong number of results');
       let chosen = null;
       for (const [i, track] of tracks.entries()) {
-        if (!job.active.has(track.id) || !current.trackIds.has(track.id) || !results[i]?.probs) continue;
+        if (!job.active.has(track.id) || !(current.tracks.get(track.id) <= frameT) || !results[i]?.probs) continue;
         const vote = this.votes.record({ frame: handle, trackId: track.id, probs: results[i].probs });
         if (chosen?.vote.status !== 'ready' && (vote.status === 'ready' || (vote.status === 'collecting' && !chosen))) {
           chosen = { checked: trackItem(item, track.id), vote };
