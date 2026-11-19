@@ -76,4 +76,6 @@ Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's fi
 | `SHREYANSH/` | Shreyansh | The original AI, voice and Solana pipeline that `PRANAV/ai-voice` adapts. |
 | `benchmarks/`, `testbench/`, `models/` | Vivan | Detection benchmarks; follow `benchmarks/BENCHMARK_PROTOCOL.md`. |
 
+Models, settings and weights (and how to run them locally, including a local bird judge) are in `MODELS.md`.
+
 Team workflow (a branch and a PR per change, notes per person) is in `AI.md`.
