@@ -71,8 +71,8 @@ def main():
         refs[name] = {"prob": float(p[0]), "logit": logit, "logmel_mean": float(logmel.mean()), "logmel_std": float(logmel.std()), "frames": int(logmel.shape[1])}
 
     out = {
-        "name": "drone_audio_v0",
-        "about": "Log-mel CNN drone detector trained on DADS (benchmarks/train/train_audio.py). Input: 1 s of 16 kHz mono audio.",
+        "name": Path(a.out).stem,
+        "about": "Log-mel CNN drone detector trained on DADS (benchmarks/train/train_audio.py). Input: 1 s of 16 kHz mono audio." + (f" Training: {json.loads(Path(str(wpath) + '.json').read_text())['args']}" if Path(str(wpath) + ".json").exists() else ""),
         "weights_file": a.weights, "weights_sha256": sha256_file(wpath),
         "frontend": {"sr": audio.SR, "n_fft": audio.N_FFT, "hop": audio.HOP, "n_mels": audio.N_MELS, "window_s": audio.WIN_S,
                      "log_eps": 1e-6, "norm_mean": float(det.norm["mean"]), "norm_std": float(det.norm["std"]),

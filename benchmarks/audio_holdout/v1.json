@@ -1,0 +1,133 @@
+{
+ "model": "models/audio/v1_audio.pt",
+ "model_sha256": "17b88339760745d2f3f35ee9e8595e846a2772883f39e0c87693fdb2520e20bf",
+ "threshold": 0.5,
+ "dads_revision": "981b832c35b45a57518c989f0f79101adb4ae91f",
+ "esc50_source": "ashraq/esc50@e3e2a63ffff66b9a9735524551e3818e96af03ee (Hugging Face mirror; official GitHub archive unreachable)",
+ "dads_test": {
+  "drone_recall": {
+   "value": 0.9961,
+   "ci": [
+    0.9945,
+    0.9975
+   ],
+   "n": 6390
+  },
+  "false_alarm_rate": {
+   "value": 0.0242,
+   "ci": [
+    0.0146,
+    0.035
+   ],
+   "n": 2857
+  }
+ },
+ "esc50_false_alarms": {
+  "all_categories": {
+   "value": 0.1233,
+   "ci": [
+    0.105,
+    0.1425
+   ],
+   "n": 1200
+  },
+  "helicopter": {
+   "value": 0.2083,
+   "ci": [
+    0.0417,
+    0.375
+   ],
+   "n": 24
+  },
+  "airplane": {
+   "value": 0.1667,
+   "ci": [
+    0.0417,
+    0.3333
+   ],
+   "n": 24
+  },
+  "engine": {
+   "value": 0.125,
+   "ci": [
+    0.0,
+    0.2917
+   ],
+   "n": 24
+  },
+  "chirping_birds": {
+   "value": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "n": 24
+  },
+  "crow": {
+   "value": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "n": 24
+  },
+  "wind": {
+   "value": 0.1667,
+   "ci": [
+    0.0417,
+    0.3333
+   ],
+   "n": 24
+  },
+  "rain": {
+   "value": 0.0417,
+   "ci": [
+    0.0,
+    0.125
+   ],
+   "n": 24
+  }
+ },
+ "stress_recall": {
+  "+10dB": {
+   "value": 1.0,
+   "ci": [
+    1.0,
+    1.0
+   ],
+   "n": 300
+  },
+  "+5dB": {
+   "value": 0.9933,
+   "ci": [
+    0.9833,
+    1.0
+   ],
+   "n": 300
+  },
+  "+0dB": {
+   "value": 0.98,
+   "ci": [
+    0.9633,
+    0.9933
+   ],
+   "n": 300
+  },
+  "-5dB": {
+   "value": 0.9233,
+   "ci": [
+    0.8933,
+    0.9501
+   ],
+   "n": 300
+  },
+  "-10dB": {
+   "value": 0.7233,
+   "ci": [
+    0.6667,
+    0.7733
+   ],
+   "n": 300
+  }
+ }
+}
