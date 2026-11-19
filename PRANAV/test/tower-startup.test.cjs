@@ -28,7 +28,7 @@ async function towerStartup(policy) {
     head: { append(node) { assetPaths.push(node.src || node.href); node.onerror(); } },
   };
   document.getElementById('birdCloudReview').checked = true; // Simulate a browser-restored form value.
-  let releaseAuth, socketStarted, verifier, feedOptions;
+  let releaseAuth, socketStarted, verifier, feedOptions, policyReads = 0;
   const started = new Promise(resolve => { socketStarted = resolve; });
   const socket = {
     connected: false,
@@ -57,10 +57,14 @@ async function towerStartup(policy) {
     },
     fetch: async (path, opts) => {
       if (['/api/cloud-evidence-policy', '/api/verify-bird'].includes(path)) reviewRequests.push({ path, opts });
-      return { ok: true, json: async () => path === '/api/cloud-evidence-policy' ? policy : path === '/api/airports' ? { airports: [] } : [] };
+      if (path === '/api/cloud-evidence-policy') {
+        const answer = typeof policy === 'function' ? policy(++policyReads) : policy;
+        return { ok: true, json: async () => answer };
+      }
+      return { ok: true, json: async () => path === '/api/airports' ? { airports: [] } : [] };
     },
     createAlertPlayer: () => ({ receive() {}, clear() {} }), ...incidentHistory,
-    AbortController, AbortSignal, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, window: {},
+    AbortController, AbortSignal, DOMException, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, window: {},
     console: { warn() {} },
   });
   return { document, events, assetPaths, reviewRequests, socket, started, releaseAuth,
@@ -70,9 +74,11 @@ async function towerStartup(policy) {
 const authFixture = {
   airport: 'TEST', socketAuth: async () => ({ token: 'test' }), headers: async () => ({ 'x-api-key': 'test' }),
 };
+const cloudPolicy = { birdJudge: 'gemini', cloudEvidenceEnabled: true, reviewEnabled: true, providerBinding: true };
+const localPolicy = { birdJudge: 'local', cloudEvidenceEnabled: false, reviewEnabled: true, providerBinding: true };
 
 test('only an authorized socket reveals tower data and starts optional loads', async t => {
-  const tower = await towerStartup({ birdJudge: 'gemini', cloudEvidenceEnabled: true, reviewEnabled: true });
+  const tower = await towerStartup(cloudPolicy);
   const { document, events, assetPaths, reviewRequests, socket, started, releaseAuth } = tower;
 
   await t.test('only an opted-in fresh warning speaks; recovery is visible without changing risk', async () => {
@@ -178,12 +184,13 @@ test('only an authorized socket reveals tower data and starts optional loads', a
     cloudReview.listeners.get('change')();
     const ref = { cameraId: 'CAM', streamId: 'live', frameId: 4, trackId: 2 };
     const review = new AbortController();
-    await verifier.judge(ref, review.signal);
+    await verifier.judge({ ...ref, image: 'ignored-fixture' }, review.signal);
     const { path, opts } = reviewRequests.at(-1);
     assert.equal(path, '/api/verify-bird');
     assert.equal(opts.method, 'POST');
     assert.equal(opts.headers['x-api-key'], 'test');
     assert.equal(opts.headers['x-airport'], 'TEST');
+    assert.equal(opts.headers['x-bird-review-provider'], 'gemini');
     assert.deepEqual(JSON.parse(opts.body), ref);
 
     cloudReview.checked = false;
@@ -214,11 +221,11 @@ test('only an authorized socket reveals tower data and starts optional loads', a
 
 test('server review policy keeps the local judge separate and never enables a disallowed cloud review', async t => {
   for (const [name, policy, hasLocalJudge, showsConsent] of [
-    ['explicit local server judge', { birdJudge: 'local', cloudEvidenceEnabled: false, reviewEnabled: true }, true, false],
-    ['no cloud evidence permission', { birdJudge: 'gemini', cloudEvidenceEnabled: false, reviewEnabled: true }, false, false],
-    ['server review veto', { birdJudge: 'gemini', cloudEvidenceEnabled: true, reviewEnabled: false }, false, false],
-    ['server judge off', { birdJudge: 'off', cloudEvidenceEnabled: true, reviewEnabled: true }, false, false],
-    ['legacy cloud evidence policy', { cloudEvidenceEnabled: true }, false, true],
+    ['explicit local server judge', localPolicy, true, false],
+    ['no cloud evidence permission', { ...cloudPolicy, cloudEvidenceEnabled: false }, false, false],
+    ['server review veto', { ...cloudPolicy, reviewEnabled: false }, false, false],
+    ['server judge off', { ...cloudPolicy, birdJudge: 'off' }, false, false],
+    ['legacy cloud evidence policy', { ...cloudPolicy, providerBinding: undefined }, false, false],
   ]) {
     await t.test(name, async () => {
       const tower = await towerStartup(policy);
@@ -233,7 +240,53 @@ test('server review policy keeps the local judge separate and never enables a di
       if (hasLocalJudge) {
         await tower.verifier.judge({ cameraId: 'CAM', streamId: 'live', frameId: 4, trackId: 2 }, new AbortController().signal);
         assert.equal(tower.reviewRequests.at(-1).path, '/api/verify-bird');
+        assert.equal(tower.reviewRequests.at(-1).opts.headers['x-bird-review-provider'], 'local');
       }
     });
   }
+});
+
+test('reconnect discards a pending old policy and never carries Gemini consent to a new connection', async () => {
+  let releaseOldPolicy;
+  const oldPolicy = new Promise(resolve => { releaseOldPolicy = resolve; });
+  const tower = await towerStartup(read => read === 1 ? oldPolicy : cloudPolicy);
+  tower.releaseAuth(authFixture);
+  await tower.started;
+  const { events, socket, reviewRequests } = tower;
+  const checkbox = tower.document.getElementById('birdCloudReview');
+  const connect = async () => {
+    socket.connected = true;
+    events.get('connect')();
+    await new Promise(resolve => setImmediate(resolve));
+  };
+  const disconnect = () => {
+    socket.connected = false;
+    events.get('disconnect')('transport close');
+  };
+  await connect();
+  assert.equal(checkbox.disabled, true);
+  assert.equal(reviewRequests.length, 1);
+  disconnect();
+  assert.equal(reviewRequests[0].opts.signal.aborted, true);
+  await connect();
+  releaseOldPolicy(localPolicy);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(tower.verifier.judge, null, 'a late local policy cannot replace the active connection consent');
+  assert.equal(checkbox.disabled, false);
+  assert.equal(checkbox.checked, false);
+
+  checkbox.checked = true;
+  checkbox.listeners.get('change')();
+  const staleJudge = tower.verifier.judge;
+  assert.equal(typeof staleJudge, 'function');
+  disconnect();
+  assert.equal(checkbox.disabled, true);
+  assert.equal(checkbox.checked, false);
+  await connect();
+  assert.equal(checkbox.disabled, false);
+  assert.equal(checkbox.checked, false);
+  assert.equal(tower.verifier.judge, null);
+  const ref = { cameraId: 'CAM', streamId: 'live', frameId: 4, trackId: 2 };
+  await assert.rejects(() => staleJudge(ref, new AbortController().signal), { name: 'AbortError' });
+  assert.deepEqual(reviewRequests.map(({ path }) => path), Array(3).fill('/api/cloud-evidence-policy'));
 });

@@ -148,7 +148,7 @@ function routeFixture(env = {}) {
     console: { warn() {} },
   });
   f.record(service);
-  async function request(route, { body, airport = f.live.airport, key = TOWER_API_KEY } = {}) {
+  async function request(route, { body, airport = f.live.airport, key = TOWER_API_KEY, provider } = {}) {
     const res = {
       code: 200,
       set() { return this; },
@@ -157,7 +157,7 @@ function routeFixture(env = {}) {
     };
     const handler = routes.get(route);
     assert.equal(typeof handler, "function", `missing ${route}`);
-    await handler({ body, airport, get: name => name === "x-api-key" ? key : undefined }, res);
+    await handler({ body, airport, get: name => ({ "x-api-key": key, "x-bird-review-provider": provider })[name] }, res);
     return { code: res.code, body: res.body };
   }
   return {
@@ -184,23 +184,24 @@ for (const source of ["gemini", "local"]) {
     const f = routeFixture(source === "gemini" ? { GEMINI_CLOUD_EVIDENCE_ENABLED: "true" } : { BIRD_JUDGE: "local" });
     const { body: policy } = await f.policy();
     assert.equal(policy.birdJudge, source);
+    assert.equal(policy.providerBinding, true);
     assert.equal(policy.cloudEvidenceEnabled, source === "gemini");
     assert.equal(policy.reviewEnabled, true);
 
-    assert.equal((await f.post(f.ref, { key: null })).code, 401);
-    for (const extra of [{ image: CROP }, { generation: "detector-a" }, { t: .1 }, { airport: "A" }]) {
-      assert.deepEqual(await f.post({ ...f.ref, ...extra }), {
+    assert.equal((await f.post(f.ref, { key: null, provider: source })).code, 401);
+    for (const extra of [{ image: CROP }, { generation: "detector-a" }, { t: .1 }, { airport: "A" }, { provider: source }]) {
+      assert.deepEqual(await f.post({ ...f.ref, ...extra }, { provider: source }), {
         code: 400, body: { status: "unavailable", reason: "invalid_reference" },
       });
     }
-    assert.deepEqual(await f.post(f.ref, { airport: "B" }), {
+    assert.deepEqual(await f.post(f.ref, { airport: "B", provider: source }), {
       code: 200, body: { status: "unavailable", reason: "unknown_evidence" },
     });
     assert.deepEqual(f.calls, []);
     assert.deepEqual(f.crops, []);
 
     const before = structuredClone(f.live.lastResult.state);
-    const { code, body } = await f.post();
+    const { code, body } = await f.post(f.ref, { provider: source });
     assert.equal(code, 200);
     assert.equal(body.status, "verified");
     assert.equal(body.source, source);
@@ -222,13 +223,31 @@ for (const source of ["gemini", "local"]) {
   });
 }
 
+test("a stale local policy cannot authorize a Gemini crop after the server provider changes", async () => {
+  const local = routeFixture({ BIRD_JUDGE: "local" });
+  const { body: localPolicy } = await local.policy();
+  assert.equal(localPolicy.birdJudge, "local");
+  assert.equal((await local.post(local.ref, { provider: localPolicy.birdJudge })).body.status, "verified");
+  const cloud = routeFixture({ GEMINI_CLOUD_EVIDENCE_ENABLED: "true" });
+  const { body: cloudPolicy } = await cloud.policy();
+  assert.equal(cloudPolicy.birdJudge, "gemini");
+  assert.equal(cloudPolicy.reviewEnabled, true);
+  for (const provider of [localPolicy.birdJudge, undefined, "off", "local, gemini"]) {
+    assert.deepEqual(await cloud.post(cloud.ref, { provider }),
+      { code: 409, body: { status: "unavailable", reason: "review_provider_mismatch" } });
+  }
+  assert.deepEqual(cloud.crops, []);
+  assert.deepEqual(cloud.calls, []);
+  assert.deepEqual(cloud.audit, []);
+});
+
 test("expired evidence and previous detector generations never reach the provider", async () => {
   const expired = routeFixture({ GEMINI_CLOUD_EVIDENCE_ENABLED: "true" });
   expired.expire();
   const retired = routeFixture({ GEMINI_CLOUD_EVIDENCE_ENABLED: "true" });
   retired.live.lastResult.state = { ...retired.live.lastResult.state, generation: "detector-b" };
   for (const f of [expired, retired]) {
-    assert.deepEqual(await f.post(), { code: 200, body: { status: "unavailable", reason: "unknown_evidence" } });
+    assert.deepEqual(await f.post(f.ref, { provider: "gemini" }), { code: 200, body: { status: "unavailable", reason: "unknown_evidence" } });
     assert.deepEqual(f.calls, []);
     assert.deepEqual(f.crops, []);
     assert.deepEqual(f.audit, []);
