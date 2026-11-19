@@ -102,6 +102,14 @@ test('wingbeat: random-walk size -> irregular (not flapping)', () => {
   const a = analyzeWingbeat(series((t, r) => (v = Math.max(8, v + (r() - 0.5) * 10)), 30, 2, 0, 9), cfgW);
   ok(a.kind === 'irregular', a.kind);
 });
+test('wingbeat: a real beat repeats two periods later (repeat check passes)', () => {
+  const a = analyzeWingbeat(series((t, r) => 30 + 8 * Math.sin(2 * Math.PI * 4 * t) + (r() - 0.5) * 3, 30, 2), cfgW);
+  ok(a.kind === 'flapping', a.kind); ok(a.repeat > 0.5, `repeat ${a.repeat}`);
+});
+test('wingbeat: a beat that does not repeat is vetoed, not called flapping', () => {
+  const a = analyzeWingbeat(series((t, r) => 30 + 8 * Math.sin(2 * Math.PI * 4 * t) + (r() - 0.5) * 3, 30, 2), { ...cfgW, minRepeat: 1.01 });
+  ok(a.kind !== 'flapping', a.kind); ok(a.vetoed === 'beat_does_not_repeat', a.vetoed);
+});
 test('wingbeat: tiny blobs are too small to judge', () => {
   const a = analyzeWingbeat(series((t) => 3 + Math.sin(2 * Math.PI * 4 * t), 30, 2), cfgW);
   ok(a.kind === 'too_small', a.kind);

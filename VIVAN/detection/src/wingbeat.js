@@ -50,8 +50,14 @@ export function analyzeWingbeat(samples, cfg) {
   const mass = bySignal.mass;
   const massAgrees = best && mass && (best.signal === 'mass' ||
     (mass.strength >= cfg.peakThreshold * cfg.massSupport && Math.abs(mass.hz - best.hz) / best.hz <= cfg.massHzTolerance));
-  if (best && best.strength >= cfg.peakThreshold && massCV >= cfg.steadyCV && massAgrees) {
-    return { kind: 'flapping', hz: best.hz, strength: best.strength, cv: massCV, signal: best.signal, bySignal, series: normalize(best.series), fs };
+  // 3. The beat must come back a second time. A real wingbeat repeats every period, so the
+  //    signal also matches itself two periods later. A bag's random wobble can line up once
+  //    by chance (one look-alike beat) but rarely twice. Skipped when the window is too short
+  //    to hold two periods with enough overlap (repeat = null).
+  const repeat = best ? repeatCorr(best.series, fs / best.hz) : null;
+  const repeats = repeat === null || cfg.minRepeat === undefined || repeat >= cfg.minRepeat;
+  if (best && best.strength >= cfg.peakThreshold && massCV >= cfg.steadyCV && massAgrees && repeats) {
+    return { kind: 'flapping', hz: best.hz, strength: best.strength, cv: massCV, signal: best.signal, bySignal, repeat, series: normalize(best.series), fs };
   }
   const kind = massCV !== null && massCV < cfg.steadyCV ? 'steady' : 'irregular';
   return {
@@ -61,10 +67,20 @@ export function analyzeWingbeat(samples, cfg) {
     cv: massCV,
     signal: best ? best.signal : null,
     bySignal,
-    vetoed: best && best.strength >= cfg.peakThreshold ? (massCV < cfg.steadyCV ? 'size_too_steady' : 'mass_disagrees') : null,
+    repeat,
+    vetoed: best && best.strength >= cfg.peakThreshold
+      ? (massCV < cfg.steadyCV ? 'size_too_steady' : !massAgrees ? 'mass_disagrees' : !repeats ? 'beat_does_not_repeat' : null) : null,
     series: best ? normalize(best.series) : null,
     fs,
   };
+}
+
+// Correlation of the (detrended) series with itself two periods later, or null if the
+// window can't fit two periods with at least 4 overlapping samples.
+function repeatCorr(x, periodSamples) {
+  const k2 = Math.round(2 * periodSamples);
+  if (!(k2 >= 2) || x.length - k2 < 4) return null;
+  return corrAtLag(x, k2);
 }
 
 // Linear interpolation of values[first..end) onto n evenly spaced times.

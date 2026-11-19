@@ -72,6 +72,7 @@ export const DEFAULTS = {
     hzTolerance: 0.25,    // consecutive beat-rate readings must agree within 25%
     minConsistent: 2,     // ...this many times in a row (2 = three matching readings) before "flapping"
     smoothing: 0.35,      // how quickly the per-track verdict follows new analyses
+    minRepeat: 0.3,       // the beat must match itself again two periods later (bags line up once by chance, wings keep going)
   },
 
   // Debris check (see debris.js): thrown rocks and tumbling debris are not birds.
