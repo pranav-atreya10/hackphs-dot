@@ -176,6 +176,11 @@ class CorpusTest(unittest.TestCase):
         self.write_evidence(evidence)
         with self.assertRaisesRegex(verify.CorpusError, "unresolved duplicates: cross_source"):
             verify.verify_corpus(self.root)
+        evidence["duplicate_audit"]["checks"]["cross_source"]["unresolved_phash_matches"] = 0
+        evidence["duplicate_audit"]["checks"]["train_select_vs_mendeley_and_svanstrom_tests"]["overlapping_groups"] = 1
+        self.write_evidence(evidence)
+        with self.assertRaisesRegex(verify.CorpusError, "source/group overlap: train_select_vs_mendeley_and_svanstrom_tests"):
+            verify.verify_corpus(self.root)
 
     def test_rejects_partial_archive_digest(self):
         self.bundle()

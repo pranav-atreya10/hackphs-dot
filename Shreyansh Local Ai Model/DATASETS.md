@@ -263,8 +263,8 @@ three crop directories, with:
 - `duplicate_audit` with `review` (reviewer and traceable report), `max_hamming: 6`,
   `svan_test_phash_sha256`, `fbd_sv_excluded: true`, and `checks` for `train_vs_select`,
   `cross_source`, and `train_select_vs_mendeley_and_svanstrom_tests`. Each check records positive
-  `items_checked`, zero `exact_matches` and zero `unresolved_phash_matches`. The first two also
-  require zero `overlapping_groups`. Review raw recording/source aliases across sources, not just
+  `items_checked`, zero `exact_matches`, zero `unresolved_phash_matches` and zero
+  `overlapping_groups`. Review raw recording/source aliases across sources, not just
   identical crop bytes or group names. This is verified against the supplied bundle hashes, not
   a repeat of the pixel audit; do not make a receipt from synthetic results or old summaries alone.
 
@@ -272,7 +272,8 @@ For preparation, retain the pinned Mendeley test images and Svanstrom reference 
 `shreyansh_crops_v4\svan_test_phash.npy` (nonempty `uint64` vector, derived from the frozen clips).
 `common.leak_check` requires both and checks the Mendeley image SHA-256s before computing pHashes.
 Mendeley's published train and test still share underlying Pexels recordings; that score is not
-independent. **Do not place FBD-SV in staging, training, selection, or the duplicate audit.** Keep
+independent. If the audit cannot clear recording-group overlap, do not issue a passing receipt.
+**Do not place FBD-SV in staging, training, selection, or the duplicate audit.** Keep
 the frozen FBD-SV assets separate for the final unseen-source headline and grouped confidence ranges.
 
 Do not run the legacy download/prep scripts against an existing data folder: several delete raw or

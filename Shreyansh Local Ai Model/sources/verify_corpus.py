@@ -233,9 +233,8 @@ def _evidence(data, files):
                  and all(type(check[k]) is int and check[k] == 0
                          for k in ("exact_matches", "unresolved_phash_matches")),
                  f"Missing checks or unresolved duplicates: {scope}")
-        if scope != AUDIT_SCOPES[-1]:
-            _require(type(check["overlapping_groups"]) is int and check["overlapping_groups"] == 0,
-                     f"Unresolved source/group overlap: {scope}")
+        _require(type(check["overlapping_groups"]) is int and check["overlapping_groups"] == 0,
+                 f"Unresolved source/group overlap: {scope}")
     return evidence
 
 
