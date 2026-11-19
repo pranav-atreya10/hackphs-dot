@@ -1,4 +1,4 @@
-// One audible announcement per incident, even if ElevenLabs arrives after the local fallback.
+// One audible announcement per incident (alarm, then the browser's voice; server audio is played if a message ever carries it).
 export function createAlertPlayer({ enabled, alarm, playAudio, speakText, showText, waitMs = 5000, setTimer = setTimeout, clearTimer = clearTimeout }) {
   const alerts = new Map();
   async function finish(state, audio) {

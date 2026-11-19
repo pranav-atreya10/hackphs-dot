@@ -483,3 +483,15 @@ The server waits 5 s and gets no answer, which is what a paused Tiger Cloud serv
 ran out). The app keeps working without it, but detections aren't logged and the hourly chart stays empty. Fix it in
 the Tiger Cloud console (resume the service or add billing); if the connection string changes, update `DATABASE_URL`
 in DigitalOcean. Also seen on `/health`: Gemini returns HTTP 401 (key rejected) and ElevenLabs has a provider error.
+
+## ElevenLabs removed
+
+Spoken tower alerts now always use the tower browser's own voice (`speechSynthesis`); no key or outside service.
+- `ai-voice/voice.js`: the ElevenLabs request and audio cache are gone; it keeps the alert sentence and the cooldown.
+- `ai-voice/pipeline.js`: red alerts go out with `voice_pending: false`, so the tower speaks them at once instead of
+  waiting up to 5 s for server audio. `/health` shows `voice: "browser voice"`.
+- `ELEVENLABS_*` settings removed from `config.js` and `.env.example`; any left in DigitalOcean are ignored (safe to delete).
+- Website, film captions and the assistant's description now say "browser voice" (also updated in `ATHARV/skysentry/dist`
+  so `npm run sync-web` doesn't bring the old text back).
+- `SHREYANSH/` and `ATHARV/skysentry/app/` (the original prototypes, not run by the site) were left as they are.
+- Tests: the ElevenLabs test was replaced by one checking a red alert is spoken straight away, once. 91/91 pass.

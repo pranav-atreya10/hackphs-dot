@@ -42,6 +42,6 @@ Clerk UI loading follows the [official JavaScript quickstart](https://clerk.com/
 
 ## Sponsor service readiness
 
-In DigitalOcean App Platform → Settings → web → Environment Variables, add encrypted `ELEVENLABS_API_KEY` and `GEMINI_API_KEY` values, plus an available `ELEVENLABS_VOICE_ID`. Save and wait for redeployment. Never commit keys. `/health` reports browser voice or template mode until these are present. In Tower, select **Turn on alert sound** and send a demo threat to verify actual ElevenLabs playback. The server requests MP3 speech and caches repeated phrases; browser speech handles unavailable or slow responses. A configured key alone is not proof of a successful provider response.
+In DigitalOcean App Platform → Settings → web → Environment Variables, add an encrypted `GEMINI_API_KEY` value. Save and wait for redeployment. Never commit keys. `/health` reports template mode until it is present. Spoken alerts use the tower browser's own voice (no key needed): in Tower, select **Turn on alert sound** and send a demo threat to hear it. ElevenLabs was removed; any `ELEVENLABS_*` variables left in DigitalOcean are ignored and can be deleted.
 
 For Solana, confirm one devnet memo transaction and compare its report hash before claiming an on-chain stamp works. Database health checks confirm connectivity; show a stored camera event, hourly chart and retrieved incident to demonstrate the complete Tiger Data and MongoDB workflows. The DEV writing challenge requires a separately published project story.

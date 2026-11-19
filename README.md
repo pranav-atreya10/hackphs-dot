@@ -30,7 +30,7 @@ The first time someone opens the **Tower** or **Camera** page, a short guided to
 
 ### How an alert travels
 
-Camera (browser or iPhone app) → streams frames to the server → the server bot runs the detection engine (`VIVAN/detection`), or the camera or tower runs it if the server is busy → a yellow or red alert goes to the tower live. It's spoken with ElevenLabs (or the browser's voice), checked and written up by Gemini, stored in MongoDB (incidents) and Tiger Data (every detection, for the hourly chart), and drone reports are stamped on Solana devnet. Only a *new* alert becomes an incident; a camera's 2-second repeats don't.
+Camera (browser or iPhone app) → streams frames to the server → the server bot runs the detection engine (`VIVAN/detection`), or the camera or tower runs it if the server is busy → a yellow or red alert goes to the tower live. It's read out loud by the tower browser's voice, checked and written up by Gemini, stored in MongoDB (incidents) and Tiger Data (every detection, for the hourly chart), and drone reports are stamped on Solana devnet. Only a *new* alert becomes an incident; a camera's 2-second repeats don't.
 
 ## Run it locally
 
@@ -58,7 +58,6 @@ Other scripts: `npm run db:setup` (create the Tiger Data table and hourly rollup
 | `MONGODB_URI` | Incident reports, admin-created airports, switch requests. |
 | `DATABASE_URL` | Tiger Data (TimescaleDB): every detection and the hourly chart. |
 | `GEMINI_API_KEY` (`GEMINI_MODEL`, `GEMINI_BACKUP_MODEL`) | Snapshot checks and incident reports. Without it, reports use a template. |
-| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (`ELEVENLABS_MODEL`) | Spoken tower alerts. Without them, the browser's voice is used. |
 | `OPENAI_API_KEY` (`OPENAI_MODEL`, `OPENAI_GUIDE_MODEL`) | Tower assistant and the landing-page chat. |
 | `SOLANA_SECRET_KEY` (`SOLANA_RPC_URL`) | Devnet stamp on drone reports. |
 | `SERVER_BOT`, `BOT_PRESET` | Server-side detection on streamed video (`on` by default). |

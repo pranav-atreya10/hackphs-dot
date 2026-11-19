@@ -1,9 +1,9 @@
 // Adapter of SHREYANSH/pipeline.js for PRANAV's incident persistence and tower protocol.
 const config = require('./config');
 const ai = require('./ai');
-const { createVoice, createRateLimit, buildAlertText } = require('./voice');
+const { createRateLimit, buildAlertText } = require('./voice');
 const { createSolana } = require('./solana');
-function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQuestion, voice = createVoice(), solana = createSolana(), shouldAlert = createRateLimit(), settings = config } = {}) {
+function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQuestion, solana = createSolana(), shouldAlert = createRateLimit(), settings = config } = {}) {
   // create() stores the incident; it's only called for a new alert. Cameras repeat a yellow/red event every couple
   // of seconds, and those repeats (inside the alert cooldown, same or lower risk) are not new incidents.
   async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit }) {
@@ -20,12 +20,9 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     };
     send('incident', incident);
     // Visible warnings are emitted before the first await; provider latency cannot delay them.
+    // The tower speaks alertText with the browser's voice straight away (no server audio).
     if (ev.risk === 'red') send('alert', { id: ev.id, incident_id: ev.id, text: alertText, audio: null,
-      voice_pending: Boolean(settings.ELEVENLABS_API_KEY), risk: ev.risk, type: ev.type, time: ev.receivedAt });
-    const voicePromise = ev.risk === 'red' ? (async () => {
-      const audio = await voice.speak(alertText);
-      send('alert_update', { id: ev.id, incident_id: ev.id, audio, audio_failed: !audio, voice_pending: false });
-    })() : Promise.resolve();
+      voice_pending: false, risk: ev.risk, type: ev.type, time: ev.receivedAt });
     const reportPromise = (async () => {
       const report = await analyzeEvent({ ...ev, object_count: ev.flock_size || ev.object_count });
       const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
@@ -40,7 +37,7 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
         await persist(stampFields);
       }
     })();
-    const result = await Promise.allSettled([voicePromise, reportPromise]);
+    const result = await Promise.allSettled([reportPromise]);
     for (const row of result) if (row.status === 'rejected') console.warn(`[pipeline] ${config.redact(row.reason?.message || row.reason)}`);
     return true;
   }
@@ -51,12 +48,12 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     const g = ai.geminiState || {};
     return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
         lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
-      elevenlabs: voice.health(), solana: solana.health() };
+      solana: solana.health() };
   }
   function status() {
     const h = health();
     return { gemini: !h.gemini.configured ? 'template' : h.gemini.lastError ? `failing (${h.gemini.lastError})` : h.gemini.lastSuccess ? 'live' : 'configured',
-      elevenlabs: h.elevenlabs.lastError ? 'browser voice (provider error)' : h.elevenlabs.lastSuccess ? 'live' : h.elevenlabs.configured ? 'configured' : 'browser voice',
+      voice: 'browser voice',
       solana: h.solana.lastError ? 'hash only (stamp error)' : h.solana.lastSuccess ? 'live devnet' : h.solana.configured ? 'configured devnet' : 'hash only' };
   }
   return { processIncident, answerQuestion, health, status };
