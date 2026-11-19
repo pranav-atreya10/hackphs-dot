@@ -1,0 +1,2326 @@
+{
+ "source": "Zenodo 5500576 Drone-detection-dataset-v1.0.0.zip (CC0 1.0), visible videos; YouTube-sourced clips test-only",
+ "seed": 31,
+ "clips": [
+  {
+   "clip": "V_AIRPLANE_001",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_002",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_003",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_004",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_005",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_006",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_007",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_008",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_009",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_010",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_011",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_012",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_013",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_014",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_015",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_016",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_017",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_018",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_019",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_020",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_021",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_022",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_023",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_024",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_025",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_026",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_027",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_028",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_029",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_AIRPLANE_030",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_031",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_032",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_033",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_034",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_035",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_036",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_037",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_038",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_039",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_040",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_041",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_042",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_043",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_044",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_045",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_046",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_047",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_048",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_049",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_050",
+   "cls": "AIRPLANE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_051",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_052",
+   "cls": "AIRPLANE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_053",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_054",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_055",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_056",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_057",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_AIRPLANE_058",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_AIRPLANE_059",
+   "cls": "AIRPLANE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_001",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_002",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_003",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_004",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_005",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_006",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_007",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_008",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_009",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_010",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_011",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_012",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_013",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_014",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_015",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_016",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_017",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_018",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_019",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_020",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_021",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_022",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_023",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_024",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_025",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_026",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_027",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_028",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_029",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_030",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_031",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_032",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_033",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_034",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_035",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_036",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_037",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_038",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_039",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_040",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_041",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_042",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_043",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_BIRD_044",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_045",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_046",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_047",
+   "cls": "BIRD",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_BIRD_048",
+   "cls": "BIRD",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_049",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_050",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_BIRD_051",
+   "cls": "BIRD",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_001",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_002",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_003",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_004",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_005",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_006",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_007",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_008",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_009",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_010",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_011",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_012",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_013",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_014",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_015",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_016",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_017",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_018",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_019",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_020",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_021",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_022",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_023",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_024",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_025",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_026",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_027",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_028",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_029",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_030",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_031",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_032",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_033",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_034",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_035",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_036",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_037",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_038",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_039",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_040",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_041",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_042",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_043",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_044",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_045",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_046",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_047",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_048",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_049",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_050",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_051",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_052",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_053",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_054",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_055",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_056",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_057",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_058",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_059",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_060",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_061",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_062",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_063",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_064",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_065",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_066",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_067",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_068",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_069",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_070",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_071",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_072",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_073",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_074",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_075",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_076",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_077",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_078",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_079",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_080",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_081",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_082",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_083",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_084",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_085",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_086",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_087",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_088",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_089",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_090",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_091",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_092",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_093",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_094",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_095",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_096",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_097",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_098",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_099",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_100",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_101",
+   "cls": "DRONE",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_DRONE_102",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_103",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_104",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_105",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_106",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_107",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_108",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_109",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_110",
+   "cls": "DRONE",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_DRONE_111",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_112",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_113",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_DRONE_114",
+   "cls": "DRONE",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_001",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_002",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_003",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_004",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_HELICOPTER_005",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_006",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_007",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_HELICOPTER_008",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_009",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_010",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_011",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_012",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_013",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_014",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_015",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_016",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_017",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "select"
+  },
+  {
+   "clip": "V_HELICOPTER_018",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_019",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_020",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_021",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_022",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_023",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_024",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_025",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_026",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_027",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_028",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_029",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_030",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_031",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_032",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_033",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_034",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_035",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_036",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_037",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_038",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_039",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_040",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_041",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_042",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_043",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_044",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_045",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_046",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_047",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_048",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_049",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_050",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_051",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_052",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_053",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_054",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_055",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_056",
+   "cls": "HELICOPTER",
+   "distance": "CLOSE",
+   "youtube": true,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_057",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_058",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_059",
+   "cls": "HELICOPTER",
+   "distance": "DISTANT",
+   "youtube": false,
+   "part": "test"
+  },
+  {
+   "clip": "V_HELICOPTER_060",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  },
+  {
+   "clip": "V_HELICOPTER_061",
+   "cls": "HELICOPTER",
+   "distance": "MEDIUM",
+   "youtube": false,
+   "part": "train"
+  }
+ ],
+ "video_sha256": {
+  "V_AIRPLANE_001": "6bb61e33c12f48a19dcfb77293ac000626c18a18326957ead37101d31c91a143",
+  "V_AIRPLANE_002": "52fcf8f1906bd4885d9728cb0ae2090bebd5880d863dfc0a4eee824dba95d41f",
+  "V_AIRPLANE_003": "939fbc3c2616ec317ea81e32e048be4a48d90981abbfe2786731664ba8261bfc",
+  "V_AIRPLANE_004": "940f2243e5a22701c28229b077347026f539070552254dc62be275819f47df9f",
+  "V_AIRPLANE_005": "806fb14b22381f43a465a240770166ec4dab36d6acc865d8de64cd74c08581ac",
+  "V_AIRPLANE_006": "0cabc81f8162b8da7185b3cffeebcc4b13165bc54331b4bc70b07f890f315a82",
+  "V_AIRPLANE_007": "1eeb5cc4d5511e1e79ecfc8f2b582a69753f63654494cc79f1dec432232cee7a",
+  "V_AIRPLANE_008": "da44b0d3e78f6c7f28edcb8a43b88dceeb28d0d099be72bc81154e3c3b00989b",
+  "V_AIRPLANE_009": "f766df6522c1b3af93eda345bb68906e321dd526e491842f917155276613491b",
+  "V_AIRPLANE_010": "897b2d3dfa82001465c1daf8da1d1dd988becbc6acdfeb70e668a7fdc86caf4c",
+  "V_AIRPLANE_011": "16d192ebac3ad7173b7b0d12e390e30bdb55b44222da9724dd879aab2eacba63",
+  "V_AIRPLANE_012": "4d5baaccca0a93253f2b1241fcaa71fc7a7c2535bdcbef0f6a9df97ec6464480",
+  "V_AIRPLANE_013": "26c7f2a50f67c3055b6fe131e809ca0a830290137a93ccf3a4107731fe68a33e",
+  "V_AIRPLANE_014": "35454a010dcfe649f92b2efb044537ace63e278b642c4f3a512995aaf591997b",
+  "V_AIRPLANE_015": "c193486b5575d1876577f65c222af207db439ab3b952fbcca21eb87d32ef6c54",
+  "V_AIRPLANE_016": "216faa00297f9108f623c4a8a9177c6b1a133da1252d94a3691d3255a5267338",
+  "V_AIRPLANE_017": "9c48eabe39b55bb7f88003fc1f39ca2a4fa90e759fc85324fcb84861312aa2f9",
+  "V_AIRPLANE_018": "167ac7c33956129717860d7c36da101c9b74cdaae5ef3705b411957212c8746b",
+  "V_AIRPLANE_019": "c086709092fa001593298e04c38430d7ddb2cd45770281304d6e4c4125112d0a",
+  "V_AIRPLANE_020": "a4b93e97232e6a6fd625e139dac4a0745c39e41fc1e0b4fc0aee4d0ad1b1c24c",
+  "V_AIRPLANE_021": "f57201e109ce495c0642de0b8353ef0b447ecc7e79526b07de593e72b39184c4",
+  "V_AIRPLANE_022": "196746503d22c6a1963ea6dce80b67c7dcb594602a264271d982032b66b6886b",
+  "V_AIRPLANE_023": "e6fc836b34aeb717cb825403fadcdaf7658a209d434428dce966c656d3d2abc2",
+  "V_AIRPLANE_024": "842ac071cf8577973b2fd5fdfbf7f897fb280ee9b08a179f1d554beb7465e591",
+  "V_AIRPLANE_025": "7ab07f77ac3664292c66b0c9896d217b9f5245f4c3a687aaa943de3af4214f9c",
+  "V_AIRPLANE_026": "41ffc23aa7e4812972dedcac08ecbb902ede9b26d87eed97968f27be5c57cfa5",
+  "V_AIRPLANE_027": "c221ab67540d1e4d8695d412390e5786c30684eb47f6589855d85b0e8a3b7043",
+  "V_AIRPLANE_028": "bd879a0ca6e07d88c06215c16f3aa3dccc2b75cd972c26a13a39b4042ee18b77",
+  "V_AIRPLANE_029": "11266bddd7e189705c38443739670f870c0281907860bab28b95217a234bd9fc",
+  "V_AIRPLANE_030": "72c968ed14bcb49208b28e0d423825dcfbfcf33a5ec31d80059839758ed81759",
+  "V_AIRPLANE_031": "458b5d76da7e4c44e40220b86a2ced7d34fda0b7a638ecb5b33fc23c96a376ee",
+  "V_AIRPLANE_032": "6ee96a528f6a9b650d53df63bb48af1f4e583eccee2dd4c6e1949541cc329d50",
+  "V_AIRPLANE_033": "f4dd40c440965276def0d679e18c77d27be2f3af8149af5454943106907af501",
+  "V_AIRPLANE_034": "b075b7efc9c21230e5e753aff00d93c6fa2e8a1392c25f5767357f12e456f643",
+  "V_AIRPLANE_035": "1deb9ce660ce85f961be7cd236db6965665332654f0d82b16e94e5907f58f0a4",
+  "V_AIRPLANE_036": "6b548a1d5fff59403c1d2aa2c8c97e895c21cb0435dcd3b079b719096307b87d",
+  "V_AIRPLANE_037": "da17efed7153d388dc807274704b857838c6f10eff8941c6f9f0da27496f787b",
+  "V_AIRPLANE_038": "9974c038cafd6455f4ee534136aefd79cfed056f83031d4542fa4e4e01e686b1",
+  "V_AIRPLANE_039": "8a84243b755dc0de5e7de1ed04edbe2ed61aaccf66126190eab9dba2798be99a",
+  "V_AIRPLANE_040": "037a4bcff159c9b1f84192362c8c07550b92fefe278865beb4d09ca2350bc646",
+  "V_AIRPLANE_041": "1108149fc9ebbe2aba16975255d0e0c3c3583866dc394106907cbf6a1b5b0bfa",
+  "V_AIRPLANE_042": "8317f691fa7840d8cdd0fe3246abeee0085a326063d5a0dbfed13a0ef7cc5e37",
+  "V_AIRPLANE_043": "008274b63ddd4a361a1ce39f6c77b45ea0a092127a709c980cc1456776a10c31",
+  "V_AIRPLANE_044": "10d2836f14d4377204f6b5863f1e16461b601fb66809407e7a677c21e0561299",
+  "V_AIRPLANE_045": "8e6f3f0391b87b4483287d019d70cb821bcbf31b7e373b68d3b92219ca80a823",
+  "V_AIRPLANE_046": "7b97d41422261d596c363a409870e3dfc58b380b96bf9dc2478146c5c28b57fd",
+  "V_AIRPLANE_047": "1f53634e0a46c647bd42f346015a657c4da774819cdf43cd84d3d928e3467435",
+  "V_AIRPLANE_048": "c2f542ec9080401ec7b23d5631b4f8e8fa2f21bf8ab59ef5ebccf460745942ed",
+  "V_AIRPLANE_049": "ba66f91c66dae9d9d8bcab76f6f556d1f58bfe348ee60c6d064fb79a2862d5e4",
+  "V_AIRPLANE_050": "c9392aff41064bb1fc7eba69c9b2af9ace91e0a9c1f1b9ec68c136906a50aacd",
+  "V_AIRPLANE_051": "87c7ae2376e18a8392fd256fec6b3647a71aa77aca378f59d870d5592d99f13e",
+  "V_AIRPLANE_052": "8ea36a9a854f136c5e9fe07e2d1c9e65490d5b039dd8fa66483444607d2f9b9c",
+  "V_AIRPLANE_053": "5c7fa73cdf76ed53440fa6365b8653953ce89f68d1d61f771d487b3e88fcd73d",
+  "V_AIRPLANE_054": "126bad200e0ce6f15b1ddc85059acc2a1a68d85910b5a28055084df765d7269c",
+  "V_AIRPLANE_055": "e60e1314d5b4306047d10e210614047dffc74032775026dd196cebfb03fe0b07",
+  "V_AIRPLANE_056": "8f2649e419fdaf57bbc637b246d85b169c1b024dfe05117763aa7ce1607f9dad",
+  "V_AIRPLANE_057": "2abeec540065eb03fff5792d9b94f7e9621e5b9263cdba5164a5ff6743474e68",
+  "V_AIRPLANE_058": "9215e03a8430190da27a6ab6f427597b693cc68c3ba05edde04eb93d98dbacb2",
+  "V_AIRPLANE_059": "129848a098e14a79c520bc2bcf83423bedd9ff5de8eebeb9d17aa2f6d9635973",
+  "V_BIRD_001": "062059c958360e552fa475f73ad32431441abc3970939e6a12f464a76d1095bf",
+  "V_BIRD_002": "67ba35cdbbd6da16489f81c2afbbfd7b53b1189c763254f30083dedf0b8ec0f9",
+  "V_BIRD_003": "502229dcf0c3633148e97635fcbc8a2bec520b091da3735a51ee6c7b06e074f4",
+  "V_BIRD_004": "8e34b28eb0ea0fc31a9b01c0045fb99e4f8e70298a626de284204608ce414d8e",
+  "V_BIRD_005": "80a8b3d5b1fe0e250ad8a2f65705e359ad25c2689d45a3918af81975d7e549f9",
+  "V_BIRD_006": "10f75fbc578ac9140f83c34a60ceef99627e536cc0613655313fcb852d7961a8",
+  "V_BIRD_007": "2c9bb9d292fd974393f0459c6e908e6270ef08b88a44e50e5967b4cd877a0684",
+  "V_BIRD_008": "7e9d66e6ba4412b5cfe8a16ae9c261b9be80b9228aad41602f181b889342c1b6",
+  "V_BIRD_009": "bfa0754d18c7c261d3e9583a4fa061f987ee37d86f9537173d72079d779b42a8",
+  "V_BIRD_010": "7f8c92db84178290ad5a52fb9b303491f1d954664ae09ab4e639840819fad090",
+  "V_BIRD_011": "728c9aa96dd2adc636897e1ed9721fc1100f06612158393064bee2c823b11eac",
+  "V_BIRD_012": "3386d0accd33d7c67ef83aae3bdcd9e03c4ba4085d2d418275f316a9ea908cbc",
+  "V_BIRD_013": "4ce59a2e00b85b01a215e42f1695730155e5516e285e74bb8dd3f13f6bdc18b7",
+  "V_BIRD_014": "6c2e3d5c8582fb8e5e6908665657ac0d5d1c6dc8878e22ee50f02fb894bd1242",
+  "V_BIRD_015": "fc11e3c8d08ecc960912e4045c16be2a1f78b4e55de51b03e9c615b29daf7eda",
+  "V_BIRD_016": "987ce264e35f49cfca2cf1f762e0d9048a9c79f6fc4405a9f4cfe99ece74c2ec",
+  "V_BIRD_017": "3b84f8e3d451a7edeaf1471a166ce29ba9b1629bb7ddab6c9975e0dfc776a4d1",
+  "V_BIRD_018": "3503b73e7a0a4e1f44e868a03cc9cbe303e6cf92877cd4abf903836790afbf7b",
+  "V_BIRD_019": "15491de3633dd91e666f444c21ef3dbe32cf2cb471debd29cf95ca430dd36f62",
+  "V_BIRD_020": "9fc863a4b784d55f56b405aa98ac3b3635d71d4b59a0709d276aca1b7ca1abe4",
+  "V_BIRD_021": "a7fab224f044db9abdd70a297e558b3401682154899dee347bcb402aa6a6df08",
+  "V_BIRD_022": "c1b367f025032737fb41c89ab9dcaa178cb202661bd3c4fe441df26ef328c69a",
+  "V_BIRD_023": "57f948eb4b5b058e4c1d15cf5c0986971a14cb4a5f08b70b79728455343ab62a",
+  "V_BIRD_024": "8842733aff3d83b5c6c0d732fb2e6429cc1c6136d28bc3fd8efb37632c3c8393",
+  "V_BIRD_025": "a91ae13080298be51e76931d53d7d7dab723a08d9f13297f9cdd7b2141da7e98",
+  "V_BIRD_026": "4d5c7ebdef74ea3230222fd84f0248d07dac98e247e497d00e5eb0656b3d4eda",
+  "V_BIRD_027": "3e2419e91254d653bcf80a13f340333a3006f6498e80c1bc7cf89b00ffa595c7",
+  "V_BIRD_028": "5d501712057e799f6427ec48b77b696c589dda9599ece964375eb9688f2d67eb",
+  "V_BIRD_029": "7101faa4b55d463e35a0c9d44f7d37a1e5f1319a364aae6f6c27cb3ee42ca969",
+  "V_BIRD_030": "3c284836c34705822a50342fa1f49f906aff22a0e297201c4c5f341288bd9a91",
+  "V_BIRD_031": "a72b2f5ba2bd275feaeaf489c5bf780d32ec82173e7917774b4280f9a46b8d72",
+  "V_BIRD_032": "8e05ae6c74c91a8f38f84d174e4337d0243712d4c8409023543c4503301d01c2",
+  "V_BIRD_033": "1c027c70ab7b993f94551f35aca27636aca71bf83ffcba8a3e68661aacd96cd4",
+  "V_BIRD_034": "aa1cddf6b7007a71b08fef9f22e61a48be536330f625bbe7c13460f5a4326ac6",
+  "V_BIRD_035": "541e6b09589fe3a3dced28bbb65004826cddac37fec9c8d67b5c3540e1f998c5",
+  "V_BIRD_036": "5a20b9896e45bedf454b4c947098346c6136700ac07604f7ba1b9263e8277cc3",
+  "V_BIRD_037": "8ac04b4e42bde4b2b8ac12fa8abd190e88720a02ac4738eee47a37a38605c483",
+  "V_BIRD_038": "5a9383870d95aa52d2725fb0b9e535931d3470ad65dc76d28cd5aa7478297fcc",
+  "V_BIRD_039": "59214757059d0c5a5e3ce0b41b514f60800cc8cf299fbad164e5cda57372e119",
+  "V_BIRD_040": "7536665f438a0ed21bf6b6ad29472a4f238f9af427b0b605de911ed61a5eea24",
+  "V_BIRD_041": "9331c32679a4c6e9c5dbbad0a44afbc88763ab3e58692a5a895f3058b569eda0",
+  "V_BIRD_042": "f4b19a0ca4744ea44922d97efabc8b2ad0be24741c4b40e059dca67d3ce7da6e",
+  "V_BIRD_043": "f251c60f6a9a733a4d6df2a5fd22017bacb303bddb126762824a4e56cd671b17",
+  "V_BIRD_044": "5f0955bbb158b65329537cfeb5b8f2a07a47724ea897f88121277d8509355955",
+  "V_BIRD_045": "a7e806a5adfce6fbda8539926067304bfad4c65ae3ecb0b1b52e0ec152d9dc7f",
+  "V_BIRD_046": "4ba826a40f33b525faae3cdb0d9a71dc9f71e9b4c4eab5341400bcb8e0d1be2b",
+  "V_BIRD_047": "a3de91bad0498abaaef5cbb38b540160c75c06611c6e10a91fc1323fd98cc23b",
+  "V_BIRD_048": "ab536cf4f1b8c69a6bdfd20778fc7a082097f9c3e86e39c4de9a16b7bddaaa22",
+  "V_BIRD_049": "ae334ec0c266b29ccb84dab0a96bb69c605112cbfdd10a20ec5d9c67e57fbd5a",
+  "V_BIRD_050": "0d419e633bd60576dc548a623f179aa1ae8e835b11fa7bbf1289ac90a6e3ef2f",
+  "V_BIRD_051": "6f34fabe7221e50980a6ec24164b6d3ac16208e62ce84410c54c61f250a240f8",
+  "V_DRONE_001": "9db5a800377c01db8369dfba808d400ca52cd393e0a32850e1d20a4861eaecbe",
+  "V_DRONE_002": "084a8c3bc4e6058cc7df23d00f464add64a07ba0210633b62bfbdb7611a4b60c",
+  "V_DRONE_003": "83ef865c589cfb98a09b8a7a102eca119b807dbb373bd29909f1048a4ad732a7",
+  "V_DRONE_004": "30d5ffe6ff11621cc18f3d95aaf9464d12e6013cd6069054ec0f68c7f96880f3",
+  "V_DRONE_005": "77c872f4799892a17e6b31e30622e0728840a7f7b95111c3096368369dcda317",
+  "V_DRONE_006": "969f9bda01bf4e91881c647dc8e3757a27530fcfa6966686ee026f3e39737e7a",
+  "V_DRONE_007": "9bedc255ae673dfcf7292c2ea81dd74fbd8cd902d31a971a5cab089e81e17cf0",
+  "V_DRONE_008": "e4045d9ce6d492a1e074d8f8edb95c58ccbd9370d6145fd82c3bd02bdb15cbfa",
+  "V_DRONE_009": "4f3e7908e2f46d9e41a4e73baf4a8d9152551e7c7dfb46d0a72d059fc16defbd",
+  "V_DRONE_010": "4a857dfe16e123fc8375b8e730ad0c7f398f5defc14d50e41ade819dde92355e",
+  "V_DRONE_011": "5e558503f301acff7c557b84a86ca2591d0e5690cd312fa694d1304287f583ac",
+  "V_DRONE_012": "e12dc2c25aaec8d2002103160b0f1c2b448eea2a9e48ad083168fb8f86d29019",
+  "V_DRONE_013": "6051c760d8e2b76c095ccac2a1808a15e3b8c9fda80a7bcdbfca618f338406c7",
+  "V_DRONE_014": "b2908a812dc6a7b10f1ddff115bda6ef2b8f60440a13b7899c332d72b07cb6fa",
+  "V_DRONE_015": "f68d15d145ce8ac5f931a9d40681b79d405a61a3468294de145044cfd4fac8f3",
+  "V_DRONE_016": "aa8d0956186dd50c6ffc63414aa167ce5f2c94760960e964fff574c95582dd2a",
+  "V_DRONE_017": "7ea6d6467e005fff7d4e14818bd2c48a78915e9b869de9693550cb017e2f18c4",
+  "V_DRONE_018": "4837846a2fcd2dee1d528749337bd94d804135964c6305a9fbbc2597f8792766",
+  "V_DRONE_019": "1936f82d7acfc4447c33c5e69eceb3893abc5fa9c8647296ef832cc62817c8b9",
+  "V_DRONE_020": "685b5c8228e0ca8c8737547607caac4b534daac2e0f412552739bb231ad18b02",
+  "V_DRONE_021": "323c40cc639161ea537c48a6992f104d08fea53bed1880bee71d8c4ae186e3a2",
+  "V_DRONE_022": "b9e81d277f2c2cd9dd15adbc70aa62c61ec7488dc69e7bc734c5f040c6ff5308",
+  "V_DRONE_023": "5750b18edd6c4ad622baf8ff4215cfd6fbf422d212ee688aa55c055ffada94ed",
+  "V_DRONE_024": "51a48c0214dead7dbfd9954ee9b3348eb258d29328c06553a8222b95157bc360",
+  "V_DRONE_025": "ca4b8485ece6cfe45e11242f0d72548747e23206edbc88949c02d1385ae9944d",
+  "V_DRONE_026": "6e4c40f5a4b0c272b23d1e6e958530f4f67d879c950203ccd76a02a042b9f203",
+  "V_DRONE_027": "ae0e55cc59c9f7be52fb3108d622af6ff2b8a3119ac986f4c14d8dc44fce0806",
+  "V_DRONE_028": "6701f4df402cddc285b3b3cf4be64d63d2fc91d858366d3ffcf84238c232d8ac",
+  "V_DRONE_029": "2b0d01cd88bce7be66014ce7bf7641ec63d20348e9ce5035c34f88a65cabe9a5",
+  "V_DRONE_030": "5123d21a3e333feae98fc58b8bc991cc9426efe66a6352c962380bc8e30e0935",
+  "V_DRONE_031": "b350e2417d4940a4bfdaf8391a5c3de16a4ade286b2c9f03083e4f1743a19e84",
+  "V_DRONE_032": "934a8723663b2d3ea5505f4ca6639dc3829a4f8554cb0b695f0491aa12e71834",
+  "V_DRONE_033": "784f1365d7db9e9522d3ad7fd121bc3fe4c7bd65d0c50ada9e844b162a1b6d96",
+  "V_DRONE_034": "3692cd5c33497f60ff3bc6e08e5117bb0148eee94f7648c9143958e96938d83d",
+  "V_DRONE_035": "1c6a97534014ed5f24d995e511b114bf9afbf7288108ce463091d8e79cce0859",
+  "V_DRONE_036": "1dd329a43fbe5396d41187467ae0dbd3ed7dbd6ba2b138041bd3ed81fe25aba6",
+  "V_DRONE_037": "a4e6cb2461e5528408d31dab699836623d6909231bb2aad2cc7e711829b9fd4b",
+  "V_DRONE_038": "4c7e5a9d6f6a48f25f1fc5c2b49a83ec625bef2c8a96bf0a938536f7b3362339",
+  "V_DRONE_039": "be8f122c417d0960dfdcbca635d7264591e517fa5b4c8c05456b2fa0ad01d603",
+  "V_DRONE_040": "566a3c3431aa126ea192d6b6f2dd10806df367d4efba5659eab48da76c5e75ea",
+  "V_DRONE_041": "17ce12c6ec80426008f301c235fbe17b025e27e93d55a396ed09939514bae7b8",
+  "V_DRONE_042": "5c6ae1a4da7074f7407d50e5e6e87213fda353699fb40505c63c0ed08e4519f3",
+  "V_DRONE_043": "c929f6dfaac3313a70d4189caa0d1fa5e23e4d4971672189cfe11d38df8dfefa",
+  "V_DRONE_044": "d4b54f9f0e48ec5b185ddc93454dcd5575035415010e6e6f1ada2c17feb0115d",
+  "V_DRONE_045": "93c6adb0f875c28ddf1f9576bad46b98b4b9f69f3aea252098c25259ef20bb5b",
+  "V_DRONE_046": "cd6457933b5b6664cb97630b3a102e64e8eaf4a209aef094038e97156fecec3a",
+  "V_DRONE_047": "1f0f4a20c995f679895643a3753764ec0dfa04c0bec6ebc5f17e82ddb05b9938",
+  "V_DRONE_048": "179a4abe922bdccea18d4e6388f7f2c60a7bd941b60aef00c90e3202db8ccb8d",
+  "V_DRONE_049": "4fbae7bc202cdba7250fd19ee88384d807b8ab32a7070c794a7ee864023ac440",
+  "V_DRONE_050": "f738c22da3beb6322ba1b415121b6eb4e62d6e43f41c0e8ea9628fc9f1bd88c8",
+  "V_DRONE_051": "01c49506366d2b8f273df4951bc8546e2f0b5920203f815589950d90aa5b53d7",
+  "V_DRONE_052": "2cd66b98e5ee9364cf5d3fee2f34e19a726febf17523edac3400deddd075239f",
+  "V_DRONE_053": "bfeda158e91d5fb95417526559e3efb79648116a11e2fb1f285f2838f01551b4",
+  "V_DRONE_054": "375423e543076b96ff4b9882bd75be57635e5b43e47bcf3b898fcb7d0b56a2fb",
+  "V_DRONE_055": "8a027b7ae48b824a07ddc821215dd425682c405f62e6ec90c84690fa1e7e46d4",
+  "V_DRONE_056": "d11bef80bb5ffa78f0a2b0052baec49d35fa113df928f1824ec6d0d84478411e",
+  "V_DRONE_057": "387427e421adc515ba301d6ce856f6eafbeb0d62d537e173ca5f19b908999666",
+  "V_DRONE_058": "ebbc58124258a80c67945256304d712332a914331b5ceb5d806aaebf3dcb942b",
+  "V_DRONE_059": "571822727892aac2941b01a3dc25125f4c6d1a695f66740ee25b498836b09c4a",
+  "V_DRONE_060": "3c4a22a69c58e448ba8b85374ad62bc2acc6b7e7242c3527d26b8ee00c47fb7c",
+  "V_DRONE_061": "e5a60995a66fd154349d0c09a7fe4a5ccecabd2767c522854344947ab77c8396",
+  "V_DRONE_062": "65edba5f28c2bbf8320a8b883ccbf4c885941a808b8d992e4959966d3de229a7",
+  "V_DRONE_063": "563edfb08a6cd621e162d3aa9031a03733c837526175584881f9f2a944c0e416",
+  "V_DRONE_064": "ffe6fe39dbc8c8afb056cc12ca5fd33f86c0abb07f5fe53f5125866afe40a23a",
+  "V_DRONE_065": "58284b0b04e191cc38dc165a6f4dcda617270342ee865e5732f2c91d13dab0ec",
+  "V_DRONE_066": "7ee66b6948a423b8534fb4dee5bfda31011224dead3ebc6d085712e8b4521cf7",
+  "V_DRONE_067": "21efd11144333e30067c137dc4fa1910518a492daf25c61a8effd684dad2b454",
+  "V_DRONE_068": "f927f649804a149278a5c89060d1fa7a7804bc44658f311112cc13eb2cc8a18a",
+  "V_DRONE_069": "a0c85a2fe5056351c0f6687cb7a0d2241fceefc624e7a4da157741a5a295426b",
+  "V_DRONE_070": "d2e4b30717a71e2790790517d83df635f15c2ed1ab0c943607afa4eee9245e9c",
+  "V_DRONE_071": "be096ea6a237dc887368b19776d48457ac6f7e10deee612767b6e0c1b6440f55",
+  "V_DRONE_072": "df636534ce23fc040e7daddb39d321d6c492b411dc596b5cdfc560f66e6fde1c",
+  "V_DRONE_073": "8f9019413f1893fe614efd0d48ad7b162f72448c05458bb40edf6463e818e8f2",
+  "V_DRONE_074": "af1bc36b4e121796e45085eb750833d24d3675d3369839eb3d8441d7d8d49262",
+  "V_DRONE_075": "595dbbb79037cd1600cbc3ae1048984fabf9c4ec23678a04ae946efe369c37e8",
+  "V_DRONE_076": "23363c4c705b8683db71805fa48f225985cfc5e02d22d0c3a3bd12aac6eda1b3",
+  "V_DRONE_077": "bf82aae04811454ac7419be14edc0ee28049a198e1e0cfe8ed712fff3c4f69b9",
+  "V_DRONE_078": "91caf84e62e5729b1a03e3dcbd3121b38d712735ecbe3fce9735391854ee2598",
+  "V_DRONE_079": "cf41d9db4b836e8c340368283fdffd11414ebd987f97d2996364cc65271ecced",
+  "V_DRONE_080": "13b81b3a6debe057d084b1f859e5f2fc59705c4efdaab1a543cf955df0ce5af8",
+  "V_DRONE_081": "3e5e14a2c353bc343c9b6a50b66ceeb390e5ee363dbbc0600bfa234edd83722b",
+  "V_DRONE_082": "a3634d9312f4a77bd23b1c24821bb07ce60536ed4c8c83b593a33a861c336666",
+  "V_DRONE_083": "bb9a9a29f0ad263390660d94a54e8267f8f49a1db488cd7311ddd06bbbe80dea",
+  "V_DRONE_084": "1d4dd504143efdc97f4d4afccacc13e306cb8c302c0bfd12a24ea22cecf168cb",
+  "V_DRONE_085": "cf396f6478a5e87b940f72e00b1dee12258136335947b79ee7558220827a80e0",
+  "V_DRONE_086": "da880d7858994d442908a77ef1386f2dbcc2feed5d52e46d34063ba68c05e9a1",
+  "V_DRONE_087": "53859e899f2b974064a652e6a2f5b66ba43bb87b8d891b59ebbd7f8a2939e32f",
+  "V_DRONE_088": "0470e31db0a06788f5c1f5992435adac66d890193766668865094095963791ac",
+  "V_DRONE_089": "017bad0ae3a4dda0969c0fa9430b92d99e48daaa5f415e9dd933f11c7b7bf41c",
+  "V_DRONE_090": "282a89eb1af3c9348599926c982b74630e1e0fc059bc4d29cfaaeb8a5be4cddb",
+  "V_DRONE_091": "b0ca8b7a3d6d48b0d27e8a54a68e78a53025173793bb4171f241f895e5cbf20b",
+  "V_DRONE_092": "d3af355eb7cc822aa233ea4c204ba0d5fdea5c3f6722a937f282b45a8ec4f2c3",
+  "V_DRONE_093": "fa447b6b6e075b9936e7092670f782ad51063d360a44ee06b4b4f9540ba8610a",
+  "V_DRONE_094": "bba7e41aa19d18a952efad4dddee920b49aef51ce9505e03fab85d7f29013a18",
+  "V_DRONE_095": "6685a4a73d5dd71088aa6aa68b480a864d66c2d9e1a504925c7d7346e45da741",
+  "V_DRONE_096": "b1a750f0852f7c64f6a86adcd5eb4f7d6cf46a71ee88367e8cc195f75d1ce9b2",
+  "V_DRONE_097": "771cd9c9bd4529ab72e330666d75711f45a473c42cfe504f4785742c92de5d92",
+  "V_DRONE_098": "c6ffb523be0a595adfae1f216e21e49f8b7af779c298bbbe449450852ebb9010",
+  "V_DRONE_099": "6c801dde4b477d1c0aad0b9b509930aa1d7f8608469cd3fbd1a82a97f8426c31",
+  "V_DRONE_100": "a278b1acebde0534a61c16550e2b9d1852ab059e4fb74d48136da2d54b5f4e95",
+  "V_DRONE_101": "7a57481c648cf4dffc740e0c17be70653d8b055966f17c6f8acefb3d6f35a7a2",
+  "V_DRONE_102": "b74e8a26e5bf4c2a8f7ac7306ea4a5d26f99e06b9f71a92c8172a4682c2082b9",
+  "V_DRONE_103": "35a98d9f6a2c8ccc20602e654003d6ee2f58974b867c500d4e242815929b3224",
+  "V_DRONE_104": "ee2416410652232aee0be455b7f1f5089e360159df0e8924c17d21f2263ccd99",
+  "V_DRONE_105": "30c143465b52071227581110ad07b5fa6dea8a3530ebdc5c31d7840f5db4cb56",
+  "V_DRONE_106": "6539982b5d06c3e6fd823c6e6f741156a324cd0a5d4d9d0642a4bf9dc481113f",
+  "V_DRONE_107": "a30628359858081c026c8abadb0613f1f76b567546e2d42dc3eedb5febd37058",
+  "V_DRONE_108": "7d7742dd9563ebe6800b9533092a6f6e1c3cd162acc5828605a75ee02cbc821e",
+  "V_DRONE_109": "3932889054b87be8d648a866d74fcc84a932ca415eeab06a15f17548299b3b12",
+  "V_DRONE_110": "e269e609503ffbe2c12d777f852deecd17f7eef5f35632ae066e19613fef5f7d",
+  "V_DRONE_111": "21048e3ac4f349d4eb7d9c506a41dde91f92a2e31d06e11261c229be7fa6cb98",
+  "V_DRONE_112": "2bf58eaf712697932343f8c352f2747dc851af86691521f6363769d008806836",
+  "V_DRONE_113": "bb82b817c6b6da6dcd4c15f84fab190aa5dbb37a5a5f79f5d4626aa7fec35e57",
+  "V_DRONE_114": "5a1a8eae700645db1c2bb27103a239fa63879ed28d0536ba720c76a224284368",
+  "V_HELICOPTER_001": "027e197f3c7872b495163bd30eb39c7b8fef4c4aef15cee01f170da46825046c",
+  "V_HELICOPTER_002": "af9d0d36307a54df7fcb3f25f6c8938a6285b79fc771d7e6b866a77bbcb8d7e9",
+  "V_HELICOPTER_003": "2de15f9a234db7138e4622f3560721f416266e4ec397e1f7986bc98485f65ff9",
+  "V_HELICOPTER_004": "7cb2561d567d62086bae684cdd392eeb4c77ee33903a3b068793a6d1a5ef1781",
+  "V_HELICOPTER_005": "c343272a479e48720ec41c795ee2103c389ac744713b81407a4c5e7175bda0d1",
+  "V_HELICOPTER_006": "97aca4443de9132a690e160c87ef45d56258fc5074a5e48647a699ec0efd6979",
+  "V_HELICOPTER_007": "aa0a649e28deba8f907c3670a8d7f27e0f45bad553bcf3fcf42208bf21b90418",
+  "V_HELICOPTER_008": "43fb8f8241de36c6227b0c0db2eaf95a513c43036e77f95ba1d0e58d2a139311",
+  "V_HELICOPTER_009": "324c7e92fdc94e13c02ae6e6f077b257d608afec625d9be3e4752d3bcdcaf0f7",
+  "V_HELICOPTER_010": "0cccf0670a67068de94689df46d2c865af67f65a4f508e8dd89852345bc2a6ec",
+  "V_HELICOPTER_011": "3475e7cc97cd3c6ea45e8b637d922ef8a53a5ff3978c74ac9631f6bf3f3e307a",
+  "V_HELICOPTER_012": "80dac9af571926d4a38b65049d1d24adf4fb621adb87c8f639b6993964a20181",
+  "V_HELICOPTER_013": "18ecbc7499aef872cb7175974ff98946a6f23d236d816f6d8e5c0c0d988fe78b",
+  "V_HELICOPTER_014": "5a7d195cb99b4478a3089f9c6041b3c1e1bfb9fd31ab1c8db604e7455a57a4a5",
+  "V_HELICOPTER_015": "1c61e1466ff7c67d0160159a22e247c5e857cb4ec7974f992203e12199d745e9",
+  "V_HELICOPTER_016": "a046ad3232ac819a17827691c53138243bb1506eee7b1d3a3c32004173245701",
+  "V_HELICOPTER_017": "217b2d98fcb7db821d0d3d2cc4269ba039c4a6fb110d4db5d5f4cf22562ec250",
+  "V_HELICOPTER_018": "75b5746e9f96d42c22f0a23b16dca46e92f486b99860f465f3ff45be749ad925",
+  "V_HELICOPTER_019": "376f7e7a3967fb3f5c8fe55de6c612434d5fa04a83c7af7efc633e48b1e94419",
+  "V_HELICOPTER_020": "166d6466013897b43cfb8e28998ab700f073170e6bfea60ee767c7e4936cf349",
+  "V_HELICOPTER_021": "fe0b1419c9d03ffb4dac6d26bdea26bf93a48789be52223e39703807a8be21ae",
+  "V_HELICOPTER_022": "f261d8d8d525f6fd3cd97d1ed8e72e4a4e5709ab1c42524652587b0fb162ec58",
+  "V_HELICOPTER_023": "0d46f8bdbfd4c19f87b8f47b300258fafac16e5f74112927b886cd893f7d7858",
+  "V_HELICOPTER_024": "3a98243514ddc729c655e1417731d5da56412b0e35d3cf6e1353023210ae8325",
+  "V_HELICOPTER_025": "4439939f50a9ad5cb5eec37f2fbc630818707538f7c0133d0b36638affce357c",
+  "V_HELICOPTER_026": "88f3f59dba72635456f8b668cc3a1f78bf4d39f9e1ff6ad171c7a63112295f0f",
+  "V_HELICOPTER_027": "f7d2e7a209f60f71c9e13597fb5ebcb9089dbd7616b22152b38853fb16048283",
+  "V_HELICOPTER_028": "a143c53c69257ce18da5717bfd11869f7825a51f4b8336c6300983ab04ef9a17",
+  "V_HELICOPTER_029": "657c7554c143ff9e90d47d03ddca6068b40fd2cb20002b231c7e415a3be33f97",
+  "V_HELICOPTER_030": "18da7229c61bf1418b45f57b25ee90ec42deff53c2c8f6eb654ebbafffef1bd4",
+  "V_HELICOPTER_031": "865a51e6fb15d62b001e4eb1d698c8e1de6a0affe5b37eecb0506ac1dad32e3a",
+  "V_HELICOPTER_032": "9324b26e787a5c8e2392f0ad3acc2dcbee9e5f2d87ed305701f1b927def6d016",
+  "V_HELICOPTER_033": "94d42207037fede59ae885c5eac7d080fa17a3911c655a5471afcb8e819e0789",
+  "V_HELICOPTER_034": "18b2b6fa1640b748e475453f58d23b9c6e236c9e0fcab5226c77067f63b5ef04",
+  "V_HELICOPTER_035": "ed4b556ff1a8aa0a866345371d361b09b0344f9ad7ee9cbb0777b7ce00615000",
+  "V_HELICOPTER_036": "ab25ef08e9ced004225d23bebb884358a424c2a953f1a7d60e338c29fe519438",
+  "V_HELICOPTER_037": "0414bb6b690a3e5595e2d521eab507285f9cf81caa1f3c7cd1d0db9ba86fb4e3",
+  "V_HELICOPTER_038": "7a43728018195b5c08641c981e3adaf809cf9304cca30ece5c6a5028e5bd6a8b",
+  "V_HELICOPTER_039": "8802cad818a1d26ea979fdad4ae5f7379268e9ba2b67dec0746aca8a0080a298",
+  "V_HELICOPTER_040": "df8329a506d45b381ae1672bd169d75a6b16f3af5d66280bccf29b4f4889d0ed",
+  "V_HELICOPTER_041": "cd844d76c3eb0be7562b894544a62a6ddb2d3c2d5565f492e05a3988c170837b",
+  "V_HELICOPTER_042": "8207652906f7b822a7fd1837e2477f23da69ec85d7f345a486aaaa2912fa4a8d",
+  "V_HELICOPTER_043": "5f593e3c18f3d8a1bd94fd89ec41b8e6a54013c5b48b1771732f4c4b88d48942",
+  "V_HELICOPTER_044": "8f46b0cd0c2e9d87e04ab5eb0e26ab926fc3521c3e313f9d29efc316e41821e7",
+  "V_HELICOPTER_045": "0a4d2d5bfcd604c21b3dfb2a15c31dc92999f9668e7eb331b2b0981dfd7edb5e",
+  "V_HELICOPTER_046": "162db9672d2af2b34bdc8a5e1593bab668f31cf7676e9530d2a52c810050f3dc",
+  "V_HELICOPTER_047": "6451ae8af0e71dc9fe8b9b2b45f18603045b2ad760f81df26fccbbfbcab11483",
+  "V_HELICOPTER_048": "469b5d3a7c3b9dde7530cf70d202c2ca5f4807b57e4d00f39566815081fff825",
+  "V_HELICOPTER_049": "bdbd2ee5fb4b73364d316f9e0a2dfd2aabf5021afa36f30a58ca0ff33679a09f",
+  "V_HELICOPTER_050": "2e4b748296ce131a758c037037b5899fc770f0b50243916fb605d5930c09a625",
+  "V_HELICOPTER_051": "3123ea06c120b329a01610bfa71b13d818d4bae13df8e923fd02515863f1a96c",
+  "V_HELICOPTER_052": "62cdc4d3649d0ff108db8d3ab7263d71c6ea4b559fdb4674fd05b97908268cd8",
+  "V_HELICOPTER_053": "cf8994d18bdab68c7a7f486b672cd56b5472b16b16376da8f8735b666a90726b",
+  "V_HELICOPTER_054": "1ac8b2a04a8b686b995d84c3ecfeb2ba418a29aa21d33085decba87cbd4f75ff",
+  "V_HELICOPTER_055": "f95e4b18ca0e1623f2d6f057de919753acdece09c949799fcbca8d9fd6333648",
+  "V_HELICOPTER_056": "d1b601261caf7586b83a211d71e076b285d0f1727455d0ba62ec2910d2502dbd",
+  "V_HELICOPTER_057": "aa7a52514fc4f9987aebae642cca1423febd3d33d53513f3e857745a46e1db3a",
+  "V_HELICOPTER_058": "7fd1f92d98ad6fb9a44be23c5101a6a889db78d6951907e1ff09a9750cb2b2dd",
+  "V_HELICOPTER_059": "e967f4dc57f0d93554f0a08d5e4bee5ed05eac7858098183c7638c9d76a4b895",
+  "V_HELICOPTER_060": "c751d121c9be62fb64a480a8c21df74ad2ca85b9fef00264217686685b51572b",
+  "V_HELICOPTER_061": "3fa7667239b269a7e9fc4110e272e54512cb92e2d7a8b5109a817d56c09e15c9"
+ },
+ "summary": {
+  "train": {
+   "clips": 153,
+   "crops": 23282,
+   "bird": 2082,
+   "drone": 5583,
+   "other": 15617,
+   "bird_size_px_p10_p50_p90": [
+    23.4,
+    28.0,
+    38.0
+   ]
+  },
+  "select": {
+   "clips": 35,
+   "crops": 7218,
+   "bird": 714,
+   "drone": 1773,
+   "other": 4731,
+   "bird_size_px_p10_p50_p90": [
+    23.8,
+    27.3,
+    32.7
+   ]
+  },
+  "test": {
+   "clips": 97,
+   "crops": 19961,
+   "bird": 794,
+   "drone": 2391,
+   "other": 16776,
+   "bird_size_px_p10_p50_p90": [
+    24.2,
+    29.1,
+    39.2
+   ]
+  }
+ }
+}

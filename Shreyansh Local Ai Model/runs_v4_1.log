@@ -1,0 +1,15 @@
+training sources: mendeley 82758 (x1), svanstrom 23282 (x3), aod4 15488 (x1), dcskycam 3817 (x1), dut_anti_uav 16206 (x1), iberbirds 5230 (x1), klim_skagen 2242 (x3), openimages 18665 (x1), synth_athkot 20717 (x1), synth_cranfield 6586 (x1) | per epoch 193281
+select sets: mendeley 11255, svanstrom 7218, aod4 1484, dcskycam 381, dut_anti_uav 2196, iberbirds 492, klim_skagen 1230, openimages 2364, synth_athkot 3438, synth_cranfield 669
+/home/claude/pranav-atreya10/hackphs-dot/Shreyansh Local Ai Model/train.py:54: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/utils/tensor_numpy.cpp:208.)
+  return torch.from_numpy(x_uint8).permute(0, 3, 1, 2).float().div_(255)
+/home/claude/pranav-atreya10/hackphs-dot/Shreyansh Local Ai Model/train_v2.py:80: RuntimeWarning: Mean of empty slice
+  rec = [float((p[y == c] == c).mean()) for c in range(3)]
+/usr/local/lib/python3.13/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/home/claude/pranav-atreya10/hackphs-dot/Shreyansh Local Ai Model/train_v2.py:83: RuntimeWarning: Mean of empty slice
+  "bird_as_drone": float((p[y == 0] == 1).mean()), "drone_as_bird": float((p[y == 1] == 0).mean())}
+epoch 1/4  loss 0.509  mean select 0.9162  | mendeley 0.925  svanstrom 0.916  aod4 0.975  dcskycam 0.948  dut_anti_uav 0.928  iberbirds 0.990  klim_skagen 0.955  openimages 0.786  synth_athkot 0.845  synth_cranfield 0.894  [357s]
+epoch 2/4  loss 0.499  mean select 0.9158  | mendeley 0.917  svanstrom 0.931  aod4 0.965  dcskycam 0.955  dut_anti_uav 0.936  iberbirds 0.980  klim_skagen 0.927  openimages 0.797  synth_athkot 0.846  synth_cranfield 0.905  [525s]
+epoch 3/4  loss 0.481  mean select 0.9109  | mendeley 0.925  svanstrom 0.912  aod4 0.948  dcskycam 0.958  dut_anti_uav 0.940  iberbirds 0.970  klim_skagen 0.903  openimages 0.789  synth_athkot 0.846  synth_cranfield 0.920  [684s]
+epoch 4/4  loss 0.465  mean select 0.9254  | mendeley 0.934  svanstrom 0.925  aod4 0.969  dcskycam 0.982  dut_anti_uav 0.944  iberbirds 0.986  klim_skagen 0.946  openimages 0.812  synth_athkot 0.853  synth_cranfield 0.903  [842s]
+done; best mean select 0.9254
