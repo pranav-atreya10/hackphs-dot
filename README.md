@@ -4,6 +4,18 @@ SkySentry is a video-only monitoring prototype. An authorized camera sends JPEGs
 
 **Live site:** https://lancerhacks-rvs8r.ondigitalocean.app (deployed from `main` on DigitalOcean App Platform)
 
+> ## ⚠️ To do before the live site updates (Pranav, at home)
+> Since PR #56 the server **refuses to start in production** unless the camera key is tied to one airport, so
+> DigitalOcean keeps running an old version (from before PRs #58/#59) until this is fixed. In DigitalOcean → the app →
+> Settings → web → Environment Variables (tick "Encrypt" for secrets), add:
+> 1. `CAMERA_API_AIRPORT` = an airport code listed in `AIRPORT_CODES` (e.g. `KPCT`). If `AIRPORT_CODES` is empty there,
+>    add it too, e.g. `KPCT=<long secret join code>`.
+> 2. If `TOWER_API_KEY` is set: `TOWER_API_AIRPORT` = the same kind of code.
+>
+> Save; it redeploys by itself. **Done when** `https://lancerhacks-rvs8r.ondigitalocean.app/ready` stops saying
+> "Cannot GET /ready" (it will then say "not ready"; that's expected on App Platform). Optional cleanup while there:
+> delete `DATABASE_URL` and any `ELEVENLABS_*` variables (no longer used). Then delete this box.
+
 ## The app
 
 | Page | What it's for | Who can open it |
