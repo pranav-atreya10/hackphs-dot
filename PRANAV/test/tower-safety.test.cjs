@@ -165,6 +165,7 @@ test('server HTML shows unavailable before JS and preview has no active media or
 test('real tower socket wiring renders the same highest warning in the dashboard and beacon', async () => {
   const monitoring = await import('../public/js/tower-monitoring.mjs');
   const beacon = await import('../public/detection/adapters/beacon.js');
+  const { reconcileIncidents } = await import('../public/js/incident-history.mjs');
   const elements = new Map(), handlers = new Map(), frames = [];
   function element() {
     return {
@@ -180,11 +181,11 @@ test('real tower socket wiring renders the same highest warning in the dashboard
     if (!elements.has(id)) elements.set(id, element());
     return elements.get(id);
   }
-  let feedOptions;
   const code = readFileSync(path.join(__dirname, '../public/js/tower.js'), 'utf8');
   runInNewContext(code.replace(/^import [^\n]+\n/gm, ''), {
-    ...monitoring, ...beacon, URLSearchParams,
-    document: { getElementById, createElement: element, addEventListener() {}, documentElement: element() },
+    ...monitoring, ...beacon, URLSearchParams, AbortController, AbortSignal, reconcileIncidents,
+    document: { getElementById, createElement: element, addEventListener() {}, documentElement: element(),
+      head: { append(node) { node.onload(); } } },
     location: { protocol: 'https:', hostname: 'example.test', origin: 'https://example.test', search: '' },
     L: { map: () => ({ setView() { return this; } }), tileLayer: () => ({ addTo() {} }) },
     createTowerLayers: () => ({ prune() {}, pin() {}, placeCamera() {} }),
@@ -199,17 +200,16 @@ test('real tower socket wiring renders the same highest warning in the dashboard
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     VirtualBeacon: class { feed(line) { frames.push(beacon.parseBeaconLine(line)); } render() {} },
     createAlertPlayer: () => ({ receive() {}, update() {} }),
-    signIn: async () => ({ role: 'dashboard', headers: async () => ({}) }),
+    signIn: async () => ({ role: 'dashboard', airport: 'TEST', socketAuth: async () => ({}), headers: async () => ({}) }),
     refreshSocketAuth() {},
     fetch: async path => ({ ok: true, json: async () => path === '/api/airports'
       ? { airports: [{ code: 'TEST' }], scoped: true }
       : path.startsWith('/api/incidents') ? [] : {} }),
-    io: () => ({ on: (name, fn) => handlers.set(name, fn) }),
-    startFeeds: (_socket, opts) => { feedOptions = opts; }, VisualBirdVerifier: class {},
-    setInterval() {}, setTimeout() {}, window: {},
+    io: () => ({ on: (name, fn) => handlers.set(name, fn), connect() {} }),
+    setInterval() {}, setTimeout() {}, clearTimeout() {}, window: {},
+    console: { warn() {} },
   });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(feedOptions.demo, false);
   handlers.get('connect')();
   assert.equal(getElementById('beaconLamps').hidden, true);
   handlers.get('camera:event')({ cameraId: 'A', risk: 'red', demo: true });

@@ -73,3 +73,21 @@ entry and `corridor_survey_id` references its survey; `eta_seconds` is not runwa
 arrival. `eta_range` is a heuristic velocity envelope, not a confidence interval.
 The approximate `bearing_deg` carries no range, target point, or geographic
 track. Do not treat archived guessed points as measured locations.
+
+## Alert recovery and incident evidence
+
+Live warnings appear before MongoDB confirms them. Acknowledgment and replay use
+the selected airport's stored alerts; replay is silent. If storage is unavailable,
+the tower marks the alert unconfirmed. Retries before the first receipt are
+bounded and held in memory; they cannot survive a server restart. A receipt
+confirmed by MongoDB persists the report job for recovery. Ambiguous Solana
+submissions are reconciled by signature, not submitted a second time.
+Detection receipts, unacknowledged alert replay, and unfinished jobs share the
+eight-day detection retention window. This does not backfill historical reports.
+
+`DURABLE_INCIDENT_EVIDENCE=1` opts in to retaining eligible server-cropped JPEGs
+in MongoDB, visible only through the authenticated airport-scoped snapshot
+route. It does not authorize sending images to Google. Only
+`GEMINI_CLOUD_EVIDENCE_ENABLED=true` allows Gemini image processing. Neither
+switch is enabled by default, and missing or invalid evidence never blocks a
+warning. A confirmation of storage is not confirmation of a completed report.

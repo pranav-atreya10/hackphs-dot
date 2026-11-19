@@ -12,14 +12,14 @@ export function createAlertPlayer({ enabled, alarm, playAudio, speakText, showTe
     }
     if (enabled()) speakText(state.text);
   }
-  function receive(data) {
+  function receive(data, { replay = false } = {}) {
     const id = data.incident_id || data.id || `${data.time}:${data.type}:${data.text}`;
-    showText(data.text);
     if (alerts.has(id)) return;
+    showText(data.text, data);
     const state = { text: data.text, started: false, ready: Promise.resolve(), timer: null };
     alerts.set(id, state);
     if (alerts.size > 100) { const first = alerts.keys().next().value; clearTimer(alerts.get(first).timer); alerts.delete(first); }
-    if (!enabled()) { state.started = true; return; }
+    if (replay || !enabled()) { state.started = true; return; }
     state.ready = Promise.resolve(alarm()).catch(() => {});
     if (data.audio || !data.voice_pending) void finish(state, data.audio);
     else state.timer = setTimer(() => { void finish(state, null); }, waitMs);

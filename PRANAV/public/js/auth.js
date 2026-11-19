@@ -42,11 +42,19 @@ export function loadClerk(publishableKey) {
   if (clerkLoading) return clerkLoading;
   clerkLoading = (async () => {
     const origin = frontendApi(publishableKey);
-    // ClerkJS v6's core no longer contains the prebuilt SignIn/UserProfile UI.
-    // Load the separate UI constructor before initializing the core, as Clerk's JS quickstart specifies.
-    if (!window.__internal_ClerkUICtor) await loadScript(`${origin}/npm/@clerk/ui@1/dist/ui.browser.js`);
+    const coreUrl = `${origin}/npm/@clerk/clerk-js@${CLERK_VERSION}/dist/clerk.browser.js`;
+    // Fetch core alongside UI, but keep script evaluation and initialization in order.
+    if (!window.__internal_ClerkUICtor) {
+      const preload = document.createElement('link');
+      Object.assign(preload, { rel: 'preload', as: 'script', href: coreUrl, crossOrigin: 'anonymous' });
+      if (!window.Clerk) document.head.appendChild(preload);
+      try {
+        await loadScript(`${origin}/npm/@clerk/ui@1/dist/ui.browser.js`);
+        if (!window.__internal_ClerkUICtor) throw new Error('The sign-in screen did not load. Refresh to try again.');
+        if (!window.Clerk) await loadScript(coreUrl, publishableKey);
+      } finally { preload.remove(); }
+    } else if (!window.Clerk) await loadScript(coreUrl, publishableKey);
     if (!window.__internal_ClerkUICtor) throw new Error('The sign-in screen did not load. Refresh to try again.');
-    if (!window.Clerk) await loadScript(`${origin}/npm/@clerk/clerk-js@${CLERK_VERSION}/dist/clerk.browser.js`, publishableKey);
     if (!window.Clerk) throw new Error('The sign-in service did not initialize. Refresh to try again.');
     await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
     return window.Clerk;
@@ -148,8 +156,21 @@ export function refreshSocketAuth(socket, auth) {
   socket.on('disconnect', () => clearInterval(interval));
 }
 
+async function authRead(path, init, message) {
+  try {
+    const r = await fetch(path, { ...init, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (err) {
+    throw new Error(message, { cause: err });
+  }
+}
+
 export async function signIn({ role, mount, onStatus = () => {}, demo = false }) {
-  const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
+  const cfg = await authRead('/api/auth/config', {}, 'Could not load sign-in configuration. Refresh to retry.');
+  if (!cfg || (cfg.publishableKey !== null && !(typeof cfg.publishableKey === 'string' && cfg.publishableKey))) {
+    throw new Error('Invalid sign-in configuration. Refresh to retry.');
+  }
   const params = new URLSearchParams(location.search);
 
   // ---------- Clerk sign-in ----------
@@ -164,9 +185,13 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
       clerk.mountSignIn(card.querySelector('#clerk-sign-in'), { forceRedirectUrl: location.href, signUpForceRedirectUrl: location.href, appearance: clerkAppearance() });
       await new Promise(resolve => clerk.addListener(({ user }) => { if (user) resolve(); }));
     }
-    const token = () => clerk.session.getToken();
+    const token = async () => {
+      const value = await clerk.session?.getToken();
+      if (!value) throw new Error('The sign-in session has expired. Refresh to sign in again.');
+      return value;
+    };
     const headers = async () => ({ authorization: `Bearer ${await token()}` });
-    let me = await fetch('/api/auth/me', { headers: await headers() }).then(r => r.json()).catch(() => ({}));
+    let me = await authRead('/api/auth/me', { headers: await headers() }, 'Could not verify account access. Refresh to retry.');
 
     // Administrator status allows selecting a tower airport, not publishing camera data.
     const asAdmin = role === 'dashboard' && me.admin && !(me.role === role && me.airport);
@@ -205,7 +230,7 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
       }).catch(() => {});
     }
     return {
-      mode: 'clerk', role: me.admin ? 'admin' : me.role, airport,
+      mode: 'clerk', role: me.admin ? 'admin' : me.role, airport: asAdmin ? null : airport, airportRequired: true,
       label: asAdmin ? `Admin · ${airport || 'select an airport'}` : `${me.airport} · signed in`,
       socketAuth: async extra => ({ token: await token(), ...extra }),
       headers,
@@ -248,7 +273,7 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
     onStatus('Tower key needed');
     key = await new Promise(resolve => {
       const card = panel(mount, `<h2>Open the tower</h2>
-        <p>${why} tower key from the server’s settings (<code>TOWER_API_KEY</code>).</p>
+        <p>${clerkDown ? why : 'This dashboard requires the'} tower key from the server’s settings (<code>TOWER_API_KEY</code>).</p>
         <form id="keyForm"><label for="tk">Tower key<input id="tk" type="password" required autocomplete="off"></label><button>Connect</button></form>`);
       card.querySelector('#keyForm').addEventListener('submit', e => { e.preventDefault(); resolve(card.querySelector('#tk').value.trim()); });
     });
@@ -257,7 +282,7 @@ export async function signIn({ role, mount, onStatus = () => {}, demo = false })
   mount.hidden = true; showRoleLinks(null);
   showAccount({ role: 'dashboard', type: key ? 'Tower (key)' : 'Local demo tower', sub: 'One airport per connection' });
   return {
-    mode: 'open', role: null, airport: null, label: key ? 'tower key' : 'open dashboard',
+    mode: 'open', role: null, airport: null, airportRequired: true, label: key ? 'tower key' : 'open dashboard',
     socketAuth: async extra => ({ key: key || undefined, ...extra }),
     headers: async () => (key ? { 'x-api-key': key } : {}),
     signOut: () => { store.set('skysentry.towerKey', ''); location.reload(); }

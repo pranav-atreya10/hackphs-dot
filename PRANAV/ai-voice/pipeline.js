@@ -9,16 +9,23 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   async function processIncident(ev, { create = () => Promise.resolve(), save = () => Promise.resolve(), emit, allowImageReview = false }) {
     if (!ev || !['bird', 'drone', 'unknown'].includes(ev.type) || !['yellow', 'red'].includes(ev.risk) || !shouldAlert(ev)) return false;
     const send = (name, data) => { try { emit(name, data); } catch (err) { console.warn(`[pipeline] delivery failed: ${config.redact(err.message)}`); } };
-    const created = Promise.resolve().then(create).catch(err => console.warn(`[pipeline] store failed: ${config.redact(err.message)}`));
-    const persist = async fields => { try { await created; await save(fields); } catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); } };
     const alertText = buildAlertText(ev);
     const incident = {
       _id: ev.id, time: new Date(ev.receivedAt || Date.now()).toISOString(), camera_id: ev.cameraId || ev.camera_id,
       airport: ev.airport, type: ev.type, object_count: ev.flock_size || ev.object_count, direction: ev.direction,
-      confidence: ev.confidence, risk: ev.risk, snapshot: typeof ev.snapshot === 'string' ? ev.snapshot : null,
+      confidence: ev.confidence, risk: ev.risk,
       alert_text: alertText,
     };
     send('incident', incident);
+    const created = Promise.resolve().then(() => create({ revision: 1 })).then(() => {
+      send('incident', { ...incident, revision: 1 });
+      return true;
+    }).catch(err => { console.warn(`[pipeline] store failed: ${config.redact(err.message)}`); return false; });
+    const persist = async (fields, revision) => {
+      if (!await created) return false;
+      try { await save({ ...fields, revision }); return true; }
+      catch (err) { console.warn(`[pipeline] save failed: ${config.redact(err.message)}`); return false; }
+    };
     // Visible warnings are emitted before the first await; provider latency cannot delay them.
     // The tower speaks alertText with the browser's voice straight away (no server audio).
     if (ev.risk === 'red') send('alert', { id: ev.id, incident_id: ev.id, text: alertText, audio: null,
@@ -28,15 +35,15 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
         object_count: ev.flock_size || ev.object_count });
       const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
       if (report.bird_verdict) fields.bird_verdict = report.bird_verdict;
-      send('incident', { ...incident, ...fields });
       send('alert_update', { id: ev.id, incident_id: ev.id, label: report.label, report: report.report, report_source: report.source });
-      await persist(fields);
+      if (await persist(fields, 2)) send('incident', { ...incident, ...fields, revision: 2 });
       if (ev.type === 'drone') {
         const stamp = await solana.stampReport(report.report);
         const stampFields = { report_hash: stamp.hash, solana_tx: stamp.tx, solana_status: stamp.status, solana_error: stamp.error, solana_url: stamp.explorer || null };
-        send('incident', { ...incident, ...fields, ...stampFields });
         send('alert_update', { id: ev.id, incident_id: ev.id, ...stampFields });
-        await persist(stampFields);
+        if (await persist({ ...fields, ...stampFields }, 3)) {
+          send('incident', { ...incident, ...fields, ...stampFields, revision: 3 });
+        }
       }
     })();
     const result = await Promise.allSettled([reportPromise]);

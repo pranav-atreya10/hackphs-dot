@@ -70,6 +70,34 @@ test('Solana timeout is bounded before submission', async () => {
   const result = await createSolana({ settings, web3: f.web3, timeoutMs: 20 }).stampReport('Report');
   assert.equal(result.status, 'failed'); assert.match(result.error, /timed out/); assert.equal(f.calls.length, 0);
 });
+
+test('Solana does not send if the durable signature reservation fails', async () => {
+  const f = fixture();
+  f.web3.Transaction.prototype.sign = function () { this.signature = Buffer.alloc(64, 1); };
+  let reservations = 0;
+  const result = await createSolana({ settings, web3: f.web3 }).stampReport('Report', { beforeSubmit: async ({ signature }) => {
+    assert.ok(signature);
+    reservations++;
+    throw new Error('simulated reservation write failure');
+  } });
+  assert.equal(result.status, 'failed');
+  assert.equal(reservations, 1);
+  assert.deepEqual(f.calls, []);
+});
+
+test('replayed alert is visible without browser speech, and duplicate receipt does not reannounce it', async () => {
+  const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
+  const shown = [], spoken = [];
+  const player = createAlertPlayer({ enabled: () => true, alarm: () => {}, showText: text => shown.push(text),
+    speakText: text => spoken.push(text) });
+  const replayed = { id: 'stored1', text: 'Recovered warning' };
+  player.receive(replayed, { replay: true });
+  player.receive(replayed);
+  player.receive({ id: 'live1', text: 'New warning' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(shown, ['Recovered warning', 'New warning']);
+  assert.deepEqual(spoken, ['New warning']);
+});
 test('late or duplicate audio updates never repeat the announcement', async () => {
   const { createAlertPlayer } = await import('../public/js/alert-player.mjs');
   let timeout, spoken = 0, played = 0, alarms = 0;
