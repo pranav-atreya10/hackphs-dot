@@ -10,6 +10,9 @@ const fresh = (at, now) => Number.isFinite(at) && now >= at && now - at <= MAX_A
 const trackFor = (state, id) => !state || state.learning || state.shake || state.overflow ? undefined :
   state.tracks?.find(t => t.id === id && !t.missed && !t.dense && t.classification !== "rejected" && t.classification !== "debris");
 
+// The camera's newest detector state. server.js keeps it as live.lastResult.state; lastState is accepted too.
+const latestState = (live) => live.lastResult?.state ?? live.lastState;
+
 function createBirdReview({ findLive, crop, verify, clock = Date.now }) {
   const frames = new Map(), pending = new Set();
   let bytes = 0;
@@ -43,7 +46,7 @@ function createBirdReview({ findLive, crop, verify, clock = Date.now }) {
     prune(clock());
     const frame = frames.get(keyOf(streamId, frameId));
     const current = () => live.bot.active && findLive(cameraId, airport) === live && live.streamId === streamId &&
-      fresh(frame?.at, clock()) && frame.state.generation === live.lastState?.generation && trackFor(live.lastState, trackId);
+      fresh(frame?.at, clock()) && frame.state.generation === latestState(live)?.generation && trackFor(latestState(live), trackId);
     const track = frame?.live === live && trackFor(frame.state, trackId);
     if (!track || !current()) return { status: "unavailable", reason: "unknown_evidence" };
     const key = `${streamId}:${trackId}`;

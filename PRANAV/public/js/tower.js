@@ -382,11 +382,12 @@ function renderIncidentReport(d, text) {
   if (d.bird_verdict?.status === 'verified') {
     const p = document.createElement('p');
     const { verdict, confidence, evidence } = d.bird_verdict;
-    p.textContent = `Gemini bird check: ${verdict.replace('_', ' ')} (${Math.round(confidence * 100)}%). ${evidence}`;
+    const who = d.bird_verdict.source === 'local' ? `Local model${d.bird_verdict.model ? ` (${d.bird_verdict.model})` : ''}` : 'Gemini';
+    p.textContent = `${who} bird check: ${verdict.replace('_', ' ')} (${Math.round(confidence * 100)}%). ${evidence}`;
     text.append(p);
   } else if (d.bird_verdict?.status === 'unavailable') {
     const p = document.createElement('p');
-    p.textContent = `Gemini bird check unavailable. ${d.bird_verdict.evidence}`;
+    p.textContent = `Bird check unavailable. ${d.bird_verdict.evidence}`;
     text.append(p);
   }
   if (d.report_hash) {
@@ -502,7 +503,11 @@ async function setupAirports() {
     throw new Error('The selected airport is not available. Select an authorized airport.');
   }
   $('airportBox').hidden = !airports.length;
-  if (scoped) { input.value = airports[0] ? label(airports[0]) : ''; input.disabled = true; $('airportHint').textContent = 'Your account’s airport.'; return; }
+  if (scoped) {
+    // A key or account bound to one airport: use it (there is nothing to choose).
+    if (!view && airports.length === 1) view = airports[0].code;
+    input.value = airports[0] ? label(airports[0]) : ''; input.disabled = true; $('airportHint').textContent = 'Your account’s airport.'; return;
+  }
   $('airportList').replaceChildren(...airports.map(label).map(v => Object.assign(document.createElement('option'), { value: v })));
   input.value = view ? label(airports.find(a => a.code === view)) : '';
   $('airportHint').textContent = `${airports.length} airport${airports.length === 1 ? '' : 's'} · type a code or name`;
@@ -533,10 +538,9 @@ async function connect() {
   if (auth.airport) view = auth.airport;
   if (!view) {
     status('Select an airport');
-    await setupAirports();
-    return;
-  }
-  if (!auth.airport) await setupAirports();
+    await setupAirports();          // picks the airport itself when the key/account is bound to exactly one
+    if (!view) return;
+  } else if (!auth.airport) await setupAirports();
   let credentials = await auth.socketAuth({ airport: view });
   socket = io('/tower', { autoConnect: false, auth: cb => {
     if (credentials) { const data = credentials; credentials = null; cb(data); return; }
