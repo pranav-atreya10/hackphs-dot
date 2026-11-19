@@ -462,3 +462,24 @@ The landing page's 3D film listens on the whole page for **Space** (play/pause) 
 Each feed tile on the tower has an **✕** at the end of its toolbar. Closing a tile removes it, and the tower ignores that camera (no tile, no video decoding) even while it keeps streaming, so stale cameras and demo-footage tiles stop piling up. A **Show hidden feeds (N)** button under the feeds brings them all back. The "Demo footage" placeholder tile can be closed too. Closing only affects this tower screen; the camera keeps sending, and alerts still arrive.
 
 **Checked:** headless Chrome on a local server: the demo placeholder showed with no cameras; two cameras gave two tiles. Closing cam-a removed its tile and kept it hidden while it was still sending, and Show hidden feeds brought it back. No script errors. Tests: 91/91.
+
+## Walkthrough for new users, and the Demos page hidden
+
+**Walkthrough** (`public/js/walkthrough.js`, loaded by `tower.html` and `camera.html`). The first time someone opens the
+Tower or Camera page, a guided tour dims the page and highlights one part at a time with a short explanation
+(Next / Back / Skip, arrow keys and Escape work too). It:
+- waits until the sign-in / "Connect this camera" box is gone, so it never covers it;
+- skips any step whose part isn't on screen (for example the add-camera card for tower accounts, or the sidebar on phones);
+- remembers it was seen (localStorage, per page), and adds **Take the tour** to the side menu to replay it;
+- uses the site's colour tokens, so it works in light and dark mode.
+Checked with Playwright on desktop and an iPhone-sized screen: every step reachable, no page errors, no sideways scroll.
+
+**Demos page hidden, not deleted.** Removed from the side menu on every app page, the landing page's top menu (also in
+`scripts/sync-web.mjs`, so a re-sync doesn't bring it back) and the sitemap; marked `noindex`. `/demo.html` still works
+by URL, and camera stations still choose demo clips in their own settings.
+
+**Tiger Data was down** (checked on the live site, `/health/db`): "Connection terminated due to connection timeout".
+The server waits 5 s and gets no answer, which is what a paused Tiger Cloud service looks like (free trial or credits
+ran out). The app keeps working without it, but detections aren't logged and the hourly chart stays empty. Fix it in
+the Tiger Cloud console (resume the service or add billing); if the connection string changes, update `DATABASE_URL`
+in DigitalOcean. Also seen on `/health`: Gemini returns HTTP 401 (key rejected) and ElevenLabs has a provider error.
