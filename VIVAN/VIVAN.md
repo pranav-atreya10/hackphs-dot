@@ -102,3 +102,24 @@ seeds 101–140 that were never used for tuning:
 available here), so it says nothing yet about drone recall or false-alarm rate on real clips. 28→19 of 80 bag runs
 is a real-looking drop but **not statistically significant** on its own. Bags are still called birds about 1 in 4 times.
 Not yet copied into the website (`npm run sync-web`), because that changes app code.
+
+## Bird-count forecaster (are birds gathering?)
+
+**What it does** (`detection/src/forecast.js`, settings in `config.js` → `forecast`). Every half second it counts the
+birds in view, fits a trend line over the last 20 s, and predicts the count 15 s ahead.
+- **Rising** (at least 6 more birds a minute, clearly above zero, 2+ more birds, arriving at 2+ separate moments)
+  → at least **yellow**, reason "Bird numbers rising: 3 now, ~8 in 15 s".
+- Rising by 3+ birds **and** the forecast reaches a flock (5+, `risk.flockRed`) → **red**, before the flock exists.
+- The engine state and every event now carry `forecast: { trend, birds_now, per_min, predicted, horizon_sec }`
+  (`trend` is rising / steady / falling / learning / off).
+
+**Edge cases handled.**
+- Recognising a bird takes a second or two, so birds already in view would look like they were "arriving" one by one.
+  Each bird is counted from when its track was **first seen**, and the first 1.5 s after start-up is the baseline.
+  (Without this, 4 birds flying *out* of view went red.)
+- A track lost for a moment stays counted for 2 s, so it isn't "a bird left, a bird arrived".
+- A group arriving together is a flock (handled by the flock rule), not a trend.
+
+**Checked on synthetic scenes:** `birds_gathering` (4 gulls arriving ~2.5 s apart, never a flock of 5) goes red at ~9 s
+in 12/12 runs; `birds_leaving` stays yellow in 12/12; all other scenes unchanged (150/150 at 15 fps). 5 new unit tests.
+Synthetic only: real gathering clips are the next test.

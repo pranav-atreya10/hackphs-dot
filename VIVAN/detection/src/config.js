@@ -124,6 +124,22 @@ export const DEFAULTS = {
     uninformative: ['kite', 'frisbee', 'sports ball'],
   },
 
+  // Bird-count forecaster (forecast.js): birds gathering in view raise the level before a flock forms.
+  forecast: {
+    enabled: true,
+    windowSec: 20,        // fit the trend over this much recent history
+    sampleSec: 0.5,       // record the bird count this often
+    holdSec: 2,           // a bird stays counted 2 s after it was last seen (a briefly lost track isn't "a bird left")
+    warmupSec: 1.5,       // birds already in view in the first 1.5 s after start-up are the baseline, not arrivals
+    minSpanSec: 6,        // need this much history before judging a trend
+    horizonSec: 15,       // forecast this far ahead
+    minSlopePerMin: 6,    // rising = at least 6 more birds per minute...
+    sigma: 2,             // ...clearly above zero (slope minus 2 standard errors > 0)...
+    minRise: 2,           // ...at least 2 more birds than the lowest count in the window...
+    minSteps: 2,          // ...arriving at 2+ separate moments (one group arriving at once is not a trend)
+    redMinRise: 3,        // red needs 3+ more birds AND a forecast reaching risk.flockRed
+  },
+
   risk: {
     flockRed: 5,
     etaRedSec: 30,

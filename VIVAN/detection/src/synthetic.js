@@ -120,6 +120,29 @@ export const SCENARIOS = {
     corridor: [],
     build(add) { add(circler(150, 110, 40, 7, 3, 7)); },
   },
+  // Forecaster scenes: the bird count changes over time.
+  birds_gathering: {
+    expectClass: 'bird', expectTrend: 'rising',
+    describe: 'Gulls arrive one after another (4 within ~8 s), spread out, never a flock of 5: forecast should warn red',
+    durationSec: 16,
+    expected: 'red',
+    corridor: [],
+    build(add, rng) {
+      const ys = [45, 105, 165, 215];
+      ys.forEach((y, i) => add(bird(-10 - 25 * i, y, 10, rng() * 2 - 1, 3.2 + rng() * 0.6, rng() * 6.28, 6)));
+    },
+  },
+  birds_leaving: {
+    expectClass: 'bird', forbidTrend: 'rising',
+    describe: 'Four gulls fly out of view one after another: the count falls, so no forecast warning',
+    durationSec: 16,
+    expected: 'yellow',
+    corridor: [],
+    build(add, rng) {
+      const ys = [45, 105, 165, 215];
+      ys.forEach((y, i) => add(bird(150 + 35 * i, y, 12, rng() * 2 - 1, 3.2 + rng() * 0.6, rng() * 6.28, 6)));
+    },
+  },
 };
 
 // ---------- object models (positions in px at 320x240; scaled to the output size) ----------

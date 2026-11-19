@@ -17,6 +17,7 @@ import { analyzeWingbeat } from './wingbeat.js';
 import { gravityArc, spinCheck } from './debris.js';
 import { FlockGrouper } from './flocks.js';
 import { RiskEngine } from './risk.js';
+import { BirdForecaster } from './forecast.js';
 import { DroneAudioState } from './audio.js';
 import { etaToPolygon } from './geometry.js';
 import { bearingFromX, elevationFromY, angularSpeedDps, motionHeading } from './geo.js';
@@ -34,6 +35,7 @@ export class DetectionEngine {
     this.tracker = new Tracker(this.cfg.tracker);
     this.grouper = new FlockGrouper(this.cfg.flocks);
     this.risk = new RiskEngine(this.cfg.risk);
+    this.forecaster = new BirdForecaster(this.cfg.forecast);
     this.audio = new DroneAudioState(this.cfg.audio);
     this.motion.setSkyMask(this.cfg.skyMask.polygon);
 
@@ -164,6 +166,7 @@ export class DetectionEngine {
     this.tracker.reset();
     this.grouper.reset();
     this.risk.reset();
+    this.forecaster.reset();
     this.verdicts.clear();
     this.cocoLabels.clear();
     this.stats = newStats();
@@ -189,6 +192,7 @@ export class DetectionEngine {
       this.motion.reset();
       this.tracker.reset();
       this.grouper.reset();
+      this.forecaster.reset();
       this.resetReporting();
     }
     const dt = this.lastT === null ? 0 : t - this.lastT;
@@ -267,7 +271,8 @@ export class DetectionEngine {
 
     // 7. Risk
     const prevLevel = this.risk.level;
-    const risk = this.risk.evaluate(groups, null, t);
+    const forecast = this.forecaster.update(confirmed, t);
+    const risk = this.risk.evaluate(groups, null, t, forecast);
     if (risk.level !== prevLevel) this.emit('risk_change', { from: prevLevel, to: risk.level, reasons: risk.reasons, t });
     // The single most important thing in view (drone > soonest ETA > biggest flock).
     // Hardware beacons and dashboards point at / describe this one.
@@ -314,6 +319,7 @@ export class DetectionEngine {
       groups: groups.map(publicGroup),
       primary: primary ? publicGroup(primary) : null,
       risk,
+      forecast,
       audio,
       stats: this.publicStats(),
     };
@@ -635,7 +641,7 @@ export class DetectionEngine {
       }
       evidence = this.evidenceFor(primary, t, wallNow, w);
     }
-    const ev = buildEvent({ cfg: this.cfg, risk, primary, groups, wallNow, evidence, crop });
+    const ev = buildEvent({ cfg: this.cfg, risk, primary, groups, wallNow, evidence, crop, forecast: this.forecaster.snap });
     if (RISK_RANK[risk.level] > 0 || changed) this.stats.events++;
     this.emit('event', ev);
   }

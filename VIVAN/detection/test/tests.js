@@ -8,6 +8,7 @@ import { BlobLabeler } from '../src/blobs.js';
 import { Tracker } from '../src/tracker.js';
 import { FlockGrouper } from '../src/flocks.js';
 import { RiskEngine } from '../src/risk.js';
+import { BirdForecaster } from '../src/forecast.js';
 import { HumDetector } from '../src/audio.js';
 import { gravityArc, spinCheck } from '../src/debris.js';
 import { DroneAudioModel, referenceSignal } from '../src/audio_model.js';
@@ -494,6 +495,42 @@ test('beacon: frames from engine state and from server events agree', () => {
   const ev = events.filter((e) => e.risk === 'red' && e.flock_size >= 5).pop();
   const b = frameFromEvent(ev);
   ok(b.level === 'R' && b.kind === 'B' && b.count === ev.flock_size && b.servo >= 0, JSON.stringify(b));
+});
+
+// ---------- forecaster ----------
+// Feed fake tracks: birds[i] = [bornAt, leftAt] in seconds.
+function runForecast(birds, until, cfg = DEFAULTS.forecast) {
+  const f = new BirdForecaster(cfg);
+  let snap;
+  for (let t = 0; t <= until + 1e-9; t += 1 / 15) {
+    const tracks = birds.map(([b, l], i) => ({ id: i + 1, born: b, cls: 'bird', l })).filter((x) => t >= x.born + 1.5 && t <= x.l);
+    snap = f.update(tracks, t);
+  }
+  return snap;
+}
+test('forecast: birds arriving one by one -> rising, red-ready, predicts more', () => {
+  const s = runForecast([[2, 99], [4, 99], [6, 99], [8, 99]], 11);
+  ok(s.trend === 'rising', s.trend); ok(s.red_ready, 'red ready'); ok(s.predicted >= 5, `predicted ${s.predicted}`);
+});
+test('forecast: same birds already in view at start-up -> not rising', () => {
+  const s = runForecast([[0, 99], [0.2, 99], [0.4, 99], [0.6, 99]], 11);
+  ok(s.trend !== 'rising', s.trend); ok(s.birds_now === 4, `now ${s.birds_now}`);
+});
+test('forecast: a group of 4 arriving together is not a trend', () => {
+  const s = runForecast([[5, 99], [5.05, 99], [5.1, 99], [5.15, 99]], 12);
+  ok(s.trend !== 'rising', s.trend);
+});
+test('forecast: birds leaving one by one -> falling', () => {
+  const s = runForecast([[0, 4], [0, 6], [0, 8], [0, 10]], 14);
+  ok(s.trend === 'falling' || s.trend === 'steady', s.trend); ok(s.trend !== 'rising');
+});
+test('risk: rising forecast raises yellow, and red once it reaches a flock', () => {
+  const r = new RiskEngine(DEFAULTS.risk);
+  const fc = { trend: 'rising', birds_now: 2, predicted: 3, horizon_sec: 15, red_ready: false };
+  ok(r.evaluate([], null, 0, fc).level === 'yellow');
+  const r2 = new RiskEngine(DEFAULTS.risk);
+  const out = r2.evaluate([], null, 0, { ...fc, birds_now: 3, predicted: 7, red_ready: true });
+  ok(out.level === 'red', out.level); ok(out.reasons.some((x) => x.includes('rising')), out.reasons.join());
 });
 
 // ---------- runner ----------
