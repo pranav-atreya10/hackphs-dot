@@ -319,7 +319,7 @@ function relayCameraEvent(cameraId, payload, airport, surveyId, detection) {
   if (!mongo) {
     rememberDetection(record);
     if (document) {
-      const preview = { ...document, report_state: "unavailable", persistence: "unavailable", revision: 1 };
+      const preview = { ...document, report_state: "unavailable", persistence: "unavailable" };
       memIncidents.unshift(preview);
       if (memIncidents.length > 50) memIncidents.pop();
       tower.emit("incident", preview);

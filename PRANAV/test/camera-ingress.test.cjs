@@ -124,6 +124,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
       }
     },
     mongo: true, pendingReceipts: new Set(), retainIncidentEvidence: true, createIncidentJob, sanitizeMetrics,
+    memIncidents: [], rememberDetection() {},
     buildAlertText: () => "Bird warning", shouldAlert: () => true, drainEnrichment() {},
     toText: x => typeof x === "string" ? x : null, toNumber: x => Number.isFinite(x) ? x : null,
     journal: createEventJournal(fn => fn({ collection: name => ({
@@ -177,9 +178,23 @@ test("authenticated capture uses its pinned mask and only the server can persist
   const events = messages.filter(([name]) => name === "camera:event");
   assert.equal(events.length, 1);
   assert.equal(Object.hasOwn(events[0][1], "snapshot"), false);
+  const pending = messages.find(([name]) => name === "incident")[1];
+  assert.equal(pending.persistence, "pending");
+  assert.equal(Object.hasOwn(pending, "revision"), false);
   await post("/api/camera-stop", {});
   sendDetection(frame);
   assert.equal(records.length, 1, "late detector callbacks after stop must not persist");
+
+  context.mongo = null;
+  assert.equal((await post("/api/camera-config", config)).code, 200);
+  assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "9.125" })).code, 200);
+  const preview = messages.findLast(([name]) => name === "incident")[1];
+  assert.equal(preview.persistence, "unavailable");
+  assert.equal(preview.report_state, "unavailable");
+  assert.equal(Object.hasOwn(preview, "revision"), false, "memory-only alerts are not committed revisions");
+  assert.equal(Object.hasOwn(preview, "snapshot"), false);
+  assert.equal(context.memIncidents[0], preview);
+  assert.equal(records.length, 1);
 });
 
 test("a server detector motion overflow clears a usable state and suppresses evidence and events", async () => {

@@ -82,6 +82,8 @@ the tower marks the alert unconfirmed. Retries before the first receipt are
 bounded and held in memory; they cannot survive a server restart. A receipt
 confirmed by MongoDB persists the report job for recovery. Ambiguous Solana
 submissions are reconciled by signature, not submitted a second time.
+Only stored incident updates carry a committed revision; a memory-only alert
+does not.
 Detection receipts, unacknowledged alert replay, and unfinished jobs share the
 eight-day detection retention window. This does not backfill historical reports.
 
