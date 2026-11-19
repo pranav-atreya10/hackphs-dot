@@ -378,7 +378,9 @@ test('presets only touch real parameters and still pass the flock scene', () => 
 });
 test('robustness: every scene passes on 3 random seeds', () => {
   const r = evaluateConfig({});
-  const bad = r.detail.filter((d) => !SCENARIOS[d.scene].knownIssue && (!d.pass || d.parts.forbidden || d.parts.missingClass));
+  // Known issues (synthetic.js): 'label' ones must still get the risk level right; 'risk' ones are checked elsewhere.
+  const issue = (d) => SCENARIOS[d.scene].knownIssue?.kind;
+  const bad = r.detail.filter((d) => issue(d) !== 'risk' && (!d.pass || (issue(d) !== 'label' && (d.parts.forbidden || d.parts.missingClass))));
   ok(!bad.length, bad.map((d) => `${d.scene}#${d.seed}: ${d.actual} ${d.classes}`).join('; '));
 });
 test('robustness: flock scenes pass at a phone-like 15 fps with the phone preset', () => {

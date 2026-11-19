@@ -1,0 +1,133 @@
+{
+ "model": "VIVAN/detection/models/drone_audio_v0.json",
+ "model_sha256": "61eace965f273aff6ac9e8b51f92fcb05ea76eec79966115b5addcac6837125b",
+ "threshold": 0.5,
+ "dads_revision": "981b832c35b45a57518c989f0f79101adb4ae91f",
+ "esc50_source": "ashraq/esc50@e3e2a63ffff66b9a9735524551e3818e96af03ee (Hugging Face mirror; official GitHub archive unreachable)",
+ "dads_test": {
+  "drone_recall": {
+   "value": 0.9964,
+   "ci": [
+    0.995,
+    0.9978
+   ],
+   "n": 6390
+  },
+  "false_alarm_rate": {
+   "value": 0.0011,
+   "ci": [
+    0.0,
+    0.0032
+   ],
+   "n": 2857
+  }
+ },
+ "esc50_false_alarms": {
+  "all_categories": {
+   "value": 0.0367,
+   "ci": [
+    0.0258,
+    0.0475
+   ],
+   "n": 1200
+  },
+  "helicopter": {
+   "value": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "n": 24
+  },
+  "airplane": {
+   "value": 0.0833,
+   "ci": [
+    0.0,
+    0.2083
+   ],
+   "n": 24
+  },
+  "engine": {
+   "value": 0.0417,
+   "ci": [
+    0.0,
+    0.125
+   ],
+   "n": 24
+  },
+  "chirping_birds": {
+   "value": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "n": 24
+  },
+  "crow": {
+   "value": 0.0,
+   "ci": [
+    0.0,
+    0.0
+   ],
+   "n": 24
+  },
+  "wind": {
+   "value": 0.0833,
+   "ci": [
+    0.0,
+    0.2083
+   ],
+   "n": 24
+  },
+  "rain": {
+   "value": 0.0833,
+   "ci": [
+    0.0,
+    0.2083
+   ],
+   "n": 24
+  }
+ },
+ "stress_recall": {
+  "+10dB": {
+   "value": 0.99,
+   "ci": [
+    0.9767,
+    1.0
+   ],
+   "n": 300
+  },
+  "+5dB": {
+   "value": 0.8633,
+   "ci": [
+    0.8299,
+    0.8967
+   ],
+   "n": 300
+  },
+  "+0dB": {
+   "value": 0.5967,
+   "ci": [
+    0.54,
+    0.6533
+   ],
+   "n": 300
+  },
+  "-5dB": {
+   "value": 0.3967,
+   "ci": [
+    0.3433,
+    0.45
+   ],
+   "n": 300
+  },
+  "-10dB": {
+   "value": 0.25,
+   "ci": [
+    0.2033,
+    0.2934
+   ],
+   "n": 300
+  }
+ }
+}

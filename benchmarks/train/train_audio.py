@@ -57,6 +57,7 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--noise_aug", default="", help="v3: comma list of noise wav dirs to mix in (empty = none)")
+    ap.add_argument("--extra_negatives", default="", help="comma list of wav dirs added as no-drone training clips (ESC-50 folds 4-5 only)")
     args = ap.parse_args()
 
     assert not (TEST_SHARDS & set(TRAIN_SHARDS + VAL_SHARDS)), "test shards must never be used for training"
@@ -76,6 +77,12 @@ def main():
     for name, d in (("train", train), ("val", val)):
         print(f"{name}: no-drone {len(d[0])} clips, drone {len(d[1])} clips", flush=True)
     print(f"loaded in {time.time() - t0:.0f}s", flush=True)
+
+    if args.extra_negatives:
+        import librosa
+        extra = [librosa.load(p, sr=SR, mono=True)[0] for d in args.extra_negatives.split(",") for p in sorted(Path(d).glob("*.wav"))]
+        train[0].extend(extra)
+        print(f"extra no-drone clips: {len(extra)} (train no-drone now {len(train[0])})", flush=True)
 
     noise_pool = []
     if args.noise_aug:

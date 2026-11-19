@@ -1,0 +1,106 @@
+{
+ "weights": "models/audio/v1_audio.pt",
+ "sha256": "17b88339760745d2f3f35ee9e8595e846a2772883f39e0c87693fdb2520e20bf",
+ "trained_utc": "2026-11-19T15:12:32Z",
+ "args": {
+  "out": "models/audio/v1_audio.pt",
+  "epochs": 8,
+  "per_class": 12000,
+  "batch": 128,
+  "lr": 0.001,
+  "seed": 0,
+  "noise_aug": "data/esc50/folds45"
+ },
+ "train_shards": [
+  2,
+  5,
+  10,
+  19,
+  24
+ ],
+ "val_shards": [
+  30
+ ],
+ "val_tail_of": {
+  "2": 0.15
+ },
+ "test_shards_excluded": [
+  3,
+  36
+ ],
+ "dads_revision": "981b832c35b45a57518c989f0f79101adb4ae91f",
+ "shard_sha256": {
+  "2": "37913cdf6074b14b4c198459d741b84c96ec1a67a19871a21f4402f104d639cd",
+  "5": "2b550d54d9349bd3c8456b57dea7a980fdcb983127cbaf8d23176dc221fbfb05",
+  "10": "1c55d7ab75b7743584b32d7d3219e63eb37ddf502b43b37b452ebdcf2c0e152f",
+  "19": "498eb6e48a63fc1fae84c447e88691672fa5df3dc40c4ae7360b87f77dee0fe9",
+  "24": "be874e2578010c11566705f2e45a04f4087f18205b429b3fc02e6ca0c695098a",
+  "30": "5a8d780811a0ae54bc144655cd9309d85932ec4023a812d429347d155bae910d"
+ },
+ "history": [
+  {
+   "epoch": 1,
+   "loss": 0.09825045432637822,
+   "val_auc": 0.9947457500000001,
+   "val_acc": 0.979
+  },
+  {
+   "epoch": 2,
+   "loss": 0.04049537865385572,
+   "val_auc": 0.9951575,
+   "val_acc": 0.9835
+  },
+  {
+   "epoch": 3,
+   "loss": 0.030801627562044465,
+   "val_auc": 0.9968250000000002,
+   "val_acc": 0.9895
+  },
+  {
+   "epoch": 4,
+   "loss": 0.026094287765172728,
+   "val_auc": 0.99741475,
+   "val_acc": 0.989
+  },
+  {
+   "epoch": 5,
+   "loss": 0.023400817182227137,
+   "val_auc": 0.996243,
+   "val_acc": 0.98875
+  },
+  {
+   "epoch": 6,
+   "loss": 0.02128141840419514,
+   "val_auc": 0.9960925,
+   "val_acc": 0.986
+  },
+  {
+   "epoch": 7,
+   "loss": 0.019238677652344664,
+   "val_auc": 0.9963529999999999,
+   "val_acc": 0.99
+  },
+  {
+   "epoch": 8,
+   "loss": 0.0187914378865513,
+   "val_auc": 0.9969537500000001,
+   "val_acc": 0.992
+  }
+ ],
+ "best_val_auc": 0.99741475,
+ "git": {
+  "commit": "2609f3ee462aa264214f2a9ff201e22a9e7c9296",
+  "branch": "claude/fervent-cerf-setrc4",
+  "dirty": true
+ },
+ "hardware": {
+  "platform": "Linux-6.18.44-fc-v653-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "python": "3.13.18",
+  "torch": "2.15.0+cu132",
+  "accelerator": "cpu",
+  "numpy": "2.5.5",
+  "librosa": "1.0.1",
+  "sklearn": "1.9.1"
+ }
+}

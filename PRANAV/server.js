@@ -118,9 +118,12 @@ function memHourly() {
   return [...buckets.values()].sort((a, b) => a.hour.localeCompare(b.hour) || a.type.localeCompare(b.type));
 }
 
-// Every Gemini bird verdict is kept for the judges' audit trail in MongoDB (skysentry.bird_verdicts).
-async function logBirdVerdict(v, airport) {
+// Every bird verdict is kept for the audit trail in MongoDB (skysentry.bird_verdicts). With SAVE_JUDGE_IMAGES=on,
+// confident answers also keep the crop, so scripts/export-judge-dataset.mjs can build a fine-tuning set for a local model.
+const SAVE_JUDGE_IMAGES = process.env.SAVE_JUDGE_IMAGES === "on";
+async function logBirdVerdict(v, airport, image = null) {
   const doc = { time: new Date(), airport, verdict: v.verdict, confidence: v.confidence, object: v.object, evidence: v.evidence, source: v.source, model: v.model || null };
+  if (SAVE_JUDGE_IMAGES && image && v.source !== "fallback" && v.verdict !== "uncertain") doc.image = image.replace(/^data:image\/[a-z]+;base64,/i, "");
   if (mongo) withMongo((mdb) => mdb.collection("bird_verdicts").insertOne(doc)).catch((err) => console.error("failed to store bird verdict:", err.message));
 }
 
@@ -630,7 +633,7 @@ app.post("/api/verify-bird", requireDashboard, async (req, res) => {
   const image = typeof req.body?.image === "string" ? req.body.image : "";
   if (!image || image.length > 900_000) return res.status(400).json({ error: "send image: a base64 JPEG under ~650 KB" });
   const verdict = await verifyBird(image, typeof req.body?.context === "string" ? req.body.context : "");
-  logBirdVerdict(verdict, req.airport ?? null);
+  logBirdVerdict(verdict, req.airport ?? null, image);
   res.json(verdict);
 });
 

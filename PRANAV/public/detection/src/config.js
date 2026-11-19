@@ -15,7 +15,7 @@ export const DEFAULTS = {
   },
 
   motion: {
-    threshold: 16,        // minimum gray-level difference from background to count as "changed"
+    threshold: 20,        // minimum gray-level difference from background to count as "changed" (16 -> 20 by tools/autotune.mjs: fewer cloud-edge false alarms)
     noiseK: 4,            // threshold also rises to noiseK x (average sensor noise)
     bgAlpha: 0.05,        // how fast the background learns (per frame)
     bgAlphaFg: 0.002,     // much slower learning under moving objects, so slow drones don't leave trails

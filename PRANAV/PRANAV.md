@@ -512,3 +512,28 @@ Tiger Data stopped answering (paused), so everything now lives in MongoDB Atlas,
 - Website, film captions and docs now say MongoDB instead of Tiger Data.
 - Not tested against a real MongoDB here (no database available in this environment); after deploying, check that the
   tower's "Detections by hour" chart fills in.
+
+## Bird judge ready to move to a local model
+
+The Gemini bird judge can now be swapped for an open model running on your own computer by changing one setting.
+Only the bird judge moves; the OpenAI assistant and the Gemini incident reports stay as they are.
+
+- **One spec file, `ai-voice/bird-judge.spec.json`**: the rubric, the answer format (JSON schema), the labels, the
+  confidence floor (0.7) and the sampling settings (temperature 0). Gemini and any local model read the same file.
+  It has a `version`; bump it when the rubric changes.
+- **`ai-voice/bird-judge.js`**: turns the spec into Gemini's schema format, checks/clamps any model's answer, and talks
+  to a local model through the standard OpenAI-style chat endpoint, which Ollama, LM Studio, llama.cpp and vLLM all
+  offer. Small models that wrap their JSON in chat text are handled.
+- **Switch:** `BIRD_JUDGE=gemini` (default) | `local` | `off`. For local: install Ollama, `ollama pull qwen2.5vl:7b`,
+  set `BIRD_JUDGE=local` (defaults: `LOCAL_JUDGE_URL=http://localhost:11434/v1`, `LOCAL_JUDGE_MODEL=qwen2.5vl:7b`).
+  `/health` shows `bird_judge` (e.g. `local qwen2.5vl:7b: live`). If the local model fails, the answer is
+  "uncertain", never a guess. With no Gemini key, a local judge still checks birds on new incidents.
+- **Training data for fine-tuning:** each incident now saves the judge's verdict next to its snapshot. With
+  `SAVE_JUDGE_IMAGES=on`, crops sent to the bird check are saved too (confident answers only; off by default).
+  `npm run export-judge` writes `judge-dataset/` (git-ignored, real camera images): images, `train.jsonl` /
+  `test.jsonl` in the chat layout local fine-tuning tools use (LLaMA-Factory / ShareGPT style: system = rubric,
+  user = image + hint, assistant = JSON answer), and a manifest with a checksum per image. The newest 10% is the test split.
+- **Checking a local model:** `npm run eval-local-judge -- judge-dataset --model qwen2.5vl:7b` reports how often it
+  agrees with Gemini on the test split, per label, plus how many real birds it called "not_bird" (the dangerous mistake).
+- Tests: 4 new (local request format, chatty replies, confidence floor, errors), 95/95 pass. Not tried against a
+  real local model here (none can run in this environment).

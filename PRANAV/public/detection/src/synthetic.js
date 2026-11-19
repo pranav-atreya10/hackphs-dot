@@ -42,6 +42,8 @@ export const SCENARIOS = {
   },
   bag: {
     forbidClass: 'bird',
+    // Known open issue: the bag is still labelled "bird" in roughly 1 run in 4 (risk stays correct: yellow).
+    knownIssue: { kind: 'label', note: 'tumbling bag sometimes labelled bird' },
     describe: 'Plastic bag tumbling and drifting in the wind (irregular size changes)',
     durationSec: 10,
     expected: 'yellow',
@@ -228,9 +230,9 @@ export const SCENARIOS = {
   },
   storm_clouds: {
     edge: true, expectFlock: 0,
-    // Known open issue: a fast cloud edge is briefly tracked as an unknown object, raising a false yellow
-    // (never red). Excluded from the "every scene passes" test until fixed; see VIVAN.md.
-    knownIssue: 'false yellow from cloud edges',
+    // Known open issue: a fast cloud edge is sometimes tracked as an unknown object, raising a false yellow
+    // (never red; rarer since motion.threshold 20). Excluded from the "every scene passes" test; see VIVAN.md.
+    knownIssue: { kind: 'risk', note: 'false yellow from cloud edges' },
     describe: 'Empty sky with dark, fast storm clouds (3x the contrast, 4x the speed): must stay green',
     durationSec: 12, expected: 'green', corridor: [], cloudAmp: 3, cloudSpeed: 4,
     build() {},

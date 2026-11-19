@@ -6,3 +6,6 @@ models/**/*.pt
 runs/
 __pycache__/
 test_media/
+
+# Bird-judge fine-tuning exports (real camera images; never commit)
+judge-dataset/

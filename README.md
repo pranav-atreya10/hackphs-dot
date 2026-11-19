@@ -57,6 +57,8 @@ Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's fi
 | `AIRPORT_CODES` | Fixed airports and join codes, e.g. `KPCT=pct-sky-4821`. Admins can add more on the admin page (saved in MongoDB). |
 | `MONGODB_URI` | Everything stored: incident reports, every detection (hourly chart; deleted after 8 days), bird verdicts, admin-created airports, switch requests. |
 | `GEMINI_API_KEY` (`GEMINI_MODEL`, `GEMINI_BACKUP_MODEL`) | Snapshot checks and incident reports. Without it, reports use a template. |
+| `BIRD_JUDGE` (`LOCAL_JUDGE_URL`, `LOCAL_JUDGE_MODEL`, `LOCAL_JUDGE_KEY`) | Who double-checks birds: `gemini` (default), `local` (a vision model on your own computer through Ollama, LM Studio, llama.cpp or vLLM) or `off`. The rubric and answer format are in `PRANAV/ai-voice/bird-judge.spec.json`. |
+| `SAVE_JUDGE_IMAGES` | `on` keeps the crop with each confident bird verdict, for building a local-model training set (`npm run export-judge`). Off by default (uses storage). |
 | `OPENAI_API_KEY` (`OPENAI_MODEL`, `OPENAI_GUIDE_MODEL`) | Tower assistant and the landing-page chat. |
 | `SOLANA_SECRET_KEY` (`SOLANA_RPC_URL`) | Devnet stamp on drone reports. |
 | `SERVER_BOT`, `BOT_PRESET` | Server-side detection on streamed video (`on` by default). |
@@ -73,5 +75,7 @@ Other scripts: `npm run sync-web` (copy Vivan's detection engine and Atharv's fi
 | `ATHARV/` | Atharv | The 3D film and landing-page source (`skysentry/`) and the iPhone camera app (`ios/`, see [its README](ATHARV/ios/README.md)). |
 | `SHREYANSH/` | Shreyansh | The original AI, voice and Solana pipeline that `PRANAV/ai-voice` adapts. |
 | `benchmarks/`, `testbench/`, `models/` | Vivan | Detection benchmarks; follow `benchmarks/BENCHMARK_PROTOCOL.md`. |
+
+Models, settings and weights (and how to run them locally, including a local bird judge) are in `MODELS.md`.
 
 Team workflow (a branch and a PR per change, notes per person) is in `AI.md`.

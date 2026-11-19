@@ -25,7 +25,8 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
       voice_pending: false, risk: ev.risk, type: ev.type, time: ev.receivedAt });
     const reportPromise = (async () => {
       const report = await analyzeEvent({ ...ev, object_count: ev.flock_size || ev.object_count });
-      const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText };
+      const fields = { gemini_label: report.label, report: report.report, report_source: report.source, alert_text: alertText,
+        ...(report.bird_verdict ? { bird_verdict: report.bird_verdict } : {}) }; // verdict + the stored snapshot = a training example
       send('incident', { ...incident, ...fields });
       send('alert_update', { id: ev.id, incident_id: ev.id, label: report.label, report: report.report, report_source: report.source });
       await persist(fields);
@@ -48,13 +49,20 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
     const g = ai.geminiState || {};
     return { gemini: { configured: Boolean(settings.GEMINI_API_KEY), model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
         lastError: g.lastErrorAt > g.lastSuccessAt ? g.lastError : null, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
+      bird_judge: { provider: settings.BIRD_JUDGE || 'gemini', model: settings.BIRD_JUDGE === 'local' ? settings.LOCAL_JUDGE_MODEL : settings.GEMINI_MODEL, ...(require('./bird-judge').localState) },
       solana: solana.health() };
   }
   function status() {
     const h = health();
     return { gemini: !h.gemini.configured ? 'template' : h.gemini.lastError ? `failing (${h.gemini.lastError})` : h.gemini.lastSuccess ? 'live' : 'configured',
       voice: 'browser voice',
+      bird_judge: judgeStatus(h.bird_judge, h.gemini),
       solana: h.solana.lastError ? 'hash only (stamp error)' : h.solana.lastSuccess ? 'live devnet' : h.solana.configured ? 'configured devnet' : 'hash only' };
+  }
+  function judgeStatus(j, g) {
+    if (j.provider === 'off') return 'off';
+    if (j.provider === 'local') return j.lastErrorAt > j.lastSuccessAt ? `local ${j.model}: failing (${j.lastError})` : j.lastSuccessAt ? `local ${j.model}: live` : `local ${j.model}: configured`;
+    return !g.configured ? 'off (no Gemini key)' : g.lastError ? 'gemini: failing' : 'gemini';
   }
   return { processIncident, answerQuestion, health, status };
 }
