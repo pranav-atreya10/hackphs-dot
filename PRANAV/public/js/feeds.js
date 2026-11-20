@@ -11,10 +11,204 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 // Demo footage runs the detector locally only for the boxes: it never emits events, alerts or incidents.
 const DEMO_AFTER_MS = 4000;
 const DEMO_CLIPS = ['gulls-sky', 'starling-murmuration', 'geese-beach', 'padilla-birds', 'drone-hover'];
+const LOCK_ON_MS = 220;
+const DEFAULT_INTERP_MS = 68, MIN_INTERP_MS = 32, MAX_INTERP_MS = 140;
+const MAX_TRACK_GAP_MS = 600, TELEPORT_DIST = 0.35;
 
-export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoState, demo = true }) {
+const nowMs = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+const isHidden = () => typeof document !== 'undefined' && Boolean(document.hidden);
+const isReducedMotion = () => typeof matchMedia === 'function' && Boolean(matchMedia('(prefers-reduced-motion: reduce)')?.matches);
+const canAnimateHud = () => typeof requestAnimationFrame === 'function' && !isHidden() && !isReducedMotion();
+const cancelRaf = id => { if (id && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id); };
+const validHudBox = b => Boolean(b) && Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.w) && Number.isFinite(b.h);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function estimateTrackVelocity(tr, prevBox, dtSec, prevVel) {
+  if (Number.isFinite(tr.vx) && Number.isFinite(tr.vy)) return { vx: tr.vx, vy: tr.vy };
+  const nextCx = tr.bbox.x + tr.bbox.w / 2, nextCy = tr.bbox.y + tr.bbox.h / 2;
+  if (prevBox && dtSec >= 0.02 && dtSec <= 0.6) {
+    const rawVx = (nextCx - (prevBox.x + prevBox.w / 2)) / dtSec;
+    const rawVy = (nextCy - (prevBox.y + prevBox.h / 2)) / dtSec;
+    return prevVel
+      ? { vx: prevVel.vx * 0.4 + rawVx * 0.6, vy: prevVel.vy * 0.4 + rawVy * 0.6 }
+      : { vx: rawVx, vy: rawVy };
+  }
+  if (Array.isArray(tr.trail) && tr.trail.length >= 2) {
+    const first = tr.trail[0], last = tr.trail[tr.trail.length - 1];
+    const spanSec = Math.max(1 / 15, (tr.trail.length - 1) / 15);
+    if (Array.isArray(first) && Array.isArray(last)) {
+      return { vx: (last[0] - first[0]) / spanSec, vy: (last[1] - first[1]) / spanSec };
+    }
+  }
+  return prevVel || { vx: 0, vy: 0 };
+}
+
+function formatVoteTag(vote) {
+  if (!vote || typeof vote !== 'object') return '';
+  if (vote.status === 'ready' && typeof vote.label === 'string' && vote.label) {
+    const pct = Number.isFinite(vote.score) ? ` ${Math.round(vote.score * 100)}%` : '';
+    return ` · v4.1 ${vote.label}${pct}`;
+  }
+  if (vote.status === 'collecting' && Number.isFinite(vote.count)) {
+    const windowSize = Number.isFinite(vote.windowSize) ? vote.windowSize : 5;
+    return ` · v4.1 ${vote.count}/${windowSize}`;
+  }
+  return '';
+}
+
+function defaultDrawForecast(ctx, P, tr, helpers) {
+  const hasPath = typeof ctx.beginPath === 'function' && typeof ctx.moveTo === 'function' &&
+    typeof ctx.lineTo === 'function' && typeof ctx.stroke === 'function';
+  if (!hasPath) return;
+  const cx = helpers.bbox.x + helpers.bbox.w / 2, cy = helpers.bbox.y + helpers.bbox.h / 2;
+  if (tr.trail?.length > 1) {
+    ctx.strokeStyle = helpers.color;
+    ctx.beginPath();
+    tr.trail.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](...P(p)));
+    const last = tr.trail[tr.trail.length - 1];
+    if (Array.isArray(last) && Math.hypot(cx - last[0], cy - last[1]) > 1e-4) ctx.lineTo(...P([cx, cy]));
+    ctx.globalAlpha = 0.6 * helpers.alpha;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  const { vx, vy } = helpers.velocity;
+  if (Math.hypot(vx, vy) > 0.015 && typeof ctx.setLineDash === 'function') {
+    const fx = clamp(cx + vx * 0.75, 0, 1), fy = clamp(cy + vy * 0.75, 0, 1);
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = helpers.color;
+    ctx.lineWidth = Math.max(1.25, 1.5 * helpers.dpr);
+    ctx.globalAlpha = 0.45 * helpers.lock * helpers.alpha;
+    ctx.moveTo(...P([cx, cy]));
+    ctx.lineTo(...P([fx, fy]));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 1;
+  }
+}
+
+function defaultDrawTrack(ctx, rect, tr, helpers) {
+  const { color, lock, alpha, dpr, vote } = helpers;
+  ctx.strokeStyle = color;
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  if (typeof ctx.beginPath === 'function' && typeof ctx.moveTo === 'function' &&
+      typeof ctx.lineTo === 'function' && typeof ctx.stroke === 'function') {
+    const pad = (1 - lock) * 7 * dpr;
+    const bx = rect.x - pad, by = rect.y - pad, bw = rect.w + pad * 2, bh = rect.h + pad * 2;
+    const arm = Math.max(4, Math.min(bw, bh) * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(bx, by + arm); ctx.lineTo(bx, by); ctx.lineTo(bx + arm, by);
+    ctx.moveTo(bx + bw - arm, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + arm);
+    ctx.moveTo(bx, by + bh - arm); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + arm, by + bh);
+    ctx.moveTo(bx + bw - arm, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - arm);
+    ctx.lineWidth = Math.max(2, 2.2 * dpr);
+    ctx.globalAlpha = (0.35 + 0.65 * lock) * alpha;
+    ctx.stroke();
+    ctx.lineWidth = 2;
+  }
+  ctx.globalAlpha = 1;
+  if (!tr.is_flock) {
+    ctx.fillStyle = color;
+    ctx.fillText(`${tr.classification}${tr.flap_hz ? ` ${tr.flap_hz} Hz` : ''}${formatVoteTag(vote)}`, rect.x, rect.y - 4);
+  }
+}
+
+function stepBuiltInHud(hud, activeTracks, now, animate, isNewState) {
+  const liveIds = new Set();
+  let animating = false;
+  for (const tr of activeTracks) {
+    liveIds.add(tr.id);
+    const box = { x: tr.bbox.x, y: tr.bbox.y, w: tr.bbox.w, h: tr.bbox.h };
+    let entry = hud.tracks.get(tr.id);
+    if (!entry) {
+      entry = {
+        id: tr.id,
+        from: { ...box },
+        target: { ...box },
+        bbox: { ...box },
+        vel: estimateTrackVelocity(tr, null, 0, null),
+        bornMs: now,
+        startMs: now,
+        interpMs: 0,
+        lastTargetMs: now,
+        lock: animate ? 0 : 1,
+        alpha: animate ? 0.55 : 1,
+      };
+      hud.tracks.set(tr.id, entry);
+    } else if (isNewState) {
+      const gapMs = Math.max(0, now - entry.lastTargetMs);
+      const jump = Math.hypot(
+        (box.x + box.w / 2) - (entry.bbox.x + entry.bbox.w / 2),
+        (box.y + box.h / 2) - (entry.bbox.y + entry.bbox.h / 2),
+      );
+      const maxDelta = Math.max(
+        Math.abs(box.x - entry.bbox.x), Math.abs(box.y - entry.bbox.y),
+        Math.abs(box.w - entry.bbox.w), Math.abs(box.h - entry.bbox.h),
+      );
+      entry.vel = estimateTrackVelocity(tr, entry.target, gapMs / 1000, entry.vel);
+      if (!animate || gapMs > MAX_TRACK_GAP_MS || jump > TELEPORT_DIST || maxDelta < 1e-5) {
+        entry.from = { ...box };
+        entry.target = { ...box };
+        entry.bbox = { ...box };
+        entry.startMs = now;
+        entry.interpMs = 0;
+      } else {
+        entry.from = { ...entry.bbox };
+        entry.target = { ...box };
+        entry.startMs = now;
+        entry.interpMs = clamp(gapMs || DEFAULT_INTERP_MS, MIN_INTERP_MS, MAX_INTERP_MS);
+      }
+      entry.lastTargetMs = now;
+    }
+
+    if (!animate) {
+      entry.bbox = { ...entry.target };
+      entry.lock = 1;
+      entry.alpha = 1;
+      continue;
+    }
+
+    const lockProgress = clamp((now - entry.bornMs) / LOCK_ON_MS, 0, 1);
+    entry.lock = 1 - (1 - lockProgress) ** 3;
+    entry.alpha = 0.55 + 0.45 * entry.lock;
+    if (lockProgress < 1) animating = true;
+
+    const elapsed = Math.max(0, now - entry.startMs);
+    if (entry.interpMs <= 0 || elapsed >= entry.interpMs) {
+      entry.bbox = { ...entry.target };
+    } else {
+      const u = clamp((elapsed + 16) / (entry.interpMs + 16), 0, 1);
+      const s = 0.7 * u + 0.3 * (1 - (1 - u) * (1 - u));
+      entry.bbox = {
+        x: entry.from.x + (entry.target.x - entry.from.x) * s,
+        y: entry.from.y + (entry.target.y - entry.from.y) * s,
+        w: entry.from.w + (entry.target.w - entry.from.w) * s,
+        h: entry.from.h + (entry.target.h - entry.from.h) * s,
+      };
+      animating = true;
+    }
+  }
+  for (const id of hud.tracks.keys()) {
+    if (!liveIds.has(id)) hud.tracks.delete(id);
+  }
+  return animating;
+}
+
+export function startFeeds(socket, {
+  container,
+  hint,
+  onFeed,
+  onRemove,
+  onDemoState,
+  demo = true,
+  getTrackVote,
+  hudRenderer,
+} = {}) {
   const tiles = new Map();
   let demoCount = 0, evidenceStream = 0, emptyDemo = null;
+  const hasCustomTileState = typeof hudRenderer?.createTileState === 'function';
   // Feeds closed with ✕: ignored (no tile, no decoding) until "Show hidden feeds" brings them back.
   const dismissed = new Set();
   let emptyDemoClosed = false;
@@ -23,7 +217,47 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
   restore.onclick = () => { dismissed.clear(); emptyDemoClosed = false; restore.hidden = true; showEmptyDemo(); };
   container.after(restore);
   const showRestore = () => { const n = dismissed.size + (emptyDemoClosed ? 1 : 0); restore.hidden = !n; restore.textContent = `Show hidden feeds (${n})`; };
+  const isTileOpen = t => Boolean(t) && (tiles.get(t.cameraId) === t || emptyDemo === t);
+  const getTileHud = t => (hasCustomTileState ? t.hud.tileState : t.hud);
+
+  function createTileHud() {
+    return {
+      tracks: new Map(),
+      raf: 0,
+      running: false,
+      scopeKey: null,
+      lastState: null,
+      frameT: null,
+      lastStepMs: 0,
+      hadActiveTracks: false,
+      tileState: hasCustomTileState ? hudRenderer.createTileState() : null,
+    };
+  }
+
+  function stopHudLoop(t) {
+    if (!t?.hud) return;
+    if (t.hud.raf) {
+      cancelRaf(t.hud.raf);
+      t.hud.raf = 0;
+    }
+    t.hud.running = false;
+  }
+
+  function resetHud(t) {
+    if (!t?.hud) return;
+    stopHudLoop(t);
+    t.hud.tracks.clear();
+    t.hud.scopeKey = null;
+    t.hud.lastState = null;
+    t.hud.frameT = null;
+    t.hud.lastStepMs = 0;
+    t.hud.hadActiveTracks = false;
+    if (typeof hudRenderer?.resetTile === 'function') hudRenderer.resetTile(getTileHud(t));
+    else if (hasCustomTileState) t.hud.tileState = hudRenderer.createTileState();
+  }
+
   function closeTile(t) {
+    resetHud(t);
     if (t === emptyDemo) { removeEmptyDemo(); emptyDemoClosed = true; }
     else { dismissed.add(t.cameraId); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(t.cameraId); onRemove?.(t.cameraId); }
     hint.hidden = tiles.size > 0 || Boolean(emptyDemo);
@@ -47,7 +281,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     const small = document.createElement('canvas');
     const t = { cameraId, el, video, overlay, vctx: video.getContext('2d'), octx: overlay.getContext('2d'), small, sctx: small.getContext('2d', { willReadFrequently: true }),
       botState: null, detector: new DetectorStatus(), frames: 0, config: null, bitmap: null, lastFrameAt: 0,
-      decoding: false, pending: null, received: 0, fps: 0, fpsAt: performance.now(), offline: false };
+      decoding: false, pending: null, received: 0, fps: 0, fpsAt: nowMs(), offline: false, hud: createTileHud() };
     t.birdPairs = new BirdFramePairs();
     t.source = demo && store.get(`skysentry.feedSource.${cameraId}`) === 'demo' ? 'demo' : 'live';
     tiles.set(cameraId, t);
@@ -71,11 +305,13 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     b.setAttribute('aria-label', demoOn ? 'Show the live camera' : 'Show demo footage');
   }
   function setSource(t, source) {
+    const changed = t.source !== source;
     t.source = source; if (!t.placeholder) store.set(`skysentry.feedSource.${t.cameraId}`, source);
     updateSourceButton(t);
+    if (changed) resetHud(t);
     if (source === 'demo') startDemo(t);
-    else if (t.frames && Date.now() - t.lastFrameAt < 3000) stopDemo(t);   // live video is flowing: show it
-    else if (!t.demo) startDemo(t);                                        // nothing live yet: keep demo until it arrives
+    else if (t.frames && Date.now() - t.lastFrameAt < 3000) { stopDemo(t); updateServerEvidence(t, true); }   // live video is flowing: show it
+    else if (!t.demo) startDemo(t);                                                                             // nothing live yet: keep demo until it arrives
     label(t);
   }
 
@@ -83,6 +319,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
   function startDemo(t) {
     if (!demo || t.demo) return;
     clearBirdEvidence(t);
+    resetHud(t);
     const clip = DEMO_CLIPS[demoCount++ % DEMO_CLIPS.length];
     const v = document.createElement('video');
     v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto'; v.setAttribute('aria-hidden', 'true');
@@ -114,12 +351,15 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     };
     d.loops = 0; v.addEventListener('seeked', () => {
       d.loops++; d.streamId = `demo:${++evidenceStream}`; d.feed.birdEvidence = null;
+      resetHud(t);
+      t.octx.clearRect(0, 0, t.overlay.width, t.overlay.height);
     });   // A seek resets the engine's tracking timeline.
     v.play().catch(() => { v.controls = false; });
     d.raf = requestAnimationFrame(step);
     label(t);
   }
   function stopDemo(t) {
+    resetHud(t);
     const d = t.demo; if (!d) return;
     d.feed.birdEvidence = null; d.feed.offline = true;
     onRemove?.(d.feed.cameraId);
@@ -138,6 +378,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
   }
   function removeEmptyDemo() {
     if (!emptyDemo) return;
+    resetHud(emptyDemo);
     stopDemo(emptyDemo); emptyDemo.el.remove(); emptyDemo = null;
     hint.textContent = 'When a phone streams, its live video appears here with the bot’s boxes drawn on it.';
     hint.hidden = tiles.size > 0;
@@ -147,6 +388,10 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
   function refreshDetection(t) {
     const state = t.detector.current();
     if (!state && t.botState) invalidateEvidence(t);
+    else if (!state && !t.demo && (t.hud?.raf || t.hud?.tracks.size)) {
+      resetHud(t);
+      draw(t, null);
+    }
     t.botState = state;
     label(t);
   }
@@ -161,7 +406,18 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     t.birdEpoch = (t.birdEpoch || 0) + 1;
     t.pending = null;
     clearBirdEvidence(t);
+    resetHud(t);
     if (!t.demo) draw(t, null);
+  }
+
+  function currentOverlayState(t) {
+    if (!isTileOpen(t) || t.offline) return null;
+    if (t.demo) return t.demo.feed?.birdEvidence ? t.demo.feed.fallbackState : null;
+    const pair = t.birdPairs.latest;
+    const active = t.detector.current();
+    t.birdEvidence = !t.offline && active?.generation && pair?.generation === active.generation &&
+      pair.frame.streamId === t.birdStreamId ? pair : null;
+    return t.birdEvidence?.frame === t.displayedFrame ? t.birdEvidence.state : null;
   }
 
   function updateServerEvidence(t, redraw = false) {
@@ -172,7 +428,27 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     if (redraw && !t.demo) draw(t, t.birdEvidence?.frame === t.displayedFrame ? t.birdEvidence.state : null);
   }
 
-  function draw(t, state) {
+  function scheduleHudLoop(t) {
+    if (t.hud.raf || !isTileOpen(t) || t.offline || !canAnimateHud()) return;
+    t.hud.running = true;
+    t.hud.raf = requestAnimationFrame(ts => {
+      t.hud.raf = 0;
+      t.hud.running = false;
+      if (!isTileOpen(t) || t.offline || !canAnimateHud()) {
+        if (!isTileOpen(t) || t.offline) resetHud(t);
+        return;
+      }
+      const state = currentOverlayState(t);
+      if (!state) {
+        if (!t.demo && !t.detector.current() && t.botState) refreshDetection(t);
+        else draw(t, null);
+        return;
+      }
+      draw(t, state, Number.isFinite(ts) ? ts : nowMs());
+    });
+  }
+
+  function draw(t, state, now = nowMs()) {
     // clientWidth ignores the zoom transform, so the overlay stays aligned with the video at any zoom.
     const o = t.overlay, dpr = Math.min(2, devicePixelRatio || 1) * Math.max(1, t.zoom?.z || 1);
     const ow = Math.round(o.clientWidth * dpr), oh = Math.round(o.clientHeight * dpr);
@@ -186,20 +462,105 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
       ctx.beginPath(); corridor.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](...P(p))); ctx.closePath();
       ctx.fillStyle = 'rgba(194,100,63,.14)'; ctx.fill(); ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(242,140,90,.85)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
     }
-    if (!state) return;
+    if (!state) {
+      t.hud.lastState = null;
+      stopHudLoop(t);
+      return;
+    }
+    const scopeKey = t.demo
+      ? `demo:${t.demo.streamId}`
+      : `live:${t.birdEvidence?.frame?.streamId ?? t.birdStreamId ?? ''}:${t.birdEvidence?.generation ?? t.detector.generation ?? ''}:${t.birdEpoch || 0}`;
+    if (t.hud.scopeKey && t.hud.scopeKey !== scopeKey) resetHud(t);
+    t.hud.scopeKey = scopeKey;
+
     ctx.font = `600 ${Math.round(11 * dpr)}px system-ui`; ctx.lineWidth = 2;
     for (const g of state.flocks || []) if (g.bbox) {
       const [x, y] = P([g.bbox.x, g.bbox.y]);
       ctx.setLineDash([5, 4]); ctx.strokeStyle = '#fff'; ctx.strokeRect(x - 5, y - 5, g.bbox.w * f.w + 10, g.bbox.h * f.h + 10); ctx.setLineDash([]);
       ctx.fillStyle = '#fff'; ctx.fillText(`flock of ${g.size}${g.eta_basis === 'image_space_corridor' && g.eta_seconds != null ? ` · mask entry ${Math.round(g.eta_seconds)} s` : ''}`, x - 5, y - 10);
     }
-    for (const tr of state.tracks || []) {
-      if (tr.missed) continue;
-      const c = COLORS[tr.classification] || COLORS.unknown, [x, y] = P([tr.bbox.x, tr.bbox.y]);
-      ctx.strokeStyle = c; ctx.strokeRect(x, y, Math.max(5, tr.bbox.w * f.w), Math.max(5, tr.bbox.h * f.h));
-      if (tr.trail?.length > 1) { ctx.beginPath(); tr.trail.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](...P(p))); ctx.globalAlpha = .6; ctx.stroke(); ctx.globalAlpha = 1; }
-      if (!tr.is_flock) { ctx.fillStyle = c; ctx.fillText(`${tr.classification}${tr.flap_hz ? ` ${tr.flap_hz} Hz` : ''}`, x, y - 4); }
+
+    const activeTracks = (state.tracks || []).filter(tr => !tr?.missed && validHudBox(tr?.bbox));
+    const frameT = Number.isFinite(state.t) ? state.t : (t.frameT ?? 0);
+    const feedCameraId = t.demo ? t.demo.feed.cameraId : t.cameraId;
+    const meta = {
+      cameraId: feedCameraId,
+      tileCameraId: t.cameraId,
+      streamId: t.demo ? t.demo.streamId : (t.birdEvidence?.frame?.streamId ?? t.birdStreamId ?? null),
+      generation: t.demo ? null : (t.birdEvidence?.generation ?? t.detector.generation ?? null),
+      frameId: t.demo ? t.demo.frameId : (t.birdEvidence?.frame?.frameId ?? null),
+      frameT,
+      demo: Boolean(t.demo),
+      source: t.demo ? 'demo' : 'server',
+      reducedMotion: isReducedMotion(),
+      hidden: isHidden(),
+      dpr,
+      frame: f,
+    };
+    if (!activeTracks.length) {
+      t.hud.tracks.clear();
+      t.hud.lastState = state;
+      t.hud.frameT = Number.isFinite(state.t) ? state.t : null;
+      if (t.hud.hadActiveTracks) {
+        t.hud.hadActiveTracks = false;
+        if (typeof hudRenderer?.resetTile === 'function') hudRenderer.resetTile(getTileHud(t));
+        else if (typeof hudRenderer?.stepTile === 'function') hudRenderer.stepTile(getTileHud(t), [], frameT, now, meta);
+      }
+      stopHudLoop(t);
+      return;
     }
+
+    const animate = canAnimateHud();
+    const isNewState = state !== t.hud.lastState || frameT !== t.hud.frameT;
+    const builtInAnimating = stepBuiltInHud(t.hud, activeTracks, now, animate, isNewState);
+    t.hud.lastState = state;
+    t.hud.frameT = frameT;
+    t.hud.lastStepMs = now;
+    t.hud.hadActiveTracks = true;
+
+    const tileHud = getTileHud(t);
+    const keepAnimating = typeof hudRenderer?.stepTile === 'function'
+      ? Boolean(hudRenderer.stepTile(tileHud, activeTracks, frameT, now, meta))
+      : builtInAnimating;
+
+    for (const tr of activeTracks) {
+      const entry = t.hud.tracks.get(tr.id);
+      const customBox = hasCustomTileState
+        ? (tileHud?.tracks?.get?.(tr.id)?.bbox ?? tileHud?.boxes?.get?.(tr.id) ?? null)
+        : null;
+      const box = validHudBox(customBox) ? customBox : (entry ? entry.bbox : tr.bbox);
+      const [rx, ry] = P([box.x, box.y]);
+      const rect = { x: rx, y: ry, w: Math.max(5, box.w * f.w), h: Math.max(5, box.h * f.h) };
+      const color = COLORS[tr.classification] || COLORS.unknown;
+      const vote = typeof getTrackVote === 'function' ? (getTrackVote(feedCameraId, tr.id, meta) ?? null) : null;
+      const helpers = {
+        P,
+        frame: f,
+        rect,
+        bbox: box,
+        color,
+        colors: COLORS,
+        dpr,
+        vote,
+        lock: entry ? entry.lock : 1,
+        alpha: entry ? entry.alpha : 1,
+        velocity: entry ? entry.vel : { vx: 0, vy: 0 },
+        tileHud,
+        trackHud: entry || null,
+        cameraId: feedCameraId,
+        tileCameraId: t.cameraId,
+        demo: Boolean(t.demo),
+        corridor,
+        state,
+        meta,
+        nowMs: now,
+      };
+      (hudRenderer?.drawForecast || defaultDrawForecast)(ctx, P, tr, helpers);
+      (hudRenderer?.drawTrack || defaultDrawTrack)(ctx, rect, tr, helpers);
+    }
+
+    if (animate && keepAnimating && !t.offline && isTileOpen(t)) scheduleHudLoop(t);
+    else stopHudLoop(t);
   }
 
   function label(t) {
@@ -284,12 +645,13 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     refreshDetection(t);
     onFeed?.(t);
     if (online) return;
-    setTimeout(() => { if (tiles.get(cameraId) === t && t.offline && Date.now() - t.lastFrameAt > 9000) { stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
+    setTimeout(() => { if (tiles.get(cameraId) === t && t.offline && Date.now() - t.lastFrameAt > 9000) { resetHud(t); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
   });
   socket.on('disconnect', () => {
     for (const t of tiles.values()) {
       t.offline = true;
       t.detector.reset('unavailable', 'connection lost');
+      resetHud(t);
       invalidateEvidence(t);
       refreshDetection(t);
       onFeed?.(t);
@@ -303,16 +665,57 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     const streamChanged = t.birdStreamId !== streamId;
     if (streamChanged) {
       clearBirdEvidence(t, { keepStates: true });
+      resetHud(t);
       t.birdStreamId = streamId;
+      if (!t.demo) draw(t, null);
     }
     t.lastFrameAt = Date.now(); t.offline = false; t.received++;
     if (streamChanged) onFeed?.(t);
-    const now = performance.now(), dt = now - t.fpsAt;
+    const now = nowMs(), dt = now - t.fpsAt;
     if (dt >= 1000) { t.fps = t.received * 1000 / dt; t.received = 0; t.fpsAt = now; }
     // Keep one newest frame while a decode is running. Never build a video backlog or draw old frames out of order.
     t.pending = { ft, jpeg, streamId, frameId, frameReceivedAt: t.lastFrameAt, epoch: t.birdEpoch };
     if (!t.decoding) renderLatest(t);
   });
+
+  function redrawTile(t) {
+    if (!isTileOpen(t)) return;
+    if (t.offline) {
+      resetHud(t);
+      draw(t, null);
+      return;
+    }
+    draw(t, currentOverlayState(t));
+  }
+
+  function redrawAll() {
+    for (const t of tiles.values()) redrawTile(t);
+    if (emptyDemo) redrawTile(emptyDemo);
+  }
+
+  function redraw(target) {
+    const cameraId = typeof target === 'string' ? target
+      : (target && typeof target === 'object' && typeof target.cameraId === 'string' ? target.cameraId : null);
+    if (cameraId) {
+      const t = tiles.get(cameraId) || (emptyDemo?.cameraId === cameraId ? emptyDemo : null);
+      if (t) redrawTile(t);
+      return;
+    }
+    redrawAll();
+  }
+
+  const onEnvChange = () => {
+    if (!canAnimateHud()) {
+      for (const t of tiles.values()) stopHudLoop(t);
+      if (emptyDemo) stopHudLoop(emptyDemo);
+      if (!isHidden() && isReducedMotion()) redrawAll();
+    } else {
+      redrawAll();
+    }
+  };
+  document?.addEventListener?.('visibilitychange', onEnvChange);
+  const motionQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  motionQuery?.addEventListener?.('change', onEnvChange);
 
   async function renderLatest(t) {
     t.decoding = true;
@@ -338,4 +741,6 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
       t.decoding = false;
     }
   }
+
+  return { redraw, redrawAll };
 }

@@ -1,0 +1,336 @@
+/* Aviation-viewfinder HUD, live/preview capture badge, corridor editor transitions,
+   and tabular-numeral readouts for SkySentry Camera Station (camera.html). */
+
+.view {
+  isolation: isolate;
+}
+
+.view .hud-frame {
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.view .hud-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: rgba(255, 255, 255, 0.34);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+
+.view .hud-tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+  border-top-left-radius: 5px;
+}
+
+.view .hud-tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+  border-top-right-radius: 5px;
+}
+
+.view .hud-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+  border-bottom-left-radius: 5px;
+}
+
+.view .hud-br {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 1.5px;
+  border-right-width: 1.5px;
+  border-bottom-right-radius: 5px;
+}
+
+.view[data-hud-state="live"] .hud-corner {
+  width: 20px;
+  height: 20px;
+  border-color: rgba(34, 197, 94, 0.7);
+}
+
+.view[data-hud-state="preview"] .hud-corner {
+  border-color: rgba(242, 183, 5, 0.72);
+}
+
+.view[data-corridor-editing="true"] {
+  border-color: rgba(242, 140, 90, 0.78);
+  box-shadow: 0 0 0 2px rgba(242, 140, 90, 0.18);
+}
+
+.view[data-corridor-editing="true"] .hud-corner {
+  width: 22px;
+  height: 22px;
+  border-color: rgba(242, 140, 90, 0.92);
+}
+
+.view .banner {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.view .banner i {
+  position: relative;
+}
+
+/* ---------- Capture mode badge & live streaming pulse ring ---------- */
+.hud-badge {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font: 700 0.7rem/1.2 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud-badge[hidden] {
+  display: none !important;
+}
+
+.hud-badge[data-hud-mode="live"] {
+  color: #dcfce7;
+  background: rgba(8, 22, 13, 0.76);
+  border: 1px solid rgba(34, 197, 94, 0.48);
+  backdrop-filter: blur(8px);
+}
+
+.hud-badge[data-hud-mode="standby"] {
+  color: #d4d4d8;
+  background: rgba(24, 24, 27, 0.76);
+  border: 1px solid rgba(161, 161, 170, 0.34);
+  backdrop-filter: blur(8px);
+}
+
+.hud-badge[data-hud-mode="preview"] {
+  color: #111111;
+  background: #f2b705;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+}
+
+.hud-pulse {
+  position: relative;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a1a1aa;
+}
+
+.hud-pulse[data-active="true"] {
+  background: #22c55e;
+}
+
+.hud-pulse[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(34, 197, 94, 0.78);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hud-badge[data-hud-mode="preview"] .hud-pulse {
+  display: none;
+}
+
+/* ---------- Viewfinder telemetry readout ---------- */
+.hud-telemetry {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(6px);
+  color: rgba(228, 228, 231, 0.84);
+  font: 500 0.72rem/1.2 var(--mono);
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.view[data-corridor-editing="true"] .hud-telemetry {
+  color: #fed7aa;
+  background: rgba(38, 18, 10, 0.82);
+  border-color: rgba(242, 140, 90, 0.56);
+}
+
+/* ---------- Corridor editor controls ---------- */
+.corridor-editor {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+
+.corridor-editor[data-editing="true"] {
+  border-color: rgba(242, 140, 90, 0.76);
+  background: color-mix(in srgb, #f28c5a 9%, var(--card));
+  box-shadow: 0 0 0 3px rgba(242, 140, 90, 0.14);
+}
+
+.corridor-editor[data-editing="true"] #drawCorridor {
+  background: #c2643f;
+  color: #ffffff;
+  border-color: #c2643f;
+}
+
+.corridor-editor[data-editing="true"] #corridorHint {
+  color: var(--ink);
+}
+
+#settings input:focus-visible,
+#settings select:focus-visible {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+/* ---------- Tabular-numeral readouts ---------- */
+.cam .stats b,
+.cam #statusLine,
+.cam #bannerText,
+.cam #riskLvl,
+.cam #riskWhat,
+.cam #riskWhy,
+.cam #log,
+.cam .hud-badge,
+.cam .hud-telemetry,
+.cam #settings input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@media (max-width: 520px) {
+  .view .hud-frame {
+    inset: 6px;
+  }
+  .view .hud-corner {
+    width: 14px;
+    height: 14px;
+  }
+  .hud-badge {
+    left: 10px;
+    bottom: 10px;
+    padding: 3px 8px;
+    font-size: 0.64rem;
+  }
+  .hud-telemetry {
+    right: 10px;
+    bottom: 10px;
+    padding: 3px 7px;
+    font-size: 0.64rem;
+  }
+}
+
+/* ---------- Motion & animations (strictly gated) ---------- */
+@keyframes hud-pulse-ring {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.9;
+  }
+  75%,
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+@keyframes hud-banner-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--banner-ring, #22c55e) 58%, transparent);
+  }
+  75%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.view .banner[data-risk="green"] {
+  --banner-ring: var(--go);
+}
+
+.view .banner[data-risk="yellow"] {
+  --banner-ring: var(--warn);
+}
+
+.view .banner[data-risk="red"] {
+  --banner-ring: var(--stop);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .view,
+  .view .hud-corner,
+  .hud-badge,
+  .hud-telemetry,
+  .corridor-editor,
+  #drawCorridor,
+  #corridorHint,
+  #settings input,
+  #settings select {
+    transition:
+      background-color 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      border-color 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      color 0.2s ease,
+      box-shadow 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      width 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
+      height 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
+      opacity 0.18s ease,
+      transform 0.14s ease;
+  }
+
+  #drawCorridor:active {
+    transform: scale(0.985);
+  }
+
+  .hud-pulse[data-active="true"]::after {
+    animation: hud-pulse-ring 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+  }
+
+  .view[data-hud-state="live"] .banner:not([data-risk="wait"]) i {
+    animation: hud-banner-ring 1.8s ease-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view,
+  .view .hud-corner,
+  .view .banner i,
+  .hud-badge,
+  .hud-pulse,
+  .hud-pulse::after,
+  .hud-telemetry,
+  .corridor-editor,
+  #drawCorridor,
+  #corridorHint,
+  #settings input,
+  #settings select {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

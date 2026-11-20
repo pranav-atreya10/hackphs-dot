@@ -182,3 +182,73 @@ test('capacity limits reject excess state without evicting an active camera or t
   clear(phase.cameraId);
   assert.equal(record(open(1, { cameraId: 'east' })).count, 1);
 });
+
+test('inspect returns frozen read-only progress only for live in-scope non-expired tracks', async () => {
+  let now = 0;
+  const { open, record, prune, clear, inspect } = await setup({ ttlMs: 10, now: () => now });
+  const query = (extra = {}) => inspect({ ...phase, trackId: 1, ...extra });
+  const weakBird = { bird: 0.5, drone: 0.375, other: 0.125 };
+
+  assert.equal(inspect(), null);
+  assert.equal(inspect(null), null);
+  assert.equal(query(), null, 'absent before first frame');
+  const first = open(1, { liveTrackIds: [1, 2] });
+  assert.equal(query(), null, 'absent before first recorded sample');
+
+  assert.equal(record(first, weakBird, 1).count, 1);
+  const partial = query();
+  assert.deepEqual(partial, {
+    count: 1, total: 5, ready: false, label: null, confidence: null, probabilities: null,
+  });
+  assert.equal(Object.isFrozen(partial), true);
+  for (const mismatch of [
+    { cameraId: 'east' }, { streamId: 'stream-b' }, { generation: 'tracker-b' },
+    { trackId: 2 }, { trackId: 0 }, { trackId: -1 }, { trackId: '1' }, { cameraId: '' },
+  ]) {
+    assert.equal(query(mismatch), null);
+  }
+
+  for (const [frameId, probs] of [[2, weakBird], [3, weakBird], [4, drone]]) {
+    const f = open(frameId, { liveTrackIds: [1, 2] });
+    record(f, probs, 1);
+    record(f, bird, 2);
+  }
+  assert.deepEqual(query(), {
+    count: 4, total: 5, ready: false, label: null, confidence: null, probabilities: null,
+  });
+
+  const fifth = open(5, { liveTrackIds: [1, 2] });
+  record(fifth, drone, 1);
+  const ready = query();
+  assert.deepEqual(ready, {
+    count: 5, total: 5, ready: true, label: 'drone', confidence: 0.625,
+    probabilities: { bird: 0.3, drone: 0.625, other: 0.075 },
+  });
+  assert.equal(Object.isFrozen(ready), true);
+  assert.equal(Object.isFrozen(ready.probabilities), true);
+  assert.throws(() => { 'use strict'; ready.count = 0; }, TypeError);
+  assert.throws(() => { 'use strict'; ready.probabilities.drone = 0; }, TypeError);
+
+  // Rolling window updates inspect summary on 6th frame; same-frame roster narrowing drops pruned track.
+  const sixth = open(6, { liveTrackIds: [1, 2] });
+  record(sixth, bird, 1);
+  assert.deepEqual(query(), {
+    count: 5, total: 5, ready: true, label: 'drone', confidence: 0.55,
+    probabilities: { bird: 0.4, drone: 0.55, other: 0.05 },
+  });
+  assert.equal(query({ trackId: 2 })?.count, 3);
+  prune(frameInfo(6, { liveTrackIds: [1] }));
+  assert.equal(query({ trackId: 2 }), null, 'pruned track returns null immediately');
+  assert.equal(query()?.count, 5);
+
+  // Expiry hides inactive tracks before prune() runs without mutating fresher tracks.
+  now = 8;
+  const seventh = open(7, { liveTrackIds: [1, 3] });
+  record(seventh, bird, 3);
+  now = 10;
+  assert.equal(query(), null, 'expired track returns null before prune()');
+  assert.equal(query({ trackId: 3 })?.count, 1, 'fresher sibling track stays inspectable');
+
+  clear(phase.cameraId);
+  assert.equal(query({ trackId: 3 }), null, 'cleared camera returns null');
+});
