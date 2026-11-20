@@ -8,7 +8,9 @@
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"></noscript>
 <script src="/js/theme.js"></script>
 </head>
 <body>
@@ -16,7 +18,8 @@
 
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"></noscript>
 <style>
 /* Layout: a 16:9 WebGL airfield stage (3D, camera moves per shot) with HTML HUD layers on top; captions + transport below. Single committed look: dark projector surround, daylight stage. */
 :root{
@@ -354,6 +357,10 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 .foot b{font:500 1.2rem var(--serif);color:var(--ink-s)}
 </style>
 <link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="/css/view-transitions.css">
+<link rel="stylesheet" href="/css/smooth-details.css">
+<link rel="stylesheet" href="/css/perf-scroll.css">
+<link rel="stylesheet" href="/css/landing-live-ai.css">
 
 <header class="bar"><div class="bar-in">
   <a class="brand" href="#top"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
@@ -385,7 +392,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
 
   <div class="stage" id="stage">
       <div class="film-poster" id="filmPoster">
-        <img src="./film-poster.svg" alt="" width="1280" height="720">
+        <img src="./film-poster.svg" alt="" width="1280" height="720" fetchpriority="high" decoding="async">
         <a class="btn-s primary" id="filmLaunch" href="./film.html">Play the 100-second film</a>
         <span id="filmLaunchStatus" role="status"></span>
       </div>
@@ -593,6 +600,91 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <section class="sec" id="promo">
     <div class="sec-head"><span class="eyebrow-s">Demonstrations</span><h2>Try a local preview</h2>
       <p>Recorded clips and synthetic scenes do not publish live events, trigger tower alerts, or validate airport performance.</p></div>
+    <div class="live-ai-card" id="landingLiveAi" data-state="idle" data-active-clip="starling-murmuration">
+      <div class="live-ai-bar">
+        <div class="live-ai-clips" role="group" aria-label="Recorded demonstration clips">
+          <button class="live-ai-clip" type="button" data-clip="starling-murmuration" data-clip-src="/clips/starling-murmuration.mp4" data-clip-poster="/clips/starling-murmuration.jpg" aria-pressed="true">Starling murmuration</button>
+          <button class="live-ai-clip" type="button" data-clip="drone-hover" data-clip-src="/clips/drone-hover.mp4" data-clip-poster="/clips/drone-hover.jpg" aria-pressed="false">Drone hover</button>
+          <button class="live-ai-clip" type="button" data-clip="gulls-sky" data-clip-src="/clips/gulls-sky.mp4" data-clip-poster="/clips/gulls-sky.jpg" aria-pressed="false">Gulls in open sky</button>
+        </div>
+        <button class="btn-s primary live-ai-toggle" type="button" data-live-ai-toggle data-live-ai-play aria-pressed="false">Run v4.1 local AI in browser · 2.5 MB</button>
+      </div>
+      <div class="live-ai-body">
+        <div class="live-ai-stage" data-live-ai-stage>
+          <img class="live-ai-poster" data-live-ai-poster src="/clips/starling-murmuration.jpg" alt="Recorded preview frame: Starling murmuration at dusk" width="854" height="480" loading="lazy" decoding="async">
+          <canvas class="live-ai-canvas" data-live-ai-video width="854" height="480" aria-label="Local AI video preview canvas"></canvas>
+          <canvas class="live-ai-overlay" data-live-ai-overlay width="854" height="480" aria-hidden="true"></canvas>
+          <div class="live-ai-hud" aria-hidden="true">
+            <i class="live-ai-tick tl"></i>
+            <i class="live-ai-tick tr"></i>
+            <i class="live-ai-tick bl"></i>
+            <i class="live-ai-tick br"></i>
+            <div class="live-ai-hud-top">
+              <span class="live-ai-pill" data-live-ai-badge><i class="live-ai-dot"></i>LOCAL SANDBOX</span>
+              <span class="live-ai-hud-tag" data-live-ai-clip-label>starling-murmuration · 16:9</span>
+            </div>
+          </div>
+        </div>
+        <aside class="live-ai-telemetry" aria-label="Local AI telemetry readout">
+          <div class="live-ai-tel-head">
+            <span class="live-ai-tel-kicker">TELEMETRY · WEB WORKER</span>
+            <span class="live-ai-tel-chip">ADVISORY ONLY</span>
+          </div>
+          <dl class="live-ai-metrics">
+            <div class="live-ai-metric">
+              <dt>Inference latency</dt>
+              <dd data-ai-ms>— ms</dd>
+            </div>
+            <div class="live-ai-metric">
+              <dt>Feed rate</dt>
+              <dd data-ai-fps>— fps</dd>
+            </div>
+            <div class="live-ai-metric">
+              <dt>Tracked objects</dt>
+              <dd data-ai-tracks>0</dd>
+            </div>
+            <div class="live-ai-metric live-ai-metric-wide">
+              <dt>5-frame advisory status</dt>
+              <dd class="live-ai-verdict" data-ai-verdict role="status" aria-live="polite">Standby · local v4.1 worker idle</dd>
+            </div>
+          </dl>
+          <div class="live-ai-probs" role="group" aria-label="Crop classification probabilities">
+            <div class="live-ai-probs-head">
+              <span>Class probabilities</span>
+              <span>64×64 crop</span>
+            </div>
+            <div class="live-ai-prob-row">
+              <div class="live-ai-prob-meta">
+                <span class="live-ai-prob-label">Bird</span>
+                <span class="live-ai-prob-pct" data-prob-value="bird">0%</span>
+              </div>
+              <div class="live-ai-prob-track">
+                <div class="live-ai-prob-fill" data-prob="bird" role="meter" aria-label="Bird probability" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+              </div>
+            </div>
+            <div class="live-ai-prob-row">
+              <div class="live-ai-prob-meta">
+                <span class="live-ai-prob-label">Drone</span>
+                <span class="live-ai-prob-pct" data-prob-value="drone">0%</span>
+              </div>
+              <div class="live-ai-prob-track">
+                <div class="live-ai-prob-fill" data-prob="drone" role="meter" aria-label="Drone probability" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+              </div>
+            </div>
+            <div class="live-ai-prob-row">
+              <div class="live-ai-prob-meta">
+                <span class="live-ai-prob-label">Other</span>
+                <span class="live-ai-prob-pct" data-prob-value="other">0%</span>
+              </div>
+              <div class="live-ai-prob-track">
+                <div class="live-ai-prob-fill" data-prob="other" role="meter" aria-label="Other probability" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+      <p class="live-ai-note">Inference runs 100% locally in a browser Web Worker (<code>SkyNetLite</code> v4.1, 472K params) with zero cloud uploads; preview frames never leave your device.</p>
+    </div>
     <div class="cta"><a class="btn-s" href="/demo.html">Browse demonstrations</a><a class="btn-s" href="#film">Back to the illustrated film</a></div>
   </section>
 
@@ -1230,6 +1322,12 @@ launch.addEventListener("click", async event => {
 
 <script src="/js/guide.js" defer></script>
 <script src="/js/nav-account.js" defer></script>
+<script src="/js/smooth-details.js" defer></script>
+<script src="/js/scroll-perf-guard.js" defer></script>
+<script src="/js/film-scrubber.js" defer></script>
+<script src="/js/film-perf-governor.js" defer></script>
+<script type="module" src="/js/landing-live-ai.mjs"></script>
+<script type="module">import { observeLandingFacts } from "/js/stat-counter.mjs"; observeLandingFacts();</script>
 
 </body>
 </html>

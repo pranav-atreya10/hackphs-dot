@@ -2,6 +2,7 @@ const path = require("path");
 const http = require("http");
 const { randomUUID } = require("node:crypto");
 const { cameraIdentity, createCameraRegistry, isDeviceId, isJPEG, isLiveSource } = require("./camera-ingress");
+const { applyPerfStaticHeaders } = require("./perf-headers");
 const express = require("express");
 const compression = require("compression");
 const { Server } = require("socket.io");
@@ -415,13 +416,11 @@ app.use(express.json({ limit: "1mb" }));
 app.use(compression({ threshold: 1024 }));
 // Heavy, rarely-changing files (3D assets, AI model weights, vendored libraries, clips) are cached
 // by the browser for a week, so the second visit and the bird check load instantly. HTML and app JS
-// revalidate every time so new deploys show up immediately.
-const LONG_CACHE = /^\/(assets|ai-models|vendor|clips|promo|brand|detection\/models)\//;
-app.use(express.static(path.join(__dirname, "public"), {
+// revalidate every time so new deploys show up immediately; compressible assets advertise Vary: Accept-Encoding.
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir, {
   setHeaders(res, filePath) {
-    const rel = "/" + path.relative(path.join(__dirname, "public"), filePath).split(path.sep).join("/");
-    if (LONG_CACHE.test(rel)) res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
-    else res.setHeader("Cache-Control", "no-cache");
+    applyPerfStaticHeaders(res, filePath, { publicDir });
   },
 }));
 
