@@ -3,13 +3,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const det = path.join(__dirname, '../public/detection');
 
 test('engine_config.json matches config.js and params.js (rerun tools/export-config.mjs if this fails)', async () => {
   const saved = JSON.parse(fs.readFileSync(path.join(det, 'models/engine_config.json'), 'utf8'));
-  const { DEFAULTS } = await import(path.join(det, 'src/config.js'));
-  const { PRESETS, PARAMS } = await import(path.join(det, 'src/params.js'));
+  const { DEFAULTS } = await import(pathToFileURL(path.join(det, 'src/config.js')));
+  const { PRESETS, PARAMS } = await import(pathToFileURL(path.join(det, 'src/params.js')));
   assert.deepEqual(saved.defaults, JSON.parse(JSON.stringify(DEFAULTS)));
   assert.deepEqual(saved.presets, JSON.parse(JSON.stringify(PRESETS)));
   assert.deepEqual(saved.registry.map((p) => p.path), PARAMS.map((p) => p.path));

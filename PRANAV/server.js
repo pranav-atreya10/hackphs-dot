@@ -761,7 +761,9 @@ app.post("/api/guide", async (req, res) => {
 const birdJudgeLimit = createRequestLimit({ max: 30, windowMs: 60_000 });
 // Bird review needs camera crops: allowed when Gemini image uploads are opted in, or when the judge is a local
 // model on the operator's own machine (BIRD_JUDGE=local), where images never leave it.
-const judgeReviewEnabled = cloudEvidenceEnabled || aiConfig.BIRD_JUDGE === "local";
+const birdReviewProvider = aiConfig.BIRD_JUDGE === "local" ? "local"
+  : aiConfig.BIRD_JUDGE === "gemini" && cloudEvidenceEnabled ? "gemini" : null;
+const judgeReviewEnabled = birdReviewProvider !== null;
 const birdReview = createBirdReview({
   findLive: (cameraId, airport) => {
     const live = liveCameras.get(cameraId);
@@ -770,16 +772,22 @@ const birdReview = createBirdReview({
   crop: cropBirdReview, verify: verifyBird,
 });
 app.get("/api/cloud-evidence-policy", requireDashboard, requireAirport, (_req, res) => {
-  res.set("Cache-Control", "no-store").json({ cloudEvidenceEnabled, birdJudge: aiConfig.BIRD_JUDGE, reviewEnabled: judgeReviewEnabled });
+  res.set("Cache-Control", "no-store").json({
+    cloudEvidenceEnabled, birdJudge: aiConfig.BIRD_JUDGE, reviewEnabled: judgeReviewEnabled, providerBinding: true,
+  });
 });
 app.post("/api/verify-bird", requireDashboard, requireAirport, async (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!clerk && !(TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)))
     return res.status(401).json({ status: "unavailable", reason: "authentication_required" });
   if (!judgeReviewEnabled) return res.json({ status: "unavailable", reason: "cloud_evidence_disabled" });
+  // A stale local-only page must not send a crop to a newly configured cloud judge.
+  if (req.get("x-bird-review-provider") !== birdReviewProvider)
+    return res.status(409).json({ status: "unavailable", reason: "review_provider_mismatch" });
   if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip))
     return res.status(429).json({ status: "unavailable", reason: "rate_limited" });
-  if (!isPlainObject(req.body) || Object.keys(req.body).some(key => !["cameraId", "streamId", "frameId", "trackId"].includes(key)))
+  const fields = ["cameraId", "streamId", "frameId", "trackId"];
+  if (!isPlainObject(req.body) || Object.keys(req.body).length !== fields.length || fields.some(key => !Object.hasOwn(req.body, key)))
     return res.status(400).json({ status: "unavailable", reason: "invalid_reference" });
   try {
     const { crop, ...verdict } = await birdReview.review(req.body, req.airport);

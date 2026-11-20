@@ -36,6 +36,14 @@ MET with voting: Svanström real-size birds and drones, false alarms on several 
 NOT met: FBD-SV birds 91%; 7 px birds (~66-69%); 10-13 px 89-94%; DUT drones 86%; Open Images false alarms 20%;
 planes/helicopters 9% false alarms even with voting. Be honest about this with the user.
 
+### v5 MobileNetV3 Large checkpoint & ONNX (Svanström authors-only research run)
+- **Packaged weights**:
+  - `runs/v5/best.pt` (`mobilenet_v3_large`, `17,031,299` bytes, SHA-256 `2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b`)
+  - `runs/v5/best.onnx` (self-contained opset-17 ONNX, `16,813,521` bytes, SHA-256 `b5623ed44fff65d8d26c350728f371065ad1dd038e8aef4f0904577fba766c6a`, dynamic batch `crop96_normalised -> logits`; `validate_v5_onnx.py` synthetic CPU logit parity max abs error `7.15e-07` at batch 1 and `8.87e-07` at batch 3)
+  - Provenance & SELECT reports: `runs/v5/run.json`, `runs/v5/history.json`, `results/v5/select_comparison.json`, `results/v5/voting_5_select.json`
+- **Training & SELECT results**: fine-tuned from TorchVision `MobileNet_V3_Large_Weights.IMAGENET1K_V2` (`0.23.0+cu126`) for 8 epochs (728 steps, seed 44) on CC0 Svanström authors-only TRAIN/SELECT (153/35 clips) with aircraft-balanced `other` loss. Native single-crop SELECT balanced accuracy: **95.71%** (95% clip-bootstrap CI `91.86%-98.62%`; bird recall `94.96%`, drone recall `93.68%`, labelled aircraft false positives `2.47%` vs `12.35%` unweighted baseline). Five-crop probability voting across 691 non-overlapping native SELECT windows: **97.81%** bird recall (`134/137`), **95.40%** drone recall (`332/348`), **1.46%** labelled aircraft called bird/drone (`3/206`).
+- **Scope & licence disclosure**: development SELECT on Svanström only — not yet trained on the full 10-source corpus or scored on unseen FBD-SV. `runs/v4_1/best.pt` (`skysentry_classifier.{js,json}`) remains the full 10-source browser classifier verified on unseen FBD-SV (`91.0%` bird recall, `2.1%` false alarms with 5-frame voting). Check TorchVision `IMAGENET1K_V2` pretrained weight terms before commercial deployment.
+
 ### Next steps, in order (what most likely closes the gap)
 1. **Bigger pretrained model on a GPU**: `train_v5_mobilenet.py --arch mobilenet_v3_large` (4.2M params, 16.8 MB,
    within the user's 20 MB limit; ImageNet-pretrained). Too slow on this 2-core CPU (~40 crops/s); on an RTX 3060

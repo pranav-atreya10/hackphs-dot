@@ -120,3 +120,11 @@ receipt and report without that snapshot. Bird and unidentified-object reports u
 Gemini image verdict stored separately as advisory context. The same image is
 not sent to a second report prompt. A confirmation of storage is not
 confirmation of a completed report.
+
+Tower `/api/verify-bird` requests contain only `cameraId`, `streamId`, `frameId`,
+and `trackId` in the JSON body. They must send `X-Bird-Review-Provider: local`
+or `X-Bird-Review-Provider: gemini` matching the currently enabled server judge.
+A missing or mismatched provider is rejected before cropping. Gemini review in
+the tower also requires operator opt-in per connection; reconnecting reloads
+server policy without carrying over the checkbox. Towers leave both review
+paths off if the policy response does not advertise `providerBinding: true`.
