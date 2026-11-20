@@ -571,24 +571,69 @@ async function connect() {
       if (pendingFeed.size > 64) pendingFeed.delete(pendingFeed.keys().next().value);
     });
   }
+  let visualBirds, policyRequest, policyGeneration = 0, cloudJudge = null;
+  const cloudReview = $('birdCloudReview');
+  cloudReview.addEventListener('change', () => {
+    if (cloudJudge) visualBirds.setJudge(!cloudReview.disabled && cloudReview.checked ? cloudJudge : null);
+  });
+  function clearBirdPolicy() {
+    policyGeneration++;
+    policyRequest?.abort();
+    policyRequest = null;
+    cloudJudge = null;
+    cloudReview.checked = false;
+    cloudReview.disabled = true;
+    $('birdCloudReviewControl').hidden = true;
+    visualBirds?.setJudge(null);
+  }
+  async function loadBirdPolicy() {
+    clearBirdPolicy();
+    if (!socket.connected || !visualBirds) return;
+    const generation = policyGeneration, airport = view, request = new AbortController();
+    policyRequest = request;
+    const current = () => generation === policyGeneration && airport === view && socket.connected;
+    const judgeFor = provider => async ({ cameraId, streamId, frameId, trackId }, signal) => {
+      if (!current() || signal.aborted || (provider === 'gemini' && (cloudReview.disabled || !cloudReview.checked))) {
+        throw new DOMException('Bird review consent is no longer active', 'AbortError');
+      }
+      const result = await api('/api/verify-bird', { method: 'POST',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
+        headers: { 'content-type': 'application/json', 'x-bird-review-provider': provider },
+        body: JSON.stringify({ cameraId, streamId, frameId, trackId }) });
+      if (result.status === 'verified' && result.source !== provider) throw new Error('Bird review provider changed');
+      return result;
+    };
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10000)]);
+    try {
+      const policy = await api('/api/cloud-evidence-policy', { signal });
+      if (!current() || signal.aborted || policy?.providerBinding !== true || policy.reviewEnabled !== true) return;
+      if (policy.birdJudge === 'local') visualBirds.setJudge(judgeFor('local'));
+      else if (policy.birdJudge === 'gemini' && policy.cloudEvidenceEnabled === true) {
+        cloudJudge = judgeFor('gemini');
+        cloudReview.disabled = false;
+        $('birdCloudReviewControl').hidden = false;
+      }
+    } catch (error) {
+      if (current() && !request.signal.aborted) console.warn('Could not configure bird evidence review:', error.message);
+    } finally {
+      if (policyRequest === request) policyRequest = null;
+    }
+  }
+
   const initFeeds = feature('Camera feeds', 'feedsLoad', async () => {
     const { startFeeds } = await import('/js/feeds.js');
     const { VisualBirdVerifier } = await import('/js/visual-ai.js');
-    const visualBirds = new VisualBirdVerifier({ button: $('birdCheck'), status: $('birdCheckStatus'), reviewStatus: $('birdReviewStatus') });
-    api('/api/cloud-evidence-policy').then(({ cloudEvidenceEnabled, reviewEnabled }) => {
-      // reviewEnabled: Gemini uploads are opted in, or the bird judge is a local model (older servers only send cloudEvidenceEnabled)
-      if ((reviewEnabled ?? cloudEvidenceEnabled) === true) {
-        visualBirds.judge = ref => api('/api/verify-bird', { method: 'POST', signal: AbortSignal.timeout(15000),
-          headers: { 'content-type': 'application/json' }, body: JSON.stringify(ref) });
-      }
-    }).catch(() => { /* An unknown policy means local-only. */ });
+    const button = $('birdCheck');
+    visualBirds = new VisualBirdVerifier({ button, status: $('birdCheckStatus'), reviewStatus: $('birdReviewStatus') });
     startFeeds({
       on: (name, receive) => feedEvents.set(name, receive),
     }, { container: $('feeds'), hint: $('feedsHint'), demo: false,
-      onFeed: t => visualBirds.onFeed(t), onRemove: id => visualBirds.feeds.delete(id),
+      onFeed: t => visualBirds.onFeed(t), onRemove: id => visualBirds.onRemove(id),
     });
     for (const [name, data] of pendingFeed.values()) deliverFeed(name, data);
     pendingFeed.clear();
+    button.disabled = false;
+    void loadBirdPolicy();
   });
   let started = false;
   socket.on('connect', () => {
@@ -598,7 +643,7 @@ async function connect() {
     void loadIncidents();
     replayAlerts();
     activateMore();
-    if (started) return;
+    if (started) { void loadBirdPolicy(); return; }
     started = true;
     if (auth.airport) void setupAirports().catch(err => {
       $('airportBox').hidden = false; $('airportSearch').disabled = true;
@@ -621,8 +666,11 @@ async function connect() {
     status(['io server disconnect', 'io client disconnect'].includes(reason)
       ? 'Access ended; reload to reconnect' : 'Reconnecting…');
     $('conn').dataset.ok = '0';
+    clearBirdPolicy();
+    visualBirds?.reset();
   });
   socket.on('connect_error', err => {
+    clearBirdPolicy();
     if (err.message === 'unauthorized' || !socket.active) showStartupError(new Error('The tower did not authorize this connection.'));
     else status('Offline — reconnecting…');
     $('conn').dataset.ok = '0';

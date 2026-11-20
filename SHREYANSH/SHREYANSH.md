@@ -1,7 +1,9 @@
 This is the file for Shreyansh. Refer to AI.md for reference.
 
 ## Advisory bird verification
-The tower loads the existing COCO assets only on opt-in and shows runtime, weight, and warmup progress. Local bird checks continue while an optional cloud review is pending. The server crops its own matching camera frame and track; the browser sends only the evidence reference. Gemini outcomes remain `bird`, `not_bird`, or `uncertain`, and late outcomes are shown as history. Neither verification path changes tower risk or provides clearance.
+The tower loads the shipped v4.1 browser model only when enabled. It copies pixels at native resolution from an exact server frame/tracker match and dispatches at most one worker batch (up to eight rotating tracks). An advisory result appears only after averaging five distinct, chronological probability vectors for the same ongoing track. Losing a track or changing detector generation, stream, camera configuration, or airport/connection scope invalidates old evidence. Recorded previews never enter this live path. The seven-pixel eligibility floor is experimental, not a measured reliability limit.
+
+Evidence review runs independently; the optional cloud path requires deployment permission and a separate operator opt-in for each connection. The server crops its own matching camera frame and track; the browser sends only the evidence reference and the expected provider header. A stale local-only request cannot reach Gemini after a server configuration change. An explicitly configured local server judge remains supported. Judge outcomes remain `bird`, `not_bird`, or `uncertain`; timely results are advisory, while a late verdict for the same session is shown as history. Neither verification path adds live track labels, changes tower risk or alerts, or provides clearance.
 
 ## Deployed integration and devnet fixes
 The PR #12 AI/voice design is adapted under PRANAV/ai-voice using native HTTP requests so the DigitalOcean PRANAV service includes it. Immediate alerts receive later report/audio/stamp updates using the same incident ID. Solana validates secret bytes, configurable RPC devnet genesis, funding, submission and bounded confirmation; missing/failed providers keep the dashboard usable and expose honest status. /api/integrations returns configuration/status without keys. Live voice and ledger success require runtime credentials.
@@ -92,8 +94,12 @@ does not download data or open FBD-SV; that frozen dataset stays reserved for th
 planes/helicopters are still below the 95% target. Earlier versions scored 95%+ on Mendeley but only 1.5% on
 real footage from another source: always test on footage from a different source.
 
-**v4.1 app integration:** See the separate [v4.1 app branch](https://github.com/pranav-atreya10/hackphs-dot/tree/shreyanshnikam-v4-1-app-integration).
-The Gemini comparison was not run.
+**Browser worker client (`v4.1` app integration):** Shipped in `PRANAV/public/ai-models/skysentry_classifier.{js,json}`
+and `PRANAV/public/js/skysentry-v41-{client,worker,schedule,vote}.mjs`. An explicit load starts a local module worker.
+The client sends one request at a time and transfers only the frame helper's owned RGBA copy. Closing cancels
+outstanding work; a new explicit load starts a fresh worker after close, a timeout, or a worker error.
+
+**Remaining gaps:** Full 10-source v5 training and unseen FBD-SV evaluation; the Gemini comparison was not run.
 Datasets are not in git (data/ is ignored); the scripts re-download them and check their checksums.
 
 **Independent small-bird evidence:** `small_bird_preflight.py` checks local native-frame metadata for
@@ -142,8 +148,8 @@ or evidence of 95% independent performance. No new FBD-SV score was produced; th
 
 **Scope and pretrained weight terms.** This v5 checkpoint was trained and selected on CC0 Svanström authors-only
 TRAIN/SELECT only — it has not yet been trained on the full 10-source corpus or scored on unseen FBD-SV, while
-v4.1 (`Shreyansh Local Ai Model/runs/v4_1/best.pt` and the exported browser classifier) remains the full 10-source
-model verified on unseen FBD-SV (`91.0%` bird recall, `2.1%` false alarms with 5-frame voting). Because v5 starts
-from TorchVision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`, review the
+v4.1 (`Shreyansh Local Ai Model/runs/v4_1/best.pt` + `PRANAV/public/ai-models/skysentry_classifier.{js,json}`) remains
+the full 10-source browser model verified on unseen FBD-SV (`91.0%` bird recall, `2.1%` false alarms with 5-frame voting).
+Because v5 starts from TorchVision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`, review the
 [TorchVision pretrained weights terms note](https://docs.pytorch.org/vision/0.23/models.html#general-information-on-pre-trained-weights)
 before any commercial deployment.

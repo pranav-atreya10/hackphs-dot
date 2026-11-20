@@ -254,6 +254,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     invalidateEvidence(t);
     t.botState = null;
     label(t);
+    onFeed?.(t);
   });
   socket.on('bot:status', s => {
     if (dismissed.has(s.cameraId)) return;
@@ -261,16 +262,19 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     if (t.detector.generation && (s.mode !== 'server' || s.generation !== t.detector.generation)) invalidateEvidence(t);
     t.detector.update(s);
     refreshDetection(t);
+    onFeed?.(t);
   });
   socket.on('bot:state', result => {
     if (dismissed.has(result.cameraId)) return;
     const t = tile(result.cameraId);
     if (t.offline || !t.detector.accept(result)) return;
+    t.birdStateStreamId = result.streamId;
     refreshDetection(t);
     if (!t.demo) {
       t.birdPairs.addState(result);
       updateServerEvidence(t, true);
     }
+    onFeed?.(t);
   });
   socket.on('camera:status', ({ cameraId, online }) => {
     const t = tiles.get(cameraId); if (!t) return;
@@ -278,6 +282,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     if (!online) t.detector.reset('unavailable', 'camera offline');
     if (!online) invalidateEvidence(t);
     refreshDetection(t);
+    onFeed?.(t);
     if (online) return;
     setTimeout(() => { if (tiles.get(cameraId) === t && t.offline && Date.now() - t.lastFrameAt > 9000) { stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
   });
@@ -287,6 +292,7 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
       t.detector.reset('unavailable', 'connection lost');
       invalidateEvidence(t);
       refreshDetection(t);
+      onFeed?.(t);
     }
   });
   setInterval(() => { for (const t of tiles.values()) refreshDetection(t); }, 500);
@@ -294,11 +300,13 @@ export function startFeeds(socket, { container, hint, onFeed, onRemove, onDemoSt
     if (dismissed.has(cameraId)) return;
     const t = tile(cameraId);
     if (t.demo && t.source !== 'demo') stopDemo(t);   // real video beats automatic demo footage immediately
-    if (t.birdStreamId !== streamId) {
+    const streamChanged = t.birdStreamId !== streamId;
+    if (streamChanged) {
       clearBirdEvidence(t, { keepStates: true });
       t.birdStreamId = streamId;
     }
     t.lastFrameAt = Date.now(); t.offline = false; t.received++;
+    if (streamChanged) onFeed?.(t);
     const now = performance.now(), dt = now - t.fpsAt;
     if (dt >= 1000) { t.fps = t.received * 1000 / dt; t.received = 0; t.fpsAt = now; }
     // Keep one newest frame while a decode is running. Never build a video backlog or draw old frames out of order.

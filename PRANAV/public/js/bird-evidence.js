@@ -138,3 +138,24 @@ export function captureBirdEvidence(candidate, options = COCO_DEFAULTS, createCa
   canvas.getContext('2d').drawImage(bitmap, crop.sx, crop.sy, crop.side, crop.side, 0, 0, canvas.width, canvas.height);
   return { canvas, bbox: crop.obj, nativeWidth, nativeHeight };
 }
+
+export function snapshotClassifierFrame(pair, createCanvas = () => document.createElement('canvas')) {
+  const { frame, state } = pair || {};
+  const bitmap = frame?.bitmap, { width, height } = bitmap || {};
+  if (!Number.isFinite(frame?.frameT) || frame.frameT !== state?.t ||
+      !Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+      width <= 0 || height <= 0 || width * height > FRAME_PIXEL_BUDGET) return null;
+  const canvas = createCanvas();
+  canvas.width = width;
+  canvas.height = height;
+  try {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Could not read the matched frame');
+    // getImageData creates independent pixels, so transferring them cannot detach the feed's bitmap.
+    ctx.drawImage(bitmap, 0, 0);
+    const { data } = ctx.getImageData(0, 0, width, height);
+    return { data, width, height };
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
+}

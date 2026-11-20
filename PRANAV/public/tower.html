@@ -111,9 +111,13 @@
       <div id="feeds"></div>
       <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
       <p class="hint" id="feedsLoad" role="status"></p>
-      <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false">Enable trained bird check</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Bird check off · motion detection stays active.</span></div>
+      <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false" aria-describedby="birdCheckHelp" disabled>Enable local video advisory</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Local video advisory off · motion detection stays active.</span></div>
+      <p class="hint" id="birdCheckHelp">The v4.1 model checks multiple frames in this browser without sending extra images. The live video stream still goes through the server. A track needs a complete vote before it can be classified. Results are advisory, not clearance, and do not change detector risk.</p>
+      <p class="hint" id="birdCloudReviewControl" hidden>
+        <label><input id="birdCloudReview" type="checkbox" autocomplete="off" aria-describedby="birdCloudReviewHelp" disabled> Allow Gemini review</label>
+        <span id="birdCloudReviewHelp">For this connection only: allow the server to send eligible camera crops to Gemini for advisory review.</span>
+      </p>
       <p class="hint" id="birdReviewStatus" role="status" aria-live="polite"></p>
-      <p class="hint">The trained bird check runs in this browser. Separate cloud review is available only if enabled for this deployment. Neither review changes operational risk.</p>
     </section>
     <details class="card" id="towerDemo">
       <summary>Preview recorded footage (demo)</summary>

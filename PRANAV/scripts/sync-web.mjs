@@ -1,10 +1,11 @@
 // Copies the team's browser code into PRANAV/public so one server (this one) hosts the whole site.
 // DigitalOcean only deploys the PRANAV folder, so the copies are committed. Run after changing
-// Vivan's detection engine or Atharv's film/site: npm run sync-web
+// Vivan's detection engine, Atharv's film/site, or Shreyansh's classifier export: npm run sync-web
 //
 //   VIVAN/detection/{index.js,src,adapters,models,test}  -> public/detection/
 //   ATHARV/skysentry/dist (film runtime + assets)  -> public/  (film.html = standalone film)
 //   ATHARV/skysentry/dist/site.html                -> public/index.html (landing page, film built in)
+//   Shreyansh Local Ai Model/skysentry_classifier.{js,json} -> public/ai-models/ (full sync only)
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
@@ -24,13 +25,13 @@ const differences = [];
 const normalized = data => data.toString('utf8').replace(/\r\n/g, '\n');
 const textFile = path => /\.(?:html|js|json|svg|txt|md|css)$/.test(path);
 const managed = new Set();
-function output(path, content) {
+function output(path, content, { exactBytes = false } = {}) {
   managed.add(path);
   const dest = join(pub, path);
   const exists = existsSync(dest);
   if (exists) {
     const actual = readFileSync(dest);
-    if (textFile(path) ? normalized(actual) === normalized(content) : actual.equals(content)) return;
+    if (!exactBytes && textFile(path) ? normalized(actual) === normalized(content) : actual.equals(content)) return;
   }
   if (check) differences.push(`${exists ? 'changed' : 'missing'} ${path}`);
   else {
@@ -126,6 +127,15 @@ site = must(site, '<div class="cta"><a class="btn-s primary" href="#film">Watch 
 site = must(site, '<div><b>SkySentry</b>', `<div><b>${MARK}SkySentry</b>`, 'site.html footer');
 site = site.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Source\+Serif[^>]*>\n?/, '');
 output('index.html', themed(decorative(loader(site)), 'site.css', 'SkySentry is a video-only monitoring prototype with server-assigned risk and advisory tower warnings.'));
+}
+
+if (!args.has('--film') && !args.has('--detector')) {
+  const model = join(repo, 'Shreyansh Local Ai Model');
+  for (const name of ['skysentry_classifier.js', 'skysentry_classifier.json']) {
+    // Undo Git's CRLF checkout conversion before comparing the bytes served to browsers.
+    const content = Buffer.from(normalized(readFileSync(join(model, name))));
+    output(join('ai-models', name), content, { exactBytes: true });
+  }
 }
 
 if (differences.length) {
