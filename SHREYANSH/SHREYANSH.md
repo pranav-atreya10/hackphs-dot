@@ -118,14 +118,16 @@ published tooling: [`60ac953`](https://github.com/pranav-atreya10/hackphs-dot/co
 The run used seed 44 and fixed TRAIN/SELECT splits (153/35 clips), with eight epochs and 728 optimizer steps.
 The loss upweighted aircraft and downweighted generated backgrounds within `other`, normalized to preserve
 the nominal total `other` weight without changing bird or drone weights. The checkpoint was selected by
-crop-level balanced accuracy on native SELECT.
+crop-level balanced accuracy on native SELECT (`95.71%`, 95% clip-bootstrap CI `91.86%` to `98.62%`).
 
-- Checkpoint SHA-256: `2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b`
+- PyTorch checkpoint: `Shreyansh Local Ai Model/runs/v5/best.pt` (`17,031,299` bytes, SHA-256 `2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b`)
+- ONNX export: `Shreyansh Local Ai Model/runs/v5/best.onnx` (`16,813,521` bytes, SHA-256 `b5623ed44fff65d8d26c350728f371065ad1dd038e8aef4f0904577fba766c6a`; opset 17, inline weights, dynamic batch `crop96_normalised -> logits`, synthetic CPU logit parity max abs error `7.15e-07` at batch 1 and `8.87e-07` at batch 3)
+- Run & SELECT artifacts: `Shreyansh Local Ai Model/runs/v5/run.json`, `Shreyansh Local Ai Model/runs/v5/history.json`, `Shreyansh Local Ai Model/results/v5/select_comparison.json`, `Shreyansh Local Ai Model/results/v5/voting_5_select.json`
 - Receipt SHA-256: `f372f1a067df5b4821c03e3562932b7ed180643826d53046041f87dcfb6613e7`
 - Recipe SHA-256: `0a2e3c9ae6880c7e4bbdfb92d4de1ee903a6a39ede5806f8e8b7a058f177c30c`
 
-**Five-crop votes** averaged class probabilities on the same non-overlapping, annotation-linked native SELECT
-windows used for the single-crop comparison:
+**Five-crop votes** averaged class probabilities across 691 non-overlapping, annotation-linked native SELECT
+windows on the same split used for the single-crop comparison:
 
 | Measure | Windows | Clips | Rate (95% clip-bootstrap CI) |
 | --- | ---: | ---: | ---: |
@@ -138,6 +140,10 @@ the clips were not verified to be independent recording sessions, and there were
 SELECT was used for development, not as a frozen or independent test. These are not live false-alarm rates
 or evidence of 95% independent performance. No new FBD-SV score was produced; the benchmark archive is unchanged.
 
-**Research only, not for production.** No weights are published here because redistribution rights for the
-exact ImageNet V2 initialization and fine-tuned checkpoint could not be verified. See the
-[TorchVision pretrained weights terms note](https://docs.pytorch.org/vision/0.23/models.html#general-information-on-pre-trained-weights).
+**Scope and pretrained weight terms.** This v5 checkpoint was trained and selected on CC0 Svanström authors-only
+TRAIN/SELECT only — it has not yet been trained on the full 10-source corpus or scored on unseen FBD-SV, while
+v4.1 (`Shreyansh Local Ai Model/runs/v4_1/best.pt` and the exported browser classifier) remains the full 10-source
+model verified on unseen FBD-SV (`91.0%` bird recall, `2.1%` false alarms with 5-frame voting). Because v5 starts
+from TorchVision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`, review the
+[TorchVision pretrained weights terms note](https://docs.pytorch.org/vision/0.23/models.html#general-information-on-pre-trained-weights)
+before any commercial deployment.

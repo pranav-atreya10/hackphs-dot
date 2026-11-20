@@ -1,0 +1,113 @@
+{
+  "scope": "authors-only Svanstrom development SELECT (not test)",
+  "git": {
+    "commit": "c2b5962c178cbd48d15ceac5b18ba63f142487bf",
+    "branch": "shreyanshnikam-fbd-sv-voting-integrity",
+    "dirty": false
+  },
+  "adapter_commit": "60ac9535e512a5e906197ae303e2c35651b30ff7",
+  "architecture": "mobilenet_v3_large",
+  "trial": "aircraft-balanced",
+  "checkpoint_sha256": "2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b",
+  "receipt_sha256": "f372f1a067df5b4821c03e3562932b7ed180643826d53046041f87dcfb6613e7",
+  "inputs_sha256": {
+    "shreyansh_crops_v3/svan_select_X.npy": "b862a277d6c857fae87e8afa210d9e0383ef134e5a155529436d6c853b8d0648",
+    "shreyansh_crops_v3/svan_select_meta.npz": "b302ef7ae3b1edfda6a29698ec93f40d8bc0c72e7aed1cfd90c5d036881149ee"
+  },
+  "window_plan_sha256": "c033969bd7bc12c76d73ed9d52bd4fc76ad5471fe8d986a3731535cf20252aed",
+  "background_mask_sha256": "e854022bd4315a00a256e09bd2a26ecab8a628dcecbc9d0dd14cf69785d2cd08",
+  "excluded_background_rows": 3678,
+  "frame_stride": 3,
+  "window_size": 5,
+  "unit": "non-overlapping annotation-linked windows, not verified object tracks",
+  "rule": "first crop argmax vs mean class probability argmax on identical windows",
+  "excluded": "generated background; no live false-alarm rate or native tiny-target claim",
+  "bootstrap": {
+    "unit": "clip within foreground type",
+    "resamples": 1000,
+    "seed": 0,
+    "level": 0.95
+  },
+  "runtime": {
+    "device": "cpu",
+    "threads": 1,
+    "batch": 24,
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.0",
+    "numpy": "2.2.6",
+    "torch": "2.8.0+cu126",
+    "torchvision": "0.23.0+cu126"
+  },
+  "results": {
+    "bird": {
+      "metric": "bird recall",
+      "windows": 137,
+      "clips": 8,
+      "first_crop": {
+        "value": 0.9197080291970803,
+        "lo": 0.8015240106112285,
+        "hi": 1.0,
+        "numerator": 126
+      },
+      "five_crop_vote": {
+        "value": 0.9781021897810219,
+        "lo": 0.9333208955223881,
+        "hi": 1.0,
+        "numerator": 134
+      },
+      "paired_delta": {
+        "value": 0.058394160583941604,
+        "lo": 0.0,
+        "hi": 0.1288124566273421
+      },
+      "ci_overlap_rule": "not significant"
+    },
+    "drone": {
+      "metric": "drone recall",
+      "windows": 348,
+      "clips": 17,
+      "first_crop": {
+        "value": 0.9396551724137931,
+        "lo": 0.8749910968660969,
+        "hi": 0.9856733524355301,
+        "numerator": 327
+      },
+      "five_crop_vote": {
+        "value": 0.9540229885057471,
+        "lo": 0.8835144311706812,
+        "hi": 0.9942861212861214,
+        "numerator": 332
+      },
+      "paired_delta": {
+        "value": 0.014367816091954023,
+        "lo": -0.008621310742323363,
+        "hi": 0.03735632183908046
+      },
+      "ci_overlap_rule": "not significant"
+    },
+    "aircraft": {
+      "metric": "labelled aircraft called bird or drone",
+      "windows": 206,
+      "clips": 10,
+      "first_crop": {
+        "value": 0.03398058252427184,
+        "lo": 0.0,
+        "hi": 0.08832409775504398,
+        "numerator": 7
+      },
+      "five_crop_vote": {
+        "value": 0.014563106796116505,
+        "lo": 0.0,
+        "hi": 0.038461538461538464,
+        "numerator": 3
+      },
+      "paired_delta": {
+        "value": -0.019417475728155338,
+        "lo": -0.049122620062517754,
+        "hi": 0.0
+      },
+      "ci_overlap_rule": "not significant"
+    }
+  },
+  "checkpoint_path": "Shreyansh Local Ai Model/runs/v5/best.pt"
+}
