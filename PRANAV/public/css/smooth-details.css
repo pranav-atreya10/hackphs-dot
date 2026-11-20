@@ -1,0 +1,180 @@
+/* Progressive smooth <details> accordions & drawers for SkySentry (Tower, Camera, Landing FAQ).
+   Uses CSS interpolate-size + ::details-content where supported, paired with /js/smooth-details.js
+   Web Animations API fallback elsewhere. All motion is disabled under prefers-reduced-motion: reduce. */
+
+:is(details.fold, .faq details, details.card) {
+  box-sizing: border-box;
+}
+
+:is(details.fold, .faq details, details.card) > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+details.card:not(.fold) > summary {
+  font: 600 .98rem var(--sans, system-ui, -apple-system, sans-serif);
+}
+
+:is(details.fold, .faq details, details.card) > summary::-webkit-details-marker,
+:is(details.fold, .faq details, details.card) > summary::marker {
+  display: none;
+  content: "";
+}
+
+/* Focus-visible polish */
+:is(details.fold, .faq details, details.card) > summary:focus {
+  outline: none;
+}
+
+:is(details.fold, .faq details, details.card) > summary:focus-visible {
+  outline: 2px solid var(--ink, var(--ink-s, currentColor));
+  outline-offset: 4px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink, var(--ink-s, currentColor)) 12%, transparent);
+}
+
+/* Summary indicators: + on .fold / .faq details, geometric chevron on standalone details.card */
+:is(details.fold, .faq details) > summary::after {
+  content: "+";
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  line-height: 1;
+  color: var(--mute, var(--mute-s, currentColor));
+  transform-origin: 50% 50%;
+}
+
+:is(details.fold, .faq details) > summary:hover::after {
+  color: var(--ink, var(--ink-s, currentColor));
+}
+
+:is(details.card:not(.fold), details[data-indicator="chevron"]) > summary::after {
+  content: "";
+  flex: none;
+  width: 0.52rem;
+  height: 0.52rem;
+  margin-right: 0.2rem;
+  border-right: 1.75px solid var(--mute, var(--mute-s, currentColor));
+  border-bottom: 1.75px solid var(--mute, var(--mute-s, currentColor));
+  transform-origin: 50% 50%;
+  transform: rotate(-45deg);
+}
+
+:is(details.card:not(.fold), details[data-indicator="chevron"]) > summary:hover::after {
+  border-color: var(--ink, var(--ink-s, currentColor));
+}
+
+:is(details.card:not(.fold), details[data-indicator="chevron"])[open]:not([data-closing="true"]) > summary::after {
+  transform: rotate(45deg);
+  border-color: var(--ink, var(--ink-s, currentColor));
+}
+
+/* JS Web Animations API fallback hooks */
+:is(details.fold, .faq details, details.card)[data-animating="true"] {
+  overflow: hidden;
+}
+
+:is(details.fold, .faq details, details.card)[open][data-closing="true"] > :not(summary),
+.faq details[open][data-closing="true"] p {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(details.fold, .faq details, details.card) > summary {
+    transition: color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  :is(details.fold, .faq details) > summary::after {
+    transform: rotate(0deg);
+    transition: transform 0.28s cubic-bezier(.2,.7,.2,1), color 0.2s ease;
+  }
+
+  :is(details.fold, .faq details)[open]:not([data-closing="true"]) > summary::after {
+    content: "+";
+    transform: rotate(45deg);
+    color: var(--ink, var(--ink-s, currentColor));
+  }
+
+  :is(details.fold, .faq details)[open][data-closing="true"] > summary::after {
+    content: "+";
+    transform: rotate(0deg);
+    color: var(--mute, var(--mute-s, currentColor));
+  }
+
+  :is(details.card:not(.fold), details[data-indicator="chevron"]) > summary::after {
+    transition: transform 0.28s cubic-bezier(.2,.7,.2,1), border-color 0.2s ease;
+  }
+
+  /* Native CSS progressive enhancement where ::details-content + allow-keywords are supported */
+  @supports selector(::details-content) and (interpolate-size: allow-keywords) {
+    :is(details.fold, .faq details, details.card) {
+      interpolate-size: allow-keywords;
+    }
+
+    details.card {
+      transition: row-gap 0.28s cubic-bezier(.2,.7,.2,1), border-color 0.2s ease, background-color 0.2s ease;
+    }
+
+    details.card:not([open]) {
+      row-gap: 0;
+    }
+
+    :is(details.fold, .faq details, details.card)::details-content {
+      display: block;
+      overflow: clip;
+      height: 0;
+      opacity: 0;
+      transition:
+        height 0.28s cubic-bezier(.2,.7,.2,1),
+        opacity 0.28s cubic-bezier(.2,.7,.2,1),
+        content-visibility 0.28s cubic-bezier(.2,.7,.2,1) allow-discrete;
+    }
+
+    :is(details.fold, .faq details, details.card)[open]::details-content {
+      height: auto;
+      opacity: 1;
+    }
+
+    details.fold[open] > :not(summary),
+    .faq details[open] p {
+      animation: none;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(details.fold, .faq details, details.card) {
+    interpolate-size: numeric-only;
+    transition: none !important;
+  }
+
+  :is(details.fold, .faq details, details.card)::details-content {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  :is(details.fold, .faq details, details.card) > summary,
+  :is(details.fold, .faq details, details.card) > summary::after,
+  :is(details.fold, .faq details, details.card) > :not(summary) {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  :is(details.fold, .faq details)[open] > summary::after {
+    content: "\2212";
+    transform: none !important;
+  }
+
+  :is(details.card:not(.fold), details[data-indicator="chevron"])[open] > summary::after {
+    transform: rotate(45deg);
+  }
+}
