@@ -57,7 +57,7 @@ function worker({ load = async () => {}, classify = (_frame, boxes) => predictio
   };
 }
 
-function setup(t, { createClient = () => worker(), judge } = {}) {
+function setup(t, { createClient = () => worker(), judge, onProgress } = {}) {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 10_000 });
   const savedDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', {
@@ -83,7 +83,7 @@ function setup(t, { createClient = () => worker(), judge } = {}) {
     clients.push(client);
     return client;
   };
-  const verifier = new VisualBirdVerifier({ button, status, reviewStatus, createWorkerClient,
+  const verifier = new VisualBirdVerifier({ button, status, reviewStatus, onProgress, createWorkerClient,
     now: () => Date.now(), isHidden: () => false });
   t.after(() => verifier.disable());
   if (judge) {
@@ -389,3 +389,158 @@ for (const [source, dense] of [['tower', false], ['demo', false], ['server', tru
     assert.equal(s.reviewStatus.textContent, '');
   });
 }
+
+test('getTrackVote and onProgress report live 1/5 -> 5/5 telemetry and pending jobs without mutating detector state', async t => {
+  const tile = feed();
+  const snapshots = [];
+  let currentJob = null;
+  const client = worker({
+    classify: (_frame, boxes) => {
+      currentJob = deferred();
+      return currentJob.promise.then(probs => predictions(boxes, probs));
+    },
+  });
+  const s = setup(t, {
+    createClient: () => client,
+    onProgress: ({ cameraId }) => {
+      snapshots.push({
+        cameraId,
+        vote: s.verifier.getTrackVote(cameraId ?? 'iphone', 1, {
+          streamId: 'iphone-stream', generation: 'generation-a',
+        }),
+      });
+    },
+  });
+
+  s.publish(tile, { frameId: 1 });
+  assert.equal(s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' }), null,
+    'returns null while verifier is disabled');
+
+  await s.verifier.enable();
+  const initial = s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' });
+  assert.deepEqual(initial, {
+    count: 0, total: 5, ready: false, label: null, confidence: null, pending: false,
+  });
+  assert.equal(Object.isFrozen(initial), true);
+
+  for (let frameId = 1; frameId <= 5; frameId++) {
+    if (frameId > 1) {
+      s.advance();
+      s.publish(tile, { frameId });
+    }
+    const operationalBefore = structuredClone(tile.botState);
+    const tickPromise = s.verifier.tick();
+    await nextTurn();
+    assert.deepEqual(
+      s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' }),
+      { count: frameId - 1, total: 5, ready: false, label: null, confidence: null, pending: true },
+    );
+    assert.equal(s.verifier.getTrackVote('iphone', 2, { streamId: 'iphone-stream', generation: 'generation-a' }), null);
+    currentJob.resolve(BIRD);
+    await tickPromise;
+    assert.deepEqual(tile.botState, operationalBefore, 'detector state and track classification stay untouched');
+    assert.deepEqual(tile.labelWrites, []);
+  }
+
+  assert.deepEqual(
+    s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' }),
+    { count: 5, total: 5, ready: true, label: 'bird', confidence: .96, pending: false },
+  );
+  assert.deepEqual(s.verifier.getTrackVote('iphone', 1), {
+    count: 5, total: 5, ready: true, label: 'bird', confidence: .96, pending: false,
+  });
+
+  // Every start/finish transition was delivered synchronously with consistent post-transition state.
+  assert.equal(snapshots.length, 10);
+  for (let i = 0; i < 5; i++) {
+    assert.deepEqual(snapshots[i * 2], {
+      cameraId: 'iphone',
+      vote: { count: i, total: 5, ready: false, label: null, confidence: null, pending: true },
+    });
+    assert.deepEqual(snapshots[i * 2 + 1], {
+      cameraId: 'iphone',
+      vote: i < 4
+        ? { count: i + 1, total: 5, ready: false, label: null, confidence: null, pending: false }
+        : { count: 5, total: 5, ready: true, label: 'bird', confidence: .96, pending: false },
+    });
+  }
+
+  s.verifier.disable();
+  assert.equal(snapshots.length, 11);
+  assert.deepEqual(snapshots.at(-1), { cameraId: 'iphone', vote: null });
+  assert.equal(s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' }), null);
+});
+
+test('getTrackVote enforces scope, epoch, freshness, track continuity, and reset/remove invalidation', async t => {
+  const tile = feed();
+  const events = [];
+  let inFlight = null;
+  const client = worker({
+    classify: (_frame, boxes) => inFlight ? inFlight.promise : predictions(boxes, DRONE),
+  });
+  const s = setup(t, {
+    createClient: () => client,
+    onProgress: ev => events.push(ev),
+  });
+  await s.verifier.enable();
+  for (let frameId = 1; frameId <= 3; frameId++) await s.sample(tile, { frameId });
+  assert.equal(s.verifier.getTrackVote('iphone', 1)?.count, 3);
+
+  // Scope, identity, and eligibility mismatches return null.
+  assert.equal(s.verifier.getTrackVote('other', 1), null);
+  assert.equal(s.verifier.getTrackVote('iphone', 0), null);
+  assert.equal(s.verifier.getTrackVote('iphone', 1, { streamId: 'wrong-stream' }), null);
+  assert.equal(s.verifier.getTrackVote('iphone', 1, { generation: 'wrong-gen' }), null);
+
+  // Unreconciled birdEpoch bump immediately hides prior-epoch votes even before onFeed runs.
+  tile.birdEpoch = 1;
+  assert.deepEqual(s.verifier.getTrackVote('iphone', 1, { streamId: 'iphone-stream', generation: 'generation-a' }), {
+    count: 0, total: 5, ready: false, label: null, confidence: null, pending: false,
+  });
+  s.verifier.onFeed(tile);
+  assert.equal(events.at(-1)?.cameraId, 'iphone');
+
+  // Resumed track ID during an in-flight pre-gap job is not marked pending and starts fresh.
+  await s.sample(tile, { frameId: 4 });
+  assert.equal(s.verifier.getTrackVote('iphone', 1)?.count, 1);
+  inFlight = deferred();
+  s.advance();
+  s.publish(tile, { frameId: 5 });
+  const jobPromise = s.verifier.tick();
+  await nextTurn();
+  assert.equal(s.verifier.getTrackVote('iphone', 1)?.pending, true);
+
+  // Track 1 disappears at t=0.6 and reappears at t=0.7 while frame 5 job (t=0.5) is still running.
+  tile.botState = { ...tile.botState, t: .6, tracks: [] };
+  s.verifier.onFeed(tile);
+  assert.equal(s.verifier.getTrackVote('iphone', 1), null);
+  tile.botState = { ...tile.botState, t: .7, tracks: [{ id: 1, classification: 'unknown', bbox: { x: .25, y: .25, w: .2, h: .2 }, dense: false }] };
+  s.verifier.onFeed(tile);
+  assert.deepEqual(s.verifier.getTrackVote('iphone', 1), {
+    count: 0, total: 5, ready: false, label: null, confidence: null, pending: false,
+  });
+
+  inFlight.resolve(predictions([{ x: .25, y: .25, w: .2, h: .2 }], DRONE));
+  await jobPromise;
+  inFlight = null;
+  assert.equal(s.verifier.getTrackVote('iphone', 1)?.count, 0);
+
+  // Stale frames, dense/demo/tower feeds, onRemove, and reset return null.
+  s.advance(3000);
+  assert.equal(s.verifier.getTrackVote('iphone', 1), null, 'stale frame beyond MAX_FRAME_AGE returns null');
+  s.publish(feed('dense-cam', 'server'), { dense: true });
+  assert.equal(s.verifier.getTrackVote('dense-cam', 1), null);
+  s.publish(feed('demo-cam', 'demo'));
+  assert.equal(s.verifier.getTrackVote('demo-cam', 1), null);
+  s.publish(feed('tower-cam', 'tower'));
+  assert.equal(s.verifier.getTrackVote('tower-cam', 1), null);
+
+  const countBeforeRemove = events.length;
+  s.verifier.onRemove('iphone');
+  assert.equal(s.verifier.getTrackVote('iphone', 1), null);
+  assert.equal(events.length, countBeforeRemove + 1);
+  assert.deepEqual(events.at(-1), { cameraId: 'iphone' });
+
+  s.verifier.reset();
+  assert.equal(events.at(-1)?.cameraId, 'tower-cam');
+});

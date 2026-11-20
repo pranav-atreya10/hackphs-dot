@@ -14,6 +14,7 @@ const rejected = reason => ({ status: 'rejected', reason });
  * keep it on the caller side of any worker boundary. Only ready results have a label.
  * Call clear(cameraId) on phase changes or feed removal, or clear() for all feeds.
  * prune() alone expires windows by local monotonic time, not the capture clock.
+ * inspect({cameraId, streamId, generation, trackId}) returns a frozen read-only summary or null.
  */
 export function createV41Votes({
   ttlMs = 3000, maxCameras = 32, maxTracks = 256, now = () => performance.now(),
@@ -74,6 +75,20 @@ export function createV41Votes({
     return frame;
   }
 
+  function summarize(samples) {
+    if (samples.length < WINDOW_SIZE) {
+      return { count: samples.length, ready: false, label: null, score: null, probs: null };
+    }
+    const average = {};
+    let label = LABELS[0];
+    for (const name of LABELS) {
+      average[name] = samples.reduce((sum, p) => sum + p[name], 0) / WINDOW_SIZE;
+      // Like the reference argmax, exact ties keep the first class: bird, drone, other.
+      if (average[name] > average[label]) label = name;
+    }
+    return { count: WINDOW_SIZE, ready: true, label, score: average[label], probs: average };
+  }
+
   function record(input) {
     const { frame, trackId, probs } = input ?? {};
     const phase = phases.get(frame?.cameraId);
@@ -97,18 +112,35 @@ export function createV41Votes({
     samples.push(sample);
     if (samples.length > WINDOW_SIZE) samples.shift();
     phase.tracks.set(trackId, { samples, frameId: frame.frameId, sampledAt: phase.sampledAt });
-    if (samples.length < WINDOW_SIZE) {
-      return { status: 'collecting', count: samples.length, label: null, score: null, probs: null };
+    const { count, ready, label, score, probs: average } = summarize(samples);
+    if (!ready) {
+      return { status: 'collecting', count, label: null, score: null, probs: null };
     }
+    return { status: 'ready', count, label, score, probs: average };
+  }
 
-    const average = {};
-    let label = LABELS[0];
-    for (const name of LABELS) {
-      average[name] = samples.reduce((sum, p) => sum + p[name], 0) / WINDOW_SIZE;
-      // Like the reference argmax, exact ties keep the first class: bird, drone, other.
-      if (average[name] > average[label]) label = name;
+  function inspect(query) {
+    const { cameraId, streamId, generation, trackId } = query ?? {};
+    if (!identifier(cameraId) || !identifier(streamId) || !identifier(generation) || !positiveInt(trackId)) {
+      return null;
     }
-    return { status: 'ready', count: WINDOW_SIZE, label, score: average[label], probs: average };
+    const phase = phases.get(cameraId);
+    if (!phase || phase.frame.streamId !== streamId || phase.frame.generation !== generation ||
+        !phase.live.has(trackId)) {
+      return null;
+    }
+    const track = phase.tracks.get(trackId);
+    const at = now();
+    if (!track || expired(phase.sampledAt, at) || expired(track.sampledAt, at)) return null;
+    const { count, ready, label, score, probs } = summarize(track.samples);
+    return Object.freeze({
+      count,
+      total: WINDOW_SIZE,
+      ready,
+      label,
+      confidence: score,
+      probabilities: probs ? Object.freeze({ ...probs }) : null,
+    });
   }
 
   function clear(cameraId) {
@@ -116,5 +148,5 @@ export function createV41Votes({
     else phases.delete(cameraId);
   }
 
-  return { record, prune, clear };
+  return { record, prune, clear, inspect };
 }
