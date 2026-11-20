@@ -32,6 +32,7 @@
   #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line)} #qr img{width:100%;height:100%;image-rendering:pixelated}
   @media (max-width:520px){.phone{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="/css/camera-hud.css">
 </head>
 <body class="app">
 <aside class="side" id="side">
@@ -53,11 +54,22 @@
 <div id="auth" hidden></div>
 
 <main class="cam">
-  <div class="view">
+  <div class="view" data-hud-state="idle">
     <video id="video" playsinline muted aria-hidden="true"></video>
     <canvas id="src" aria-hidden="true"></canvas>
     <canvas id="overlay" role="img" aria-label="Camera view of the sky with the detector's boxes drawn over birds and drones"></canvas>
+    <div class="hud-frame" id="hudFrame" aria-hidden="true">
+      <span class="hud-corner hud-tl"></span>
+      <span class="hud-corner hud-tr"></span>
+      <span class="hud-corner hud-bl"></span>
+      <span class="hud-corner hud-br"></span>
+    </div>
     <div class="banner" id="banner" data-risk="wait"><i></i><span id="bannerText">Ready</span></div>
+    <div class="hud-badge" id="hudBadge" data-hud-mode="idle" hidden>
+      <span class="hud-pulse" id="hudPulse" data-active="false" aria-hidden="true"></span>
+      <span class="hud-badge-text" id="hudBadgeText"></span>
+    </div>
+    <div class="hud-telemetry" id="hudTelemetry" aria-hidden="true">HDG 090° · FOV 65° · +20°</div>
     <div id="empty">Point the camera at the sky by the runway, then press Start.</div>
   </div>
   <div class="controls"><button id="start" type="button">Start</button><button class="ghost" id="upload" type="button">Upload a video</button><input id="uploadFile" type="file" accept="video/*" hidden></div>
@@ -86,8 +98,10 @@
       <label for="lat">Latitude<input id="lat" type="number" step="0.0001" value="40.3987"></label>
       <label for="lon">Longitude<input id="lon" type="number" step="0.0001" value="-74.6586"></label>
     </div>
-    <button class="ghost" id="drawCorridor" type="button">Draw draft mask</button>
-    <p class="hint" id="corridorHint">Draft masks do not affect alerts. Corridor timing requires a site-approved survey.</p>
+    <div class="corridor-editor" id="corridorEditor" data-editing="false">
+      <button class="ghost" id="drawCorridor" type="button">Draw draft mask</button>
+      <p class="hint" id="corridorHint">Draft masks do not affect alerts. Corridor timing requires a site-approved survey.</p>
+    </div>
   </details>
 
   <details class="card fold">
@@ -106,6 +120,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="/vendor/qrcode.min.js"></script>
 <script type="module" src="/js/camera.js"></script>
+<script src="/js/camera-hud.js" defer></script>
 <script src="/js/reveal.js" defer></script>
 <script src="/js/walkthrough.js" defer></script>
 </body>
