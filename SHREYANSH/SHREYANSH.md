@@ -71,3 +71,22 @@ Demo footage still never creates alerts, sounds, incident reports or database ro
   server evidence review answered `unknown_evidence` in the real app. Fixed, with a test using the real shape.
 - Tower-key towers stayed on "Select an airport" (scoped key, locked airport box); now the single airport is chosen.
 - The trained bird check now also accepts answers from a local model (`BIRD_JUDGE=local`), labelled "Local-model".
+
+## Local bird / drone classifier (folder "Shreyansh Local Ai Model")
+**Why:** the bird check used Gemini (snapshots leave the airport) and COCO-SSD. This is our own small model
+(472,579 parameters, 2.5 MB) that labels each tracked object as bird, drone or other, fully in the browser.
+
+**What's there:** start with `Shreyansh Local Ai Model/HANDOFF.md` (section 00 = latest status, results, approvals
+and the plan to wire it into `PRANAV/public/js/visual-ai.js`). Trained on 10 openly licensed sources (Mendeley,
+Svanström, AOD-4, DUT Anti-UAV, DCSkyCam, IBERBIRDS, Klim/Skagen, Open Images, two synthetic sets); FBD-SV-2024 is
+used only for testing, as a camera the model has never seen. Also: a 30-60 s flight-path forecaster
+(`flight_forecast.js`), a script to rename the person-named folders (`rename-folders.sh`), and a Gemini comparison
+script (not run: the key is free tier).
+
+**Results (best model v4.1, footage never trained on):** voting over 5 frames of a track, never-seen-camera birds
+91.0% with 2.1% false alarms; Svanström birds 96.1%, drones 96.0%, false alarms 1.0%. Small objects (7-13 px) and
+planes/helicopters are still below the 95% target. Earlier versions scored 95%+ on Mendeley but only 1.5% on
+real footage from another source: always test on footage from a different source.
+
+**Not done yet:** the app wiring (approved), v5 (bigger pretrained model, needs a GPU), the Gemini comparison.
+Datasets are not in git (data/ is ignored); the scripts re-download them and check their checksums.

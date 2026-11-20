@@ -1,0 +1,26 @@
+472,579 parameters; fit [20692, 30959, 31107] (bird, drone, other) x 3 versions; holdout [2860, 4143, 4252]
+/home/claude/pranav-atreya10/hackphs-dot/Shreyansh Local Ai Model/train_v2.py:80: RuntimeWarning: Mean of empty slice
+  rec = [float((p[y == c] == c).mean()) for c in range(3)]
+/usr/local/lib/python3.13/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+epoch 1/20  loss 0.850  holdout balanced 0.7302  bird 0.641 drone 0.895 other 0.655  |  tiny<=12px: bird 0.082 drone 0.872  [71s]
+epoch 2/20  loss 0.681  holdout balanced 0.8217  bird 0.765 drone 0.883 other 0.817  |  tiny<=12px: bird 0.122 drone 0.912  [143s]
+epoch 3/20  loss 0.595  holdout balanced 0.8467  bird 0.805 drone 0.927 other 0.808  |  tiny<=12px: bird 0.184 drone 0.886  [211s]
+epoch 4/20  loss 0.534  holdout balanced 0.8886  bird 0.911 drone 0.910 other 0.844  |  tiny<=12px: bird 0.347 drone 0.916  [276s]
+epoch 5/20  loss 0.495  holdout balanced 0.9074  bird 0.912 drone 0.943 other 0.867  |  tiny<=12px: bird 0.490 drone 0.912  [342s]
+epoch 6/20  loss 0.468  holdout balanced 0.9039  bird 0.867 drone 0.940 other 0.904  |  tiny<=12px: bird 0.204 drone 0.872  [412s]
+epoch 7/20  loss 0.449  holdout balanced 0.9179  bird 0.910 drone 0.956 other 0.888  |  tiny<=12px: bird 0.408 drone 0.919  [480s]
+epoch 8/20  loss 0.436  holdout balanced 0.9088  bird 0.960 drone 0.860 other 0.907  |  tiny<=12px: bird 0.408 drone 0.886  [551s]
+epoch 9/20  loss 0.422  holdout balanced 0.9274  bird 0.950 drone 0.947 other 0.885  |  tiny<=12px: bird 0.449 drone 0.938  [621s]
+epoch 10/20  loss 0.407  holdout balanced 0.9406  bird 0.956 drone 0.954 other 0.912  |  tiny<=12px: bird 0.449 drone 0.934  [691s]
+epoch 11/20  loss 0.397  holdout balanced 0.9390  bird 0.948 drone 0.963 other 0.906  |  tiny<=12px: bird 0.449 drone 0.934  [763s]
+epoch 12/20  loss 0.387  holdout balanced 0.9452  bird 0.968 drone 0.951 other 0.916  |  tiny<=12px: bird 0.490 drone 0.927  [843s]
+epoch 13/20  loss 0.378  holdout balanced 0.9485  bird 0.949 drone 0.966 other 0.931  |  tiny<=12px: bird 0.347 drone 0.923  [928s]
+epoch 14/20  loss 0.366  holdout balanced 0.9470  bird 0.966 drone 0.959 other 0.915  |  tiny<=12px: bird 0.388 drone 0.927  [1006s]
+epoch 15/20  loss 0.358  holdout balanced 0.9498  bird 0.963 drone 0.970 other 0.916  |  tiny<=12px: bird 0.388 drone 0.945  [1075s]
+epoch 16/20  loss 0.349  holdout balanced 0.9506  bird 0.980 drone 0.957 other 0.914  |  tiny<=12px: bird 0.449 drone 0.945  [1144s]
+epoch 17/20  loss 0.343  holdout balanced 0.9543  bird 0.975 drone 0.963 other 0.925  |  tiny<=12px: bird 0.510 drone 0.938  [1319s]
+epoch 18/20  loss 0.336  holdout balanced 0.9581  bird 0.973 drone 0.969 other 0.932  |  tiny<=12px: bird 0.510 drone 0.945  [1424s]
+epoch 19/20  loss 0.332  holdout balanced 0.9577  bird 0.972 drone 0.966 other 0.935  |  tiny<=12px: bird 0.469 drone 0.941  [1494s]
+epoch 20/20  loss 0.331  holdout balanced 0.9577  bird 0.973 drone 0.965 other 0.935  |  tiny<=12px: bird 0.449 drone 0.938  [1564s]
+done; best holdout balanced accuracy 0.9581
