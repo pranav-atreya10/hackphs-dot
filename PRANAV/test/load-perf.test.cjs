@@ -86,16 +86,26 @@ const FILM_DISCLOSURES = [
   "Reports are advisory. A camera’s view on the map is not a measured object location.",
 ];
 
+function unoptimizeHtml(html) {
+  return html
+    .replace('\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>', "")
+    .replaceAll(' media="print" onload="this.media=\'all\'"', "")
+    .replace(/\n<noscript><link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]+"><\/noscript>/g, "")
+    .replace(' fetchpriority="high" decoding="async"', "");
+}
+
 test("optimizeGeneratedHtml fixes render-blocking Google Fonts, gstatic preconnect, and LCP poster on real index.html", async () => {
   const { optimizeGeneratedHtml } = await import("../scripts/perf-html-transform.mjs");
-  const rawIndex = fs.readFileSync(indexHtmlPath, "utf8");
+  const diskIndex = fs.readFileSync(indexHtmlPath, "utf8");
+  const rawIndex = findBlockingGoogleFontLinks(diskIndex).length > 0 ? diskIndex : unoptimizeHtml(diskIndex);
   const rawTower = fs.readFileSync(towerHtmlPath, "utf8");
 
-  // Confirm tower.html already uses the non-blocking pattern we match.
+  // Confirm tower.html and synced index.html use the non-blocking pattern.
   assert.equal(findBlockingGoogleFontLinks(rawTower).length, 0);
+  assert.equal(findBlockingGoogleFontLinks(diskIndex).length, 0);
 
-  // Confirm raw index.html currently exhibits the exact critical-path bugs.
-  assert.equal(findBlockingGoogleFontLinks(rawIndex).length, 2, "raw index.html has 2 render-blocking Google Fonts links");
+  // Confirm pre-transform index.html has the 2 render-blocking Google Fonts links.
+  assert.equal(findBlockingGoogleFontLinks(rawIndex).length, 2, "pre-transform index.html has 2 render-blocking Google Fonts links");
   assert.doesNotMatch(rawIndex, /fonts\.gstatic\.com/);
 
   const optimized = optimizeGeneratedHtml(rawIndex, { page: "index" });
@@ -148,19 +158,18 @@ test("optimizeGeneratedHtml fixes render-blocking Google Fonts, gstatic preconne
   }
 
   // Reversible diff check: undoing ONLY the 3 expected enhancements recovers rawIndex byte-for-byte.
-  const reverted = optimized
-    .replace('\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>', "")
-    .replaceAll(' media="print" onload="this.media=\'all\'"', "")
-    .replace(/\n<noscript><link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]+"><\/noscript>/g, "")
-    .replace(' fetchpriority="high" decoding="async"', "");
+  const reverted = unoptimizeHtml(optimized);
   assert.equal(reverted, rawIndex, "no unintended text, script, style, or disclosure mutations");
+  assert.equal(optimized, diskIndex, "synced public/index.html matches optimizeGeneratedHtml output byte-for-byte");
 });
 
 test("optimizeGeneratedHtml optimizes real film.html and preserves all disclosures and idempotency", async () => {
   const { optimizeGeneratedHtml } = await import("../scripts/perf-html-transform.mjs");
-  const rawFilm = fs.readFileSync(filmHtmlPath, "utf8");
+  const diskFilm = fs.readFileSync(filmHtmlPath, "utf8");
+  const rawFilm = findBlockingGoogleFontLinks(diskFilm).length > 0 ? diskFilm : unoptimizeHtml(diskFilm);
 
-  assert.equal(findBlockingGoogleFontLinks(rawFilm).length, 2, "raw film.html has 2 render-blocking Google Fonts links");
+  assert.equal(findBlockingGoogleFontLinks(diskFilm).length, 0);
+  assert.equal(findBlockingGoogleFontLinks(rawFilm).length, 2, "pre-transform film.html has 2 render-blocking Google Fonts links");
 
   const optimized = optimizeGeneratedHtml(rawFilm, { page: "film" });
   assert.deepEqual(findBlockingGoogleFontLinks(optimized), []);

@@ -61,7 +61,7 @@ body{-webkit-font-smoothing:antialiased}
   font:500 .74rem/1.2 var(--body,system-ui,sans-serif);letter-spacing:-.005em;
   opacity:0;
   transform:translate3d(var(--tooltip-x,0px),6px,0) translateX(var(--tooltip-shift,0%)) scale(.96);
-  transition:opacity .16s ease,bottom .2s cubic-bezier(.22,1,.36,1),transform .26s cubic-bezier(.22,1.24,.36,1);
+  transition:opacity .16s ease,transform .26s cubic-bezier(.22,1.24,.36,1);
   will-change:transform,opacity;
 }
 .film-chapter-tooltip[data-mode="focus"]{bottom:calc(100% + 10px)}
@@ -69,7 +69,7 @@ body{-webkit-font-smoothing:antialiased}
   opacity:1;
   transform:translate3d(var(--tooltip-x,0px),0,0) translateX(var(--tooltip-shift,0%)) scale(1);
 }
-.film-chapter-tooltip[data-spring="js"]{transition:opacity .16s ease,bottom .2s cubic-bezier(.22,1,.36,1)}
+.film-chapter-tooltip[data-spring="js"]{transition:opacity .16s ease}
 .film-chapter-idx{font:600 .7rem/1 var(--mono,monospace);font-variant-numeric:tabular-nums;color:var(--on-surround);opacity:.86}
 .film-chapter-sep{color:var(--on-surround-mute);white-space:pre}
 .film-chapter-title{font-weight:600;color:var(--on-surround)}

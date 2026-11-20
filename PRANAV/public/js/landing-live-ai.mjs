@@ -7,6 +7,7 @@
 import { DetectionEngine, PRESETS } from '../detection/index.js';
 import { createV41WorkerClient } from './skysentry-v41-client.mjs';
 import { createV41Votes } from './skysentry-v41-vote.mjs';
+import { createCanvasSizer } from './frame-budget.mjs';
 
 const CAMERA_ID = 'landing-live-ai';
 const DEFAULT_CLIP_ID = 'starling-murmuration';
@@ -250,19 +251,33 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
 
   const overlay = rootEl.querySelector?.('[data-live-ai-overlay]') ?? null;
   const octx = overlay?.getContext?.('2d') ?? null;
+  const overlaySizer = createCanvasSizer({ dpr: getDpr });
+  if (overlay) overlaySizer.observe(overlay);
 
-  let video = rootEl.querySelector?.('[data-live-ai-video]') ?? rootEl.querySelector?.('video') ?? null;
+  const stageEl = rootEl.querySelector?.('[data-live-ai-stage]') ?? null;
+  const posterEl = rootEl.querySelector?.('[data-live-ai-poster]') ?? null;
+  const rawVideoTarget = rootEl.querySelector?.('[data-live-ai-video]') ?? null;
+  const targetIsCanvas = Boolean(rawVideoTarget && String(rawVideoTarget.tagName || '').toUpperCase() === 'CANVAS');
+  const videoCanvas = targetIsCanvas ? rawVideoTarget : null;
+  const videoCanvasCtx = videoCanvas?.getContext?.('2d') ?? null;
+
+  let video = (!targetIsCanvas ? rawVideoTarget : null) ?? rootEl.querySelector?.('video') ?? null;
   if (!video && doc?.createElement) {
     video = doc.createElement('video');
-    video.setAttribute?.('data-live-ai-video', '');
-    const stage = rootEl.querySelector?.('[data-live-ai-stage]');
-    if (stage?.prepend) stage.prepend(video);
-    else if (overlay?.before) overlay.before(video);
-    else rootEl.prepend?.(video);
+    if (!targetIsCanvas) {
+      video.setAttribute?.('data-live-ai-video', '');
+      if (stageEl?.prepend) stageEl.prepend(video);
+      else if (overlay?.before) overlay.before(video);
+      else rootEl.prepend?.(video);
+    } else {
+      video.hidden = true;
+      video.setAttribute?.('data-no-pause-offscreen', '');
+    }
   }
 
-  const playBtn = rootEl.querySelector?.('[data-live-ai-play], [data-ai-play], [data-action="play"]') ?? null;
+  const playBtn = rootEl.querySelector?.('[data-live-ai-play], [data-live-ai-toggle], [data-ai-play], [data-action="play"]') ?? null;
   const playLabelEl = playBtn?.querySelector?.('[data-live-ai-play-label]') ?? null;
+  const idlePlayLabel = (playLabelEl?.textContent || (!playBtn?.children?.length ? playBtn?.textContent : '') || '').trim() || 'Run v4.1 in browser';
   const clipButtons = [...(rootEl.querySelectorAll?.('[data-clip], [data-live-ai-clip], [data-ai-clip]') ?? [])]
     .filter(btn => CLIPS_BY_ID.has(readClipIdFromButton(btn)));
 
@@ -271,6 +286,7 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
   const tracksEls = [...(rootEl.querySelectorAll?.('[data-ai-tracks]') ?? [])];
   const verdictEls = [...(rootEl.querySelectorAll?.('[data-ai-verdict]') ?? [])];
   const clipTitleEls = [...(rootEl.querySelectorAll?.('[data-ai-clip-title]') ?? [])];
+  const clipLabelEls = [...(rootEl.querySelectorAll?.('[data-live-ai-clip-label]') ?? [])];
   const creditEls = [...(rootEl.querySelectorAll?.('[data-ai-credit]') ?? [])];
 
   const probEls = Object.fromEntries(
@@ -340,8 +356,11 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
   function setRootState(state) {
     if (rootEl.dataset) {
       rootEl.dataset.aiState = state;
+      rootEl.dataset.state = state;
       rootEl.dataset.activeClip = currentClip.id;
     }
+    setAttr(rootEl, 'data-state', state);
+    setAttr(rootEl, 'data-active-clip', currentClip.id);
   }
 
   function syncClipButtons() {
@@ -352,7 +371,12 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
       btn.classList?.toggle?.('is-active', isSelected);
     }
     for (const el of clipTitleEls) setText(el, currentClip.title);
+    for (const el of clipLabelEls) setText(el, `${currentClip.id} \u00b7 16:9`);
     for (const el of creditEls) setText(el, currentClip.credit);
+    if (posterEl) {
+      setAttr(posterEl, 'src', currentClip.poster);
+      if ('src' in posterEl && posterEl.src !== currentClip.poster) posterEl.src = currentClip.poster;
+    }
     if (rootEl.dataset) rootEl.dataset.activeClip = currentClip.id;
   }
 
@@ -367,7 +391,7 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
         : state === 'running' ? 'Pause v4.1'
         : state === 'paused' || state === 'offscreen' ? 'Resume v4.1'
         : state === 'error' ? 'Retry v4.1 in browser'
-        : 'Run v4.1 in browser';
+        : idlePlayLabel;
       setText(labelTarget, text);
     }
   }
@@ -577,11 +601,10 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
     if (!overlay || !octx) return;
     const vidW = video?.videoWidth || 854;
     const vidH = video?.videoHeight || 480;
-    const dpr = getDpr();
-    const cssW = overlay.clientWidth || overlay.width || vidW;
-    const cssH = overlay.clientHeight || overlay.height || vidH;
-    const ow = Math.max(1, Math.round(cssW * dpr));
-    const oh = Math.max(1, Math.round(cssH * dpr));
+    const sized = overlaySizer.syncCanvasSize(overlay);
+    const dpr = sized.dpr || getDpr();
+    const ow = Math.max(1, sized.width || overlay.width || Math.round(vidW * dpr));
+    const oh = Math.max(1, sized.height || overlay.height || Math.round(vidH * dpr));
     if (overlay.width !== ow || overlay.height !== oh) {
       overlay.width = ow;
       overlay.height = oh;
@@ -882,6 +905,15 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
 
     const sw = scratchWidth;
     const sh = Math.max(1, Math.round((sw * vidH) / vidW));
+    if (videoCanvas && videoCanvasCtx) {
+      if (videoCanvas.width !== vidW || videoCanvas.height !== vidH) {
+        videoCanvas.width = vidW;
+        videoCanvas.height = vidH;
+      }
+      videoCanvasCtx.drawImage(video, 0, 0, vidW, vidH);
+      posterEl?.classList?.add?.('is-hidden');
+      if (stageEl?.dataset) stageEl.dataset.active = 'true';
+    }
     if (scratch.width !== sw || scratch.height !== sh) {
       scratch.width = sw;
       scratch.height = sh;
@@ -1018,6 +1050,8 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
     ensureLocalPipeline();
     if (wasStarted && changed) {
       loadedVideoClipId = null;
+      posterEl?.classList?.remove?.('is-hidden');
+      if (stageEl?.dataset) delete stageEl.dataset.active;
       resetTrackPhase();
       renderProbabilities(null, 'collecting');
     } else if (phaseSeq === 0) {
@@ -1123,6 +1157,10 @@ export function mountLandingLiveAi(rootEl, deps = {}) {
     }
 
     clearOverlay();
+    videoCanvasCtx?.clearRect?.(0, 0, videoCanvas?.width || 0, videoCanvas?.height || 0);
+    posterEl?.classList?.remove?.('is-hidden');
+    if (stageEl?.dataset) delete stageEl.dataset.active;
+    overlaySizer.disconnect();
     mountedRoots.delete(rootEl);
   }
 

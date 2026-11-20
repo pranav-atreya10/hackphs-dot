@@ -153,3 +153,10 @@ the full 10-source browser model verified on unseen FBD-SV (`91.0%` bird recall,
 Because v5 starts from TorchVision `MobileNet_V3_Large_Weights.IMAGENET1K_V2`, review the
 [TorchVision pretrained weights terms note](https://docs.pytorch.org/vision/0.23/models.html#general-information-on-pre-trained-weights)
 before any commercial deployment.
+
+## UI, aviation HUD, and 60 fps scroll/load upgrades (`shreyanshnikam-ui-animations-and-hud`)
+
+- **Tower & camera aviation HUD** (`PRANAV/public/js/feeds.js`, `hud-reticles.mjs`, `hud-vote-ring.mjs`, `flight-forecast.mjs`, `hud-forecast-cone.mjs`, `camera-hud.js`): 60 fps corner-bracket reticles, 5-frame v4.1 radial vote progress arcs (`VisualBirdVerifier` `onProgress` + `getTrackVote`), bounded 120-sample Monte Carlo flight-path forecast cones (corridor tinting/ETA gated strictly on surveyed corridors), and camera viewfinder telemetry. Browser HUD visuals remain advisory only and never change server-assigned risk or alerts.
+- **Tower motion & map choreography** (`tower-layers.mjs`, `map-hud.css`, `alert-choreography.mjs`, `alerts-motion.css`, `risk-beacon-fx.mjs`, `beacon-risk-motion.css`, `stat-counter.mjs`): live FOV cone risk tinting + radar threat ripples, alert entrance/dismissal transitions, progressive storage/report/Solana enrichment pills, `#risk` escalation shockwaves synced to `#beaconView`, and tabular-odometer counters.
+- **Landing sandbox, cross-page View Transitions & 60 fps load/scroll budgets** (`landing-live-ai.mjs`, `landing-live-ai.css`, `film-scrubber.js`, `film-perf-governor.js`, `view-transitions.css`, `smooth-details.{js,css}`, `perf-scroll.css`, `scroll-perf-guard.js`, `frame-budget.mjs`, `perf-html-transform.mjs`, `perf-headers.js`): zero-upload browser-local v4.1 landing demo, chapter hover scrubbing + offscreen WebGL pause on the 3D film, circular theme reveal, `ResizeObserver`-cached zero-reflow canvas sizing + shared frame-budget loop, non-render-blocking Google Fonts + `Vary: Accept-Encoding` static headers, and full `prefers-reduced-motion` / ARIA / zero-jank test gates (`ui-animations-a11y.test.cjs`, `perf-jank-budget.test.cjs`).
+

@@ -297,8 +297,6 @@
       border-color 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
       color 0.2s ease,
       box-shadow 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
-      width 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
-      height 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
       opacity 0.18s ease,
       transform 0.14s ease;
   }

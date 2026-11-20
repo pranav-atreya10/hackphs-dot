@@ -7,8 +7,16 @@ import { createTowerMonitoring, imageEta, operational, RISK_RANK } from '/js/tow
 import { createTowerLayers } from '/js/tower-layers.mjs';
 import { createAlertPlayer } from '/js/alert-player.mjs';
 import { receiptProgress, reconcileIncidents } from '/js/incident-history.mjs';
+import { animateRowEnter, animateRowDismiss, applyEnrichmentBadges } from '/js/alert-choreography.mjs';
+import { watchRiskTransitions } from '/js/risk-beacon-fx.mjs';
+import { animateStatValue } from '/js/stat-counter.mjs';
 
 const $ = id => document.getElementById(id);
+const rowEnter = typeof animateRowEnter === 'function' ? animateRowEnter : el => el;
+const rowDismiss = typeof animateRowDismiss === 'function' ? animateRowDismiss : (_el, done) => done?.();
+const renderBadges = typeof applyEnrichmentBadges === 'function' ? applyEnrichmentBadges : null;
+const watchRisk = typeof watchRiskTransitions === 'function' ? watchRiskTransitions : null;
+const statCounter = typeof animateStatValue === 'function' ? animateStatValue : null;
 const time = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
 let auth = null, socket = null, soundOn = false, audioCtx = null;
 // Airport picker: administrators select one airport. Kept in the URL
@@ -89,14 +97,17 @@ const announcements = createAlertPlayer({
 const alerts = new Map(), acknowledgedAlerts = new Set();
 let alertSyncGeneration = 0;
 const scopedAlert = row => operational(row) && row.airport === view && typeof row.id === 'string';
-function removeAlert(id) {
-  alerts.get(id)?.row.remove();
+function removeAlert(id, animated = false) {
+  const entry = alerts.get(id);
   alerts.delete(id);
+  if (!entry?.row) return;
+  if (animated && typeof animateRowDismiss === 'function') rowDismiss(entry.row, () => entry.row.remove());
+  else entry.row.remove();
 }
 function acknowledgeAlert(id) {
   if (acknowledgedAlerts.size >= 1000) acknowledgedAlerts.delete(acknowledgedAlerts.values().next().value);
   acknowledgedAlerts.add(id);
-  removeAlert(id);
+  removeAlert(id, true);
 }
 function showAlert(data, { replay = false, provisional = false } = {}) {
   if (!scopedAlert(data) || acknowledgedAlerts.has(data.id)) return;
@@ -119,6 +130,7 @@ function showAlert(data, { replay = false, provisional = false } = {}) {
     });
     row.append(label, status, button);
     $('unacknowledgedAlerts').append(row);
+    rowEnter(row, { replay });
     entry = { row, status, button, committed: false, progress: -1 };
     alerts.set(id, entry);
   }
@@ -175,6 +187,7 @@ function replayAlerts() {
 /* ---------- operational risk and coverage ---------- */
 const monitoring = createTowerMonitoring();
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+let riskWatcher = null, lastCamsText = '';
 function describe(ev) {
   if (!ev || ev.risk === 'green') return 'No detections in monitored video';
   if (ev.direction === 'heard, not seen') return 'Drone heard, not seen';
@@ -184,11 +197,12 @@ function describe(ev) {
   return typeof ev.direction === 'string' && ev.direction ? `${target} · ${ev.direction}` : target;
 }
 function refreshRisk() {
+  if (!riskWatcher && watchRisk) riskWatcher = watchRisk($('risk'), { beaconEl: $('beaconView') });
   const snapshot = monitoring.snapshot();
   const { level, coverage, reason, top, online } = snapshot;
   const what = top ? describe(top) : level === 'green' ? 'No detections in monitored video'
     : coverage === 'degraded' ? 'Limited monitoring' : 'No usable monitoring';
-  $('risk').dataset.risk = level;
+  if ($('risk').dataset.risk !== level) $('risk').dataset.risk = level;
   setText($('riskLvl'), level.toUpperCase());
   setText($('riskWhat'), what);
   const side = $('sideRisk');
@@ -203,7 +217,12 @@ function refreshRisk() {
   const coverageLimit = ' · Video only; drone audio not monitored. Not a clearance.';
   const detail = (top ? ` · ${top.cameraLabel}${eta === null ? '' : ` · projected image-mask entry in ${Math.round(eta)} s`}` : '') + coverageLimit;
   setText($('riskWhy'), `${reason}${detail}`);
-  setText($('cams'), online.length ? `${online.length} camera${online.length > 1 ? 's' : ''}: ${online.join(', ')}` : 'No live cameras');
+  const nextCamsText = online.length ? `${online.length} camera${online.length > 1 ? 's' : ''}: ${online.join(', ')}` : 'No live cameras';
+  if (nextCamsText !== lastCamsText) {
+    lastCamsText = nextCamsText;
+    if (statCounter && online.length) statCounter($('cams'), nextCamsText, { animateInitial: false });
+    else setText($('cams'), nextCamsText);
+  }
   renderBeacon(snapshot, what, detail);
   const warningIds = new Set(snapshot.warnings.map(ev => ev.cameraId));
   layers?.prune(snapshot.cameraIds, warningIds);
@@ -242,6 +261,7 @@ function feed(ev) {
   description.textContent = `${ev.cameraLabel || ev.cameraId} · ${describe(ev)}`;
   li.append(at, level, description);
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
+  rowEnter(li);
 }
 
 /* ---------- beacon: Vivan's protocol, rendered in software ---------- */
@@ -288,12 +308,17 @@ const incidentEls = new Map();
 let incidentData = new Map(), historyRequest;
 let selectedIncident = null;
 let evidenceRequest, evidenceUrl;
-function incidentItem(inc) {
+function incidentItem(inc, prevRow = null) {
   const li = document.createElement('li'), b = document.createElement('button');
   b.innerHTML = '<b></b><span></span>';
   const n = inc.object_count;
   b.firstChild.textContent = `${inc.risk === 'red' ? 'Red' : 'Yellow'} · ${inc.type === 'drone' ? 'Drone' : n > 1 ? `${n} ${inc.type}s` : inc.type} · ${inc.camera_id}`;
   b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_status === 'confirmed' ? ' · devnet memo confirmed' : inc.solana_status === 'pending' ? ' · memo pending' : inc.solana_error ? ' · memo needs attention' : ''}`;
+  if (renderBadges) {
+    const badges = document.createElement('div');
+    renderBadges(badges, inc, prevRow ? { previous: prevRow } : {});
+    b.append(badges);
+  }
   b.addEventListener('click', () => showIncident(inc));
   li.appendChild(b); return li;
 }
@@ -305,10 +330,12 @@ function updateIncidents(rows, source) {
   let at = $('incidents').firstChild;
   for (const [id, entry] of next) {
     let el = incidentEls.get(id);
-    if (incidentData.get(id) !== entry || !el) {
-      const replacement = incidentItem(entry.row);
+    const priorEntry = incidentData.get(id);
+    if (priorEntry !== entry || !el) {
+      const replacement = incidentItem(entry.row, priorEntry?.row ?? null);
       if (el && el === at) at = replacement;
       el?.replaceWith(replacement);
+      if (!priorEntry) rowEnter(replacement, { replay: source === 'history' });
       incidentEls.set(id, replacement); el = replacement;
     }
     if (el !== at || !el.parentNode) $('incidents').insertBefore(el, at);
@@ -316,7 +343,7 @@ function updateIncidents(rows, source) {
   }
   const selected = next.get(selectedIncident), previous = incidentData.get(selectedIncident);
   if (selected && selected !== previous) {
-    renderIncidentReport(selected.row, $('incidentReport'));
+    renderIncidentReport(selected.row, $('incidentReport'), previous?.row ?? null);
     if (selected.row.snapshot_state === 'stored' && previous?.row.snapshot_state !== 'stored') void loadEvidence(selected.row, $('incidentEvidence'));
   }
   if (!selected && selectedIncident) {
@@ -371,8 +398,13 @@ async function loadEvidence(d, container) {
     container.replaceChildren(err.message === 'HTTP 404' ? 'No snapshot available yet. ' : 'Could not load snapshot. ', retry);
   }
 }
-function renderIncidentReport(d, text) {
+function renderIncidentReport(d, text, prevRow = null) {
   text.replaceChildren();
+  if (renderBadges) {
+    const badges = document.createElement('div');
+    renderBadges(badges, d, prevRow ? { previous: prevRow } : {});
+    text.append(badges);
+  }
   const label = document.createElement('p'); label.innerHTML = '<b>Advisory report:</b> ';
   label.append(d.gemini_label ?? (d.receipt_state === 'retrying' ? 'waiting for storage retry'
     : d.receipt_state === 'retrying_volatile' ? 'waiting for an in-memory storage retry'
@@ -624,11 +656,22 @@ async function connect() {
     const { startFeeds } = await import('/js/feeds.js');
     const { VisualBirdVerifier } = await import('/js/visual-ai.js');
     const button = $('birdCheck');
-    visualBirds = new VisualBirdVerifier({ button, status: $('birdCheckStatus'), reviewStatus: $('birdReviewStatus') });
-    startFeeds({
+    let feedsApi = null;
+    visualBirds = new VisualBirdVerifier({
+      button,
+      status: $('birdCheckStatus'),
+      reviewStatus: $('birdReviewStatus'),
+      onProgress: ({ cameraId } = {}) => {
+        if (!feedsApi) return;
+        if (cameraId) feedsApi.redraw?.(cameraId);
+        else feedsApi.redrawAll?.();
+      },
+    });
+    feedsApi = startFeeds({
       on: (name, receive) => feedEvents.set(name, receive),
     }, { container: $('feeds'), hint: $('feedsHint'), demo: false,
       onFeed: t => visualBirds.onFeed(t), onRemove: id => visualBirds.onRemove(id),
+      getTrackVote: (cameraId, trackId, meta) => visualBirds.getTrackVote?.(cameraId, trackId, meta) ?? null,
     });
     for (const [name, data] of pendingFeed.values()) deliverFeed(name, data);
     pendingFeed.clear();
@@ -676,11 +719,20 @@ async function connect() {
     $('conn').dataset.ok = '0';
     monitoring.setConnected(false); refreshRisk();
   });
-  socket.on('camera:status', packet => { if (monitoring.status(packet)) refreshRisk(); });
+  socket.on('camera:status', packet => {
+    if (packet?.cameraId) layers?.setCameraStatus?.(packet.cameraId, { online: Boolean(packet.online), risk: packet.online ? 'blue' : 'offline', pulse: false });
+    if (monitoring.status(packet)) refreshRisk();
+  });
   socket.on('camera:heartbeat', packet => monitoring.heartbeat(packet));
   socket.on('camera:frame', packet => monitoring.heartbeat(packet));
   socket.on('bot:status', packet => { if (monitoring.mode(packet)) refreshRisk(); });
-  socket.on('bot:state', packet => monitoring.detector(packet));
+  socket.on('bot:state', packet => {
+    const accepted = monitoring.detector(packet);
+    if (accepted && packet?.cameraId) {
+      const r = packet.state?.risk;
+      layers?.setCameraStatus?.(packet.cameraId, { online: true, risk: ['green', 'yellow', 'red'].includes(r) ? r : 'blue', pulse: r === 'yellow' || r === 'red' });
+    }
+  });
   socket.on('camera:event', packet => {
     const ev = monitoring.event(packet);
     if (!ev) return;
