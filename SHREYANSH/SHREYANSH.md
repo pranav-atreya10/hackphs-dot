@@ -92,7 +92,8 @@ does not download data or open FBD-SV; that frozen dataset stays reserved for th
 planes/helicopters are still below the 95% target. Earlier versions scored 95%+ on Mendeley but only 1.5% on
 real footage from another source: always test on footage from a different source.
 
-**Not done yet:** the app wiring (approved), v5 (bigger pretrained model, needs a GPU), the Gemini comparison.
+**v4.1 app integration:** See the separate [v4.1 app branch](https://github.com/pranav-atreya10/hackphs-dot/tree/shreyanshnikam-v4-1-app-integration).
+The Gemini comparison was not run.
 Datasets are not in git (data/ is ignored); the scripts re-download them and check their checksums.
 
 **Independent small-bird evidence:** `small_bird_preflight.py` checks local native-frame metadata for
@@ -108,3 +109,35 @@ verifies the official frozen manifest without opening the field holdout, require
 records the checkpoint hash, crop/group counts and 95% group-bootstrap intervals. FBD-SV stays test-only and
 unscored unless `--fbd-pins` names a reviewed JSON file with `crops_sha256` and `metadata_sha256`. A never-seen
 headline additionally needs a leakage audit tied to the recorded checkpoint. No v5 benchmark result is implied.
+
+## v5 research result (Svanström only)
+
+MobileNetV3 Large was fine-tuned on [Svanström](https://zenodo.org/records/5500576) only, starting from
+`MobileNet_V3_Large_Weights.IMAGENET1K_V2` in TorchVision `0.23.0+cu126`. Baseline trainer: `cce10da`;
+published tooling: [`60ac953`](https://github.com/pranav-atreya10/hackphs-dot/commit/60ac9535e512a5e906197ae303e2c35651b30ff7).
+The run used seed 44 and fixed TRAIN/SELECT splits (153/35 clips), with eight epochs and 728 optimizer steps.
+The loss upweighted aircraft and downweighted generated backgrounds within `other`, normalized to preserve
+the nominal total `other` weight without changing bird or drone weights. The checkpoint was selected by
+crop-level balanced accuracy on native SELECT.
+
+- Checkpoint SHA-256: `2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b`
+- Receipt SHA-256: `f372f1a067df5b4821c03e3562932b7ed180643826d53046041f87dcfb6613e7`
+- Recipe SHA-256: `0a2e3c9ae6880c7e4bbdfb92d4de1ee903a6a39ede5806f8e8b7a058f177c30c`
+
+**Five-crop votes** averaged class probabilities on the same non-overlapping, annotation-linked native SELECT
+windows used for the single-crop comparison:
+
+| Measure | Windows | Clips | Rate (95% clip-bootstrap CI) |
+| --- | ---: | ---: | ---: |
+| Bird recall | 134/137 | 8 | 97.81% (93.33% to 100%) |
+| Drone recall | 332/348 | 17 | 95.40% (88.35% to 99.43%) |
+| Labelled aircraft classified as bird or drone | 3/206 | 10 | 1.46% (0% to 3.85%) |
+
+Generated backgrounds were excluded from the vote comparison. The windows were not verified object tracks,
+the clips were not verified to be independent recording sessions, and there were no native tiny-bird examples.
+SELECT was used for development, not as a frozen or independent test. These are not live false-alarm rates
+or evidence of 95% independent performance. No new FBD-SV score was produced; the benchmark archive is unchanged.
+
+**Research only, not for production.** No weights are published here because redistribution rights for the
+exact ImageNet V2 initialization and fine-tuned checkpoint could not be verified. See the
+[TorchVision pretrained weights terms note](https://docs.pytorch.org/vision/0.23/models.html#general-information-on-pre-trained-weights).
