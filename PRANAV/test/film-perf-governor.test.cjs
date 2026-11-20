@@ -527,3 +527,47 @@ test('auto-initializes on browser document load and coexists cleanly with untrus
   assert.equal(h.playing, true);
   assert.equal(h.stage.dataset.autoPaused, undefined);
 });
+
+test('warm-fetches core 3D film assets once when #filmPoster nears viewport or receives pointer/focus, honoring saveData', () => {
+  const h = createFilmHarness({ started: false });
+  const poster = createElement('filmPoster', { parent: h.stage });
+  h.doc.getElementById = id => (id === 'filmPoster' ? poster : (id === 'stage' ? h.stage : id === 'film' ? h.film : id === 'gl' ? h.gl : id === 'play' ? h.play : id === 'replay' ? h.replay : id === 'creditsToggle' ? h.creditsToggle : null));
+
+  const fetched = [];
+  const saveDataH = createFilmHarness({ started: false });
+  const saveDataPoster = createElement('filmPoster', { parent: saveDataH.stage });
+  const govSaveData = initFilmPerfGovernor(saveDataH.doc, {
+    ...saveDataH.options,
+    poster: saveDataPoster,
+    navigator: { connection: { saveData: true } },
+    fetch(url, init) { fetched.push([url, init]); return Promise.resolve(); },
+  });
+  saveDataPoster.dispatchEvent({ type: 'pointerenter' });
+  assert.equal(fetched.length, 0, 'saveData: true skips warm-fetching');
+  govSaveData.destroy();
+
+  const gov = initFilmPerfGovernor(h.doc, {
+    ...h.options,
+    poster,
+    navigator: { connection: { saveData: false } },
+    fetch(url, init) { fetched.push([url, init]); return Promise.resolve(); },
+  });
+  assert.equal(h.observers.length, 2);
+  assert.equal(h.observers[1].options.rootMargin, '300px');
+  assert.equal(h.observers[1].observed[0], poster);
+
+  // Near-viewport intersection triggers low-priority warm-fetch once and disconnects warmObserver.
+  h.observers[1].callback([{ target: poster, isIntersecting: true, intersectionRatio: 0 }], h.observers[1]);
+  assert.equal(fetched.length, 6);
+  assert.equal(fetched[0][0], './vendor/three.module.js');
+  assert.equal(fetched[4][0], './assets/narrow-body-airliner.glb');
+  assert.deepEqual(fetched[0][1], { priority: 'low' });
+  assert.equal(poster.dataset.warmFetched, '1');
+  assert.equal(h.observers[1].disconnected, true);
+
+  // Subsequent hover/focus does not re-fetch.
+  poster.dispatchEvent({ type: 'pointerenter' });
+  poster.dispatchEvent({ type: 'focusin' });
+  assert.equal(fetched.length, 6);
+  gov.destroy();
+});

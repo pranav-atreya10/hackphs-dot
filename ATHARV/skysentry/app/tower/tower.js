@@ -96,7 +96,7 @@ async function showIncident(id) {
   const img = document.createElement('img'); img.alt = 'Snapshot from the camera';
   if (d.snapshot) img.src = `data:image/jpeg;base64,${d.snapshot}`;
   const text = document.createElement('div'); text.style.display = 'grid'; text.style.gap = '6px';
-  const label = document.createElement('p'); label.innerHTML = '<b>Gemini sees:</b> '; label.append(d.gemini_label ?? '—');
+  const label = document.createElement('p'); label.innerHTML = '<b>Local AI Model sees:</b> '; label.append(d.gemini_label ?? '—');
   const report = document.createElement('p'); report.textContent = d.report;
   text.append(label, report);
   if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'View the Solana stamp'; text.append(a); }

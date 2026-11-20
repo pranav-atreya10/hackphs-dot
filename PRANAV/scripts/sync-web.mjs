@@ -127,6 +127,7 @@ const scripts = [
   '<script src="/js/nav-account.js" defer></script>',
   '<script src="/js/smooth-details.js" defer></script>',
   '<script src="/js/scroll-perf-guard.js" defer></script>',
+  '<script src="/js/reveal.js" defer></script>',
   '<script src="/js/film-scrubber.js" defer></script>',
   '<script src="/js/film-perf-governor.js" defer></script>',
   '<script type="module" src="/js/landing-live-ai.mjs"></script>',

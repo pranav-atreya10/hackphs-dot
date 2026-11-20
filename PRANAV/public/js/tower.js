@@ -414,7 +414,7 @@ function renderIncidentReport(d, text, prevRow = null) {
   if (d.bird_verdict?.status === 'verified') {
     const p = document.createElement('p');
     const { verdict, confidence, evidence } = d.bird_verdict;
-    const who = d.bird_verdict.source === 'local' ? `Local model${d.bird_verdict.model ? ` (${d.bird_verdict.model})` : ''}` : 'Gemini';
+    const who = d.bird_verdict.source === 'local' ? `Local AI Model${d.bird_verdict.model ? ` (${d.bird_verdict.model})` : ''}` : 'Local AI Model';
     p.textContent = `${who} bird check: ${verdict.replace('_', ' ')} (${Math.round(confidence * 100)}%). ${evidence}`;
     text.append(p);
   } else if (d.bird_verdict?.status === 'unavailable') {

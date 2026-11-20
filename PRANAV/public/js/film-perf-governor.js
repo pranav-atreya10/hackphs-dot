@@ -12,6 +12,14 @@ const DEFAULT_RAPID_SCROLL_PX = 80;
 const DEFAULT_RAPID_VELOCITY_PX_S = 1800;
 const DEFAULT_RECOVERY_FRAMES = 8;
 const DEFAULT_IDLE_MS = 180;
+const WARM_FETCH_URLS = Object.freeze([
+  './vendor/three.module.js',
+  './film-enhancements.js',
+  './details.js',
+  './cinema.js',
+  './assets/narrow-body-airliner.glb',
+  './assets/derelict_airfield_01_1k.hdr',
+]);
 
 const activeGovernors = new WeakMap();
 
@@ -259,6 +267,7 @@ function initFilmPerfGovernor(
   const playButton = options.playButton ?? findById(root, 'play');
   const replayButton = options.replayButton ?? findById(root, 'replay');
   const creditsToggle = options.creditsToggle ?? findById(root, 'creditsToggle');
+  const poster = options.poster ?? findById(root, 'filmPoster') ?? findById(stage, 'filmPoster');
 
   const doc = options.document
     ?? stage.ownerDocument
@@ -421,6 +430,46 @@ function initFilmPerfGovernor(
     observer.observe(stage);
   }
 
+  // Warm-fetch core Three.js modules + hero aircraft/HDR once when #filmPoster enters within 300px or is hovered/focused.
+  const fetchFn = options.fetch ?? win?.fetch?.bind?.(win) ?? (typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : null);
+  const nav = options.navigator ?? win?.navigator ?? (typeof navigator !== 'undefined' ? navigator : null);
+  let warmObserver = null;
+  let warmDone = false;
+  function warmFetchFilmAssets() {
+    if (destroyed || warmDone) return;
+    if (getDataAttr(poster, 'warmFetched', 'data-warm-fetched') === '1') {
+      warmDone = true;
+      warmObserver?.disconnect?.();
+      return;
+    }
+    if (nav?.connection?.saveData) return;
+    warmDone = true;
+    if (poster) setDataAttr(poster, 'warmFetched', 'data-warm-fetched', '1');
+    warmObserver?.disconnect?.();
+    if (typeof fetchFn === 'function') {
+      for (const url of WARM_FETCH_URLS) {
+        try {
+          Promise.resolve(fetchFn(url, { priority: 'low' })).catch(() => {});
+        } catch {}
+      }
+    }
+  }
+  if (poster && !isFilmStarted(stage, film, gl, root)) {
+    if (typeof ObserverCtor === 'function') {
+      warmObserver = new ObserverCtor(entries => {
+        if (destroyed || !Array.isArray(entries)) return;
+        if (entries.some(e => e && (e.isIntersecting || (typeof e.intersectionRatio === 'number' && e.intersectionRatio > 0)))) {
+          warmFetchFilmAssets();
+        }
+      }, { rootMargin: '300px' });
+      warmObserver.observe(poster);
+    }
+    if (typeof poster.addEventListener === 'function') {
+      poster.addEventListener('pointerenter', warmFetchFilmAssets, { once: true, passive: true });
+      poster.addEventListener('focusin', warmFetchFilmAssets, { once: true });
+    }
+  }
+
   let filmMutationObserver = null;
   if (film && typeof MutationObserverCtor === 'function' && typeof film.addEventListener === 'function') {
     filmMutationObserver = new MutationObserverCtor(() => {
@@ -471,6 +520,11 @@ function initFilmPerfGovernor(
       destroyed = true;
       if (activeGovernors.get(stage) === controller) activeGovernors.delete(stage);
       observer?.disconnect?.();
+      warmObserver?.disconnect?.();
+      if (poster && typeof poster.removeEventListener === 'function') {
+        poster.removeEventListener('pointerenter', warmFetchFilmAssets);
+        poster.removeEventListener('focusin', warmFetchFilmAssets);
+      }
       filmMutationObserver?.disconnect?.();
       if (playButton && typeof playButton.removeEventListener === 'function') {
         playButton.removeEventListener('click', onPlayClick);

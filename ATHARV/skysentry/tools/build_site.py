@@ -35,8 +35,32 @@ launch = 'startFilm().catch(showFilmError);'
 assert launch in film_scripts
 film_scripts = film_scripts.replace(launch, """
 const film = document.getElementById("film");
+const filmPoster = document.getElementById("filmPoster");
 const launch = document.getElementById("filmLaunch");
 const status = document.getElementById("filmLaunchStatus");
+let warmFetched = false;
+const warmFilmAssets = () => {
+  if (warmFetched || filmPoster?.dataset.warmFetched === "1" || navigator.connection?.saveData) return;
+  warmFetched = true;
+  if (filmPoster) filmPoster.dataset.warmFetched = "1";
+  warmObserver?.disconnect();
+  for (const url of [
+    "./vendor/three.module.js",
+    "./film-enhancements.js",
+    "./details.js",
+    "./cinema.js",
+    "./assets/narrow-body-airliner.glb",
+    "./assets/derelict_airfield_01_1k.hdr"
+  ]) fetch(url, {priority: "low"}).catch(() => {});
+};
+const warmObserver = typeof IntersectionObserver === "function" && filmPoster
+  ? new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) warmFilmAssets(); }, {rootMargin: "300px"})
+  : null;
+if (filmPoster) {
+  warmObserver?.observe(filmPoster);
+  filmPoster.addEventListener("pointerenter", warmFilmAssets, {once: true, passive: true});
+  filmPoster.addEventListener("focusin", warmFilmAssets, {once: true});
+}
 let launching = false, failed = false;
 launch.addEventListener("click", async event => {
   if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
@@ -281,7 +305,7 @@ SITE_BODY = f"""
         <li><em>Socket.IO</em><b>Show the warning</b><span>An in-session warning can arrive before storage confirms it.</span></li>
         <li><em>Browser voice</em><b>Speak fresh alerts only</b><span>Operators can turn sound on. Acknowledgment and replay do not trigger speech.</span></li>
         <li><em>MongoDB Atlas</em><b>Confirm storage</b><span>Stored receipts support acknowledgment and replay. The hourly chart counts stored detections.</span></li>
-        <li><em>Gemini</em><b>Optionally review evidence</b><span>Reports use detector readings. Cloud image review requires separate opt-in and does not change warnings.</span></li>
+        <li><em>Local AI Model</em><b>Optionally review evidence</b><span>Reports use detector readings. The Local AI Model checks tracks in the browser; optional server review requires separate opt-in and does not change warnings.</span></li>
         <li><em>MongoDB Atlas</em><b>Save the report when available</b><span>Report work can be delayed or incomplete; incident snapshot retention is off unless separately enabled.</span></li>
         <li><em>Solana devnet</em><b>Optionally verify a report hash</b><span>A confirmed hash can be compared with the exact report text. It does not protect stored records from edits or prove the report accurate.</span></li>
       </ol>
@@ -292,7 +316,7 @@ SITE_BODY = f"""
     <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>The services behind the prototype</h2></div>
     <div class="stack">
       <div><b>Browser voice</b><span>Opt-in speech for new alerts</span></div>
-      <div><b>Gemini</b><span>Optional image review and text assistance</span></div>
+      <div><b>Local AI Model</b><span>In-browser bird and drone verification</span></div>
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
       <div><b>MongoDB Atlas</b><span>Alert receipts, incident reports and hourly charts</span></div>
       <div><b>Solana devnet</b><span>Optional drone-report hash comparison</span></div>
@@ -304,7 +328,7 @@ SITE_BODY = f"""
     <div class="faq">
       <details><summary>How accurate is it?</summary><p>The film and synthetic scenarios illustrate the software; they do not establish field accuracy or airport qualification.</p></details>
       <details><summary>Can it monitor the whole airport?</summary><p>No. It can only assess usable video in view. Poor visibility, distance or a stalled detector can leave coverage gaps. Night performance is not established.</p></details>
-      <details><summary>What about privacy?</summary><p>Live video goes to the SkySentry server. Incident snapshot retention and sending eligible camera images to Google Gemini are separate settings, both off by default. Enabling one does not authorize the other.</p></details>
+      <details><summary>What about privacy?</summary><p>Live video goes to the SkySentry server, while the Local AI Model checks tracks directly in your browser. Incident snapshot retention and sending eligible camera images for optional AI review are separate settings, both off by default. Enabling one does not authorize the other.</p></details>
       <details><summary>What does a devnet hash prove?</summary><p>It lets someone compare the fingerprint of exact report text against a confirmed memo. It is not tamper-proof storage, proof of accuracy, or a chain of custody.</p></details>
     </div>
   </section>
