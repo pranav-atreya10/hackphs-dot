@@ -1,34 +1,17 @@
-/* Scroll compositor & offscreen containment optimizations for SkySentry.
-   1. Defers initial layout and paint of below-the-fold static landing sections (#risk, #stack, #faq, .foot),
-      never touching sticky header.bar, above-the-fold .hero, the 3D #film stage, or live app risk cards.
+/* Scroll compositor & paint-isolation optimizations for SkySentry.
+   1. Keeps native layout height on all static landing sections (no placeholder contain-intrinsic-size jumps).
    2. Isolates high-frequency canvas, map, and telemetry repaints (.tile, #map, .live-ai-card).
-   3. Suppresses non-essential backdrop-filter and hover box-shadow recalculations below header.bar
-      while actively scrolling (:root[data-scrolling="1"]), keeping header.bar crisp. */
+   3. Suppresses backdrop-filter and hover box-shadow recalculations (including header.bar blur)
+      while actively scrolling (:root[data-scrolling="1"]) so scrolling never re-blurs moving WebGL/DOM content. */
 
-/* 1. Offscreen DOM subtree containment for below-the-fold static landing sections */
-#risk,
-#stack,
-#faq,
-.foot {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 560px;
-}
-
-/* Keep live operational risk cards on app pages (tower.html, camera.html) un-deferred */
-body.app #risk,
-#risk[data-risk] {
-  content-visibility: visible;
-  contain-intrinsic-size: none;
-}
-
-/* 2. Paint & layout layer isolation so canvas/map/card updates never reflow the outer document */
+/* 1. Paint & layout layer isolation so canvas/map/card updates never reflow the outer document */
 .tile,
 #map,
 .live-ai-card {
   contain: layout paint;
 }
 
-/* 3. Active-scroll GPU overdraw & hover-shadow guard (:root[data-scrolling="1"]) */
+/* 2. Active-scroll GPU overdraw & hover-shadow guard (:root[data-scrolling="1"]) */
 :root[data-scrolling="1"] :is(.card, .step3, .clip, .promo-card, .live-ai-card, .limits, .glass, .banner, [data-glass]):not(header.bar *) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -43,8 +26,9 @@ body.app #risk,
 }
 
 :root[data-scrolling="1"] header.bar {
-  backdrop-filter: saturate(1.4) blur(10px);
-  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--paper) 97%, transparent);
 }
 
 /* Pause decorative CSS animations inside offscreen [data-pause-offscreen] containers */

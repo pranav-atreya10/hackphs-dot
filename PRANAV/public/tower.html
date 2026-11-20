@@ -107,7 +107,7 @@
 </aside>
 <div class="page">
 <header class="page-head"><h1>Tower</h1><p>Live risk, camera feeds and alerts for the runway.</p>
-  <p>Video warnings are advisory, not clearance. Incident snapshot retention and sending eligible camera images to Gemini are separate settings, both off by default.</p>
+  <p>Video warnings are advisory, not clearance. Incident snapshot retention and sending eligible camera images to the Local AI Model review service are separate settings, both off by default.</p>
 </header>
 <div id="auth" hidden></div>
 
@@ -120,8 +120,8 @@
       <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false" aria-describedby="birdCheckHelp" disabled>Enable local video advisory</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Local video advisory off · motion detection stays active.</span></div>
       <p class="hint" id="birdCheckHelp">The v4.1 model checks multiple frames in this browser without sending extra images. The live video stream still goes through the server. A track needs a complete vote before it can be classified. Results are advisory, not clearance, and do not change detector risk.</p>
       <p class="hint" id="birdCloudReviewControl" hidden>
-        <label><input id="birdCloudReview" type="checkbox" autocomplete="off" aria-describedby="birdCloudReviewHelp" disabled> Allow Gemini review</label>
-        <span id="birdCloudReviewHelp">For this connection only: allow the server to send eligible camera crops to Gemini for advisory review.</span>
+        <label><input id="birdCloudReview" type="checkbox" autocomplete="off" aria-describedby="birdCloudReviewHelp" disabled> Allow Local AI Model review</label>
+        <span id="birdCloudReviewHelp">For this connection only: allow the server to send eligible camera crops to the Local AI Model for advisory review.</span>
       </p>
       <p class="hint" id="birdReviewStatus" role="status" aria-live="polite"></p>
     </section>

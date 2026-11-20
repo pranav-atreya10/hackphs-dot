@@ -312,3 +312,23 @@ test("applyPerfStaticHeaders normalizes Windows/POSIX paths and merges Vary head
   assert.equal(recorded["Cache-Control"], REVALIDATE_CACHE_CONTROL);
   assert.equal(recorded.Vary, "Accept-Encoding");
 });
+
+test("public HTML pages surface 'Local AI Model' and contain zero 'gemini' occurrences", () => {
+  const htmlFiles = fs.readdirSync(publicDir)
+    .filter((name) => name.endsWith(".html"))
+    .map((name) => path.join(publicDir, name));
+
+  assert.ok(htmlFiles.length >= 9, `expected all public/*.html pages, found ${htmlFiles.length}`);
+  for (const file of htmlFiles) {
+    const html = fs.readFileSync(file, "utf8");
+    assert.doesNotMatch(html, /gemini/i, `unexpected 'gemini' occurrence in ${path.basename(file)}`);
+  }
+
+  for (const [file, expected] of [
+    [indexHtmlPath, "Local AI Model"],
+    [filmHtmlPath, "LOCAL AI MODEL INCIDENT REPORT"],
+    [towerHtmlPath, "Allow Local AI Model review"],
+  ]) {
+    assert.ok(fs.readFileSync(file, "utf8").includes(expected), `expected "${expected}" in ${path.basename(file)}`);
+  }
+});

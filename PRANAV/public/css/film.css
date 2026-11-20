@@ -39,15 +39,6 @@ body{-webkit-font-smoothing:antialiased}
 }
 .seg.is-pulsing i{animation:film-seg-pulse .42s cubic-bezier(.22,1,.36,1)}
 
-@media (prefers-reduced-motion:no-preference){
-  .film-scrubber-ready:not([data-reduced-motion="true"]) .seg i b{
-    width:100%!important;
-    transform-origin:0 50%;
-    transform:scaleX(var(--seg-progress,0));
-    will-change:transform;
-  }
-}
-
 .film-chapter-tooltip{
   position:absolute;left:0;bottom:calc(100% + 28px);z-index:30;pointer-events:none;
   display:inline-flex;align-items:center;gap:0;white-space:nowrap;

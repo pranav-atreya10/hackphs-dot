@@ -1,35 +1,32 @@
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { loadGltfJson } from './assetload.js';
 
-// Model pass: places scanned CC0 props from Poly Haven around the airfield, and rebuilds
-// the geese, parked light aircraft and tower roof in more detail.
-export async function enhanceModels({T, scene, W, rnd}) {
+// Model pass: rebuilds Canada geese, parked light aircraft and tower roof synchronously (0 network),
+// and streams scanned CC0 Poly Haven props in small background batches via streamScannedProps().
+export async function enhanceModels({T, scene, W, rnd, streamProps = true}) {
   const D = new T.Group(); D.name = 'Scanned props and rebuilt models'; scene.add(D);
   const heightAt = (x, z) => { const d = Math.hypot(Math.max(0, Math.abs(x) - 540), Math.max(0, Math.abs(z) - 250)); const n = Math.sin(x*.004)*Math.cos(z*.005) + .5*Math.sin(x*.011 + z*.007); return d > 0 ? (n + 1.3)*Math.min(1, d/420)*34 : 0; };
   const materialCache = new Map();
   const std = (c,o) => {const key=JSON.stringify([c,o||{}]);if(!materialCache.has(key))materialCache.set(key,new T.MeshStandardMaterial(Object.assign({color:c,roughness:.75,metalness:0},o||{})));return materialCache.get(key);};
   const add = (geo, mat, x, y, z, p, cast = true) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; p.add(m); return m; };
 
-  /* ---------- Scanned props, instanced per mesh ---------- */
-  const loader = new GLTFLoader();
-  const url = id => new URL(`./assets/models/${id}/${id}_smooth.gltf.json`, import.meta.url).href;
-  // p: [x, z, rotationY, scale, y?]; y defaults to the terrain height.
+  /* ---------- Scanned props placement table ---------- */
   const place = {
     shrub_02: [], shrub_04: [], boulder_01: [], street_lamp_01: [], security_camera_01: [], utility_box_01: [],
     exterior_aircon_unit: [], concrete_road_barrier: [], portable_generator: [], small_lpg_tank: [], fire_hydrant: []
   };
   // Bushes along both fence lines and around buildings.
-  for (let x = -540; x <= 540; x += 9 + rnd()*14) { place.shrub_02.push([x, -258 - rnd()*6, rnd()*6.3, .55 + rnd()*.6]); if (rnd() < .6) place.shrub_02.push([x + 4, 253 + rnd()*6, rnd()*6.3, .5 + rnd()*.6]); }
+  for (let x = -540; x <= 540; x += 18 + rnd()*22) { place.shrub_02.push([x, -258 - rnd()*6, rnd()*6.3, .55 + rnd()*.6]); if (rnd() < .5) place.shrub_02.push([x + 4, 253 + rnd()*6, rnd()*6.3, .5 + rnd()*.6]); }
   [[60, -200], [150, -200], [200, -145], [180, -145], [75, -168], [146, -168]].forEach(([x, z]) => place.shrub_02.push([x, z, rnd()*6.3, .35 + rnd()*.2]));
   // Low ground plants where the camera gets close: the phone station, runway 10 threshold, the tower base.
   const scatter = (cx, cz, r, n, list, smin, smax, avoid) => { for (let i = 0; i < n; i++) { const a = rnd()*6.283, d = Math.sqrt(rnd())*r, x = cx + Math.cos(a)*d, z = cz + Math.sin(a)*d; if (avoid && avoid(x, z)) continue; list.push([x, z, rnd()*6.3, smin + rnd()*(smax - smin)]); } };
   const offPavement = (x, z) => Math.abs(z) < 24 || (Math.abs(z + 62) < 10 && Math.abs(x) < 372) || (z < -88 && z > -162 && Math.abs(x) < 172);
-  scatter(130, -30, 30, 110, place.shrub_04, 1.2, 2.6, offPavement);
-  scatter(-380, 30, 45, 90, place.shrub_04, 1.2, 2.4, offPavement);
-  scatter(-380, -30, 45, 70, place.shrub_04, 1.2, 2.4, offPavement);
-  scatter(200, -112, 18, 30, place.shrub_04, 1, 2, offPavement);
+  scatter(130, -30, 30, 28, place.shrub_04, 1.4, 2.8, offPavement);
+  scatter(-380, 30, 45, 22, place.shrub_04, 1.4, 2.6, offPavement);
+  scatter(-380, -30, 45, 18, place.shrub_04, 1.4, 2.6, offPavement);
+  scatter(200, -112, 18, 10, place.shrub_04, 1.2, 2.2, offPavement);
   // Boulders on the field edges and outside the fence.
-  for (let i = 0; i < 34; i++) { const a = rnd()*6.283, r = 560 + rnd()*500, x = Math.cos(a)*r, z = Math.sin(a)*r*.75; place.boulder_01.push([x, z, rnd()*6.3, 1.2 + rnd()*2.2]); }
+  for (let i = 0; i < 18; i++) { const a = rnd()*6.283, r = 560 + rnd()*500, x = Math.cos(a)*r, z = Math.sin(a)*r*.75; place.boulder_01.push([x, z, rnd()*6.3, 1.3 + rnd()*2.2]); }
   [[-470, -128], [-452, -168], [-488, -176], [100, -46], [158, -18]].forEach(([x, z]) => place.boulder_01.push([x, z, rnd()*6.3, .6 + rnd()*.5]));
   // Apron and car-park floodlights, scaled up to apron-mast height.
   for (let x = -150; x <= 150; x += 60) place.street_lamp_01.push([x, -91, Math.PI/2, 2.3, 0]);
@@ -43,67 +40,83 @@ export async function enhanceModels({T, scene, W, rnd}) {
   for (let x = 82; x <= 138; x += 14) place.exterior_aircon_unit.push([x, -188, 0, 1.6, 12]);
   [-130, -60, 10].forEach(x => place.exterior_aircon_unit.push([x + 25.2, -192, Math.PI/2, 1.5, 0]));
   // Jersey barriers along the perimeter road and around the fuel island.
-  for (let x = -40; x <= 210; x += 3.4) place.concrete_road_barrier.push([x, -244.5, 0, 1.1, 0]);
+  for (let x = -40; x <= 210; x += 6.8) place.concrete_road_barrier.push([x, -244.5, 0, 1.1, 0]);
   for (let i = 0; i < 6; i++) place.concrete_road_barrier.push([-36 + i*3.4, -161.5, 0, 1.05, 0]);
   // Ground power units and LPG tanks.
   [[-112, -145, .3], [-70, -150, -.6], [42, -146, 1.1], [-150, -103, .2]].forEach(([x, z, r]) => place.portable_generator.push([x, z, r, 1.5, 0]));
   [-130, -60, 10].forEach(x => { place.small_lpg_tank.push([x - 25, -196, 0, 2, 0]); place.small_lpg_tank.push([x - 25, -199, 0, 2, 0]); });
   [[-104, -158], [58, -158], [-20, -92], [120, -205], [180, -205]].forEach(([x, z]) => place.fire_hydrant.push([x, z, rnd()*6.3, 1.3, 0]));
 
-  const shadowless = new Set(['shrub_04']);
-  const dm = new T.Object3D(), m4 = new T.Matrix4();
-  const loads = Object.entries(place).map(([id, list]) => loadGltfJson(loader, url(id)).then(gltf => {
-    const root = gltf.scene; root.updateMatrixWorld(true);
-    const box = new T.Box3().setFromObject(root), lift = -box.min.y;
-    root.traverse(o => {
-      if (!o.isMesh) return;
-      const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.translate(0, lift, 0);
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      mats.forEach(m => { m.envMapIntensity = .9; if (m.map) m.map.anisotropy = 8; });
-      const inst = new T.InstancedMesh(geo, o.material, list.length);
-      list.forEach(([x, z, r, s, y], i) => { dm.position.set(x, y ?? heightAt(x, z), z); dm.rotation.set(0, r, 0); dm.scale.setScalar(s); dm.updateMatrix(); inst.setMatrixAt(i, dm.matrix); });
-      inst.castShadow = !shadowless.has(id); inst.receiveShadow = true; inst.name = id;
-      D.add(inst);
+  const shadowless = new Set(['shrub_02', 'shrub_04', 'boulder_01', 'concrete_road_barrier', 'security_camera_01', 'utility_box_01', 'exterior_aircon_unit', 'small_lpg_tank', 'fire_hydrant']);
+  const propsGroup = new T.Group(); propsGroup.name = 'Scanned airfield props'; scene.add(propsGroup);
+  const streamScannedProps = async () => {
+    const loader = new GLTFLoader();
+    const url = id => new URL(`./assets/models/${id}/${id}_smooth.gltf.json`, import.meta.url).href;
+    const dm = new T.Object3D();
+    const loadProp = ([id, list]) => loadGltfJson(loader, url(id)).then(gltf => {
+      const root = gltf.scene; root.updateMatrixWorld(true);
+      const box = new T.Box3().setFromObject(root), lift = -box.min.y;
+      root.traverse(o => {
+        if (!o.isMesh) return;
+        const geo = o.geometry.clone(); geo.applyMatrix4(o.matrixWorld); geo.translate(0, lift, 0);
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(m => { m.envMapIntensity = .9; if (m.map) m.map.anisotropy = 8; });
+        const inst = new T.InstancedMesh(geo, o.material, list.length);
+        list.forEach(([x, z, r, s, y], i) => { dm.position.set(x, y ?? heightAt(x, z), z); dm.rotation.set(0, r, 0); dm.scale.setScalar(s); dm.updateMatrix(); inst.setMatrixAt(i, dm.matrix); });
+        inst.castShadow = !shadowless.has(id); inst.receiveShadow = true; inst.name = id;
+        propsGroup.add(inst);
+      });
     });
-  }));
+    const entries = Object.entries(place), failed = [];
+    for (let i = 0; i < entries.length; i += 2) {
+      if (i > 0) await new Promise(r => setTimeout(r, 16));
+      const batch = await Promise.allSettled(entries.slice(i, i + 2).map(loadProp));
+      for (const result of batch) if (result.status === 'rejected') failed.push(result);
+    }
+    failed.forEach(result => console.warn('Model failed', result.reason));
+    return { ok: failed.length === 0, group: propsGroup };
+  };
 
-  /* ---------- Canada geese, rebuilt ---------- */
-  const brown = std(0x6f6355, {roughness:.95}), breast = std(0xb3a690, {roughness:.95}), blackM = std(0x1d2124, {roughness:.7}),
-        whiteM = std(0xeeeae0, {roughness:.9}), primaries = std(0x3f382f, {roughness:.95, side:T.DoubleSide}), coverts = std(0x7d705f, {roughness:.95, side:T.DoubleSide});
-  const lathe = (profile, sy = .85) => { const g = new T.LatheGeometry(profile.map(([r, y]) => new T.Vector2(r, y)), 14); g.rotateZ(-Math.PI/2); g.scale(1, sy, 1); return g; };
-  const bodyGeo = lathe([[0, -1.15], [.12, -1.05], [.24, -.85], [.36, -.45], [.42, 0], [.4, .45], [.3, .78], [.14, .95], [0, 1]]);
-  const neckGeo = new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(.8, .06, 0), new T.Vector3(1.3, .12, 0), new T.Vector3(1.85, .16, 0)]), 12, .09, 8);
-  const headGeo = new T.SphereGeometry(.16, 12, 10); headGeo.scale(1.45, 1, .9);
-  const beakGeo = new T.ConeGeometry(.06, .3, 8); beakGeo.rotateZ(-Math.PI/2);
-  const chinGeo = new T.SphereGeometry(.11, 10, 8); chinGeo.scale(.9, .85, 1.35);
-  const tailGeo = new T.SphereGeometry(.2, 10, 6); tailGeo.scale(1.3, .45, 1.1);
+  /* ---------- Canada geese, rebuilt (vertex-colored so each bird body batches into 1 mesh) ---------- */
+  const gooseMat = std(0xffffff, {roughness:.9, vertexColors:true}), wingMat = std(0xffffff, {roughness:.95, side:T.DoubleSide, vertexColors:true});
+  const tintGeo = (geo, hex) => { const g = geo.clone(), c = new T.Color(hex), n = g.attributes.position.count, arr = new Float32Array(n*3); for (let i = 0; i < n; i++) { arr[i*3] = c.r; arr[i*3+1] = c.g; arr[i*3+2] = c.b; } g.setAttribute('color', new T.BufferAttribute(arr, 3)); return g; };
+  const lathe = (profile, sy = .85) => { const g = new T.LatheGeometry(profile.map(([r, y]) => new T.Vector2(r, y)), 12); g.rotateZ(-Math.PI/2); g.scale(1, sy, 1); return g; };
+  const bodyGeo = tintGeo(lathe([[0, -1.15], [.12, -1.05], [.24, -.85], [.36, -.45], [.42, 0], [.4, .45], [.3, .78], [.14, .95], [0, 1]]), 0x6f6355);
+  const breastGeo = tintGeo(new T.SphereGeometry(.34, 10, 8), 0xb3a690);
+  const neckGeo = tintGeo(new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(.8, .06, 0), new T.Vector3(1.3, .12, 0), new T.Vector3(1.85, .16, 0)]), 10, .09, 6), 0x1d2124);
+  const headGeo = tintGeo(new T.SphereGeometry(.16, 10, 8), 0x1d2124); headGeo.scale(1.45, 1, .9);
+  const beakGeo = tintGeo(new T.ConeGeometry(.06, .3, 6), 0x1d2124); beakGeo.rotateZ(-Math.PI/2);
+  const chinGeo = tintGeo(new T.SphereGeometry(.11, 8, 6), 0xeeeae0); chinGeo.scale(.9, .85, 1.35);
+  const tailGeo = tintGeo(new T.SphereGeometry(.2, 8, 6), 0x1d2124); tailGeo.scale(1.3, .45, 1.1);
+  const utGeo = tintGeo(new T.SphereGeometry(.14, 8, 6), 0xeeeae0);
   const shape = pts => { const s = new T.Shape(); s.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => s.lineTo(p[0], p[1])); const g = new T.ShapeGeometry(s); g.rotateX(Math.PI/2); return g; };
-  const innerGeo = shape([[.42, 0], [.36, 1.15], [-.3, 1.2], [-.55, 0]]);
-  const outerGeo = shape([[.36, 0], [.18, .7], [0, 1.3], [-.12, 1.22], [-.18, 1.05], [-.26, .9], [-.3, .6], [-.3, 0]]);
+  const innerGeo = tintGeo(shape([[.42, 0], [.36, 1.15], [-.3, 1.2], [-.55, 0]]), 0x7d705f);
+  const outerGeo = tintGeo(shape([[.36, 0], [.18, .7], [0, 1.3], [-.12, 1.22], [-.18, 1.05], [-.26, .9], [-.3, .6], [-.3, 0]]), 0x3f382f);
   W.gooseOuter = [];
-  W.birds.forEach(b => {
+  W.birds.forEach((b, bi) => {
+    const castBird = bi < 8;
     b.children.forEach(c => { if (c !== b.userData.wl && c !== b.userData.wr) c.visible = false; });
-    add(bodyGeo, brown, 0, 0, 0, b);
-    const br = add(new T.SphereGeometry(.34, 12, 8), breast, .45, -.08, 0, b); br.scale.set(1.3, .8, .95);
-    add(neckGeo, blackM, 0, 0, 0, b);
-    add(headGeo, blackM, 2, .17, 0, b);
-    add(beakGeo, blackM, 2.3, .14, 0, b);
-    add(chinGeo, whiteM, 1.98, .11, 0, b);
-    add(tailGeo, blackM, -1.08, .02, 0, b);
-    const ut = add(new T.SphereGeometry(.14, 8, 6), whiteM, -.9, -.13, 0, b); ut.scale.set(1.5, .6, 1);
+    add(bodyGeo, gooseMat, 0, 0, 0, b, castBird);
+    const br = add(breastGeo, gooseMat, .45, -.08, 0, b, castBird); br.scale.set(1.3, .8, .95);
+    add(neckGeo, gooseMat, 0, 0, 0, b, castBird);
+    add(headGeo, gooseMat, 2, .17, 0, b, castBird);
+    add(beakGeo, gooseMat, 2.3, .14, 0, b, castBird);
+    add(chinGeo, gooseMat, 1.98, .11, 0, b, castBird);
+    add(tailGeo, gooseMat, -1.08, .02, 0, b, castBird);
+    const ut = add(utGeo, gooseMat, -.9, -.13, 0, b, castBird); ut.scale.set(1.5, .6, 1);
     [b.userData.wl, b.userData.wr].forEach((wing, k) => {
       wing.children.forEach(c => c.visible = false);
       const side = new T.Group(); side.scale.z = k ? -1 : 1; wing.add(side);
-      add(innerGeo, coverts, 0, 0, .2, side, true);
+      add(innerGeo, wingMat, 0, 0, .2, side, castBird);
       const outer = new T.Group(); outer.position.set(0, 0, 1.38); side.add(outer);
-      add(outerGeo, primaries, 0, 0, 0, outer, true);
+      add(outerGeo, wingMat, 0, 0, 0, outer, castBird);
       W.gooseOuter.push({outer, wing, sign:k ? -1 : 1});
     });
   });
 
   /* ---------- Parked light aircraft (high-wing single engine) ---------- */
   const lightPlane = (body, trim) => {
-    const g = new T.Group(), mb = std(body, {roughness:.35, metalness:.1}), mt = std(trim, {roughness:.4}), glass = new T.MeshPhysicalMaterial({color:0x2b4152, roughness:.08, metalness:.2, transparent:true, opacity:.85}), dark = std(0x24282c), tyre = std(0x141618, {roughness:.9});
+    const g = new T.Group(), mb = std(body, {roughness:.35, metalness:.1}), mt = std(trim, {roughness:.4}), glass = std(0x2b4152, {roughness:.12, metalness:.35, transparent:true, opacity:.85}), dark = std(0x24282c), tyre = std(0x141618, {roughness:.9});
     const fus = new T.LatheGeometry([[0, -4.6], [.18, -4.4], [.42, -2.4], [.62, -.4], [.66, .9], [.6, 1.9], [.44, 2.5], [0, 2.7]].map(([r, y]) => new T.Vector2(r, y)), 16);
     fus.rotateZ(-Math.PI/2); fus.scale(1, 1.25, .9); add(fus, mb, 0, 1.6, 0, g);
     add(new T.BoxGeometry(1.6, .65, 1.22), glass, .5, 2.25, 0, g);
@@ -142,7 +155,8 @@ export async function enhanceModels({T, scene, W, rnd}) {
     if (W.anemo) W.anemo.rotation.y = gt*5.5;
     if (W.vane) W.vane.rotation.y = .4 + Math.sin(gt*.6)*.15;
   };
-  const failed = (await Promise.allSettled(loads)).filter(result => result.status === 'rejected');
-  failed.forEach(result => console.warn('Model failed', result.reason));
-  return failed.length === 0;
+  W.streamScannedProps = streamScannedProps;
+  if (!streamProps) return true;
+  const {ok} = await streamScannedProps();
+  return ok;
 }

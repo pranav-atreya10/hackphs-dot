@@ -1,6 +1,6 @@
-// Scroll-reveal for every page. Chrome/Edge already animate the landing page with CSS scroll timelines,
-// so this only adds an IntersectionObserver reveal where that isn't supported (Safari, Firefox) and on the
-// app pages (cards, demo clips). Respects reduced motion; content is never hidden if JS fails.
+// Scroll-reveal for every page. Uses a zero-scroll-overhead one-shot IntersectionObserver across both
+// the landing page and app pages (cards, demo clips) on all browsers. Respects reduced motion; content
+// is never hidden if JS fails.
 (() => {
   const STAGGER_MS = [0, 55, 100, 135];
   const computeStagger = index => STAGGER_MS[Math.max(0, index | 0) % STAGGER_MS.length];
@@ -23,7 +23,6 @@
       return noopApi(reduced || !env || typeof env.IntersectionObserver !== 'function');
     }
     const hasViewTimeline = Boolean(env.CSS?.supports?.('animation-timeline: view()'));
-    if (doc.body && doc.body.classList.contains('app') === false && hasViewTimeline) return noopApi(false);
 
     const style = doc.createElement('style');
     if (style.dataset) style.dataset.skysentryReveal = '';
@@ -84,7 +83,7 @@
       if (el.isConnected === false) return;
       if (el.closest?.('#film, .stage, .side')) { seen.add(el); return; }
       if (el.hidden || el.closest?.('[hidden], details:not([open])')) return;
-      if (hasViewTimeline && el.classList?.contains('clip')) { seen.add(el); return; }
+      if (hasViewTimeline && doc.body?.classList?.contains('app') && el.classList?.contains('clip')) { seen.add(el); return; }
       seen.add(el);
       const viewH = env.innerHeight || doc.documentElement?.clientHeight || 800;
       // Anything already on screen at scan time shows immediately (no flash of hidden content).
@@ -166,10 +165,6 @@
     const start = () => {
       if (!active) return;
       sel = getSelector();
-      if (doc.body && doc.body.classList.contains('app') === false && hasViewTimeline) {
-        disconnect();
-        return;
-      }
       watch(doc);
       if (doc.body && typeof env.MutationObserver === 'function') {
         mo = new env.MutationObserver(onMutations);

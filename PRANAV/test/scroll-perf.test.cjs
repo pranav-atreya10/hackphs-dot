@@ -233,7 +233,7 @@ function createHarness({ readyState = 'complete', initialElements = [] } = {}) {
   };
 }
 
-test('perf-scroll.css applies offscreen content-visibility only to below-the-fold static landing sections', () => {
+test('perf-scroll.css avoids placeholder content-visibility height jumps on static landing sections', () => {
   const css = fs.readFileSync(cssPath, 'utf8');
   const blocks = parseCssBlocks(css);
   const indexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
@@ -245,28 +245,13 @@ test('perf-scroll.css applies offscreen content-visibility only to below-the-fol
   }
   assert.ok(towerHtml.includes('id="map"') && towerHtml.includes('.tile'), 'tower.html contains #map and .tile');
 
-  const offscreenBlock = blocks.find(b => b.body.includes('content-visibility: auto'));
-  assert.ok(offscreenBlock, 'defines a content-visibility: auto rule');
-  assert.match(offscreenBlock.body, /contain-intrinsic-size:\s*auto\s+560px/);
-
-  const offscreenSelectors = offscreenBlock.selector.split(',').map(s => s.trim());
-  assert.deepEqual(offscreenSelectors, ['#risk', '#stack', '#faq', '.foot']);
-
   for (const block of blocks) {
-    if (block.body.includes('content-visibility: auto') || block.body.includes('560px')) {
-      for (const forbidden of ['header.bar', '.bar', '.hero', '#film']) {
-        assert.equal(block.selector.includes(forbidden), false, `${forbidden} must never get content-visibility: auto`);
-      }
-    }
+    assert.equal(block.body.includes('content-visibility: auto'), false, 'must not apply content-visibility: auto placeholder heights that jump mid-scroll');
+    assert.equal(block.body.includes('contain-intrinsic-size'), false, 'must not apply contain-intrinsic-size placeholder estimates');
   }
-
-  const appRiskReset = blocks.find(b => b.selector.includes('body.app #risk'));
-  assert.ok(appRiskReset, 'resets live operational #risk cards on body.app pages');
-  assert.match(appRiskReset.body, /content-visibility:\s*visible/);
-  assert.match(appRiskReset.body, /contain-intrinsic-size:\s*none/);
 });
 
-test('perf-scroll.css isolates .tile, #map, and .live-ai-card and suppresses non-header scroll GPU spikes', () => {
+test('perf-scroll.css isolates .tile, #map, and .live-ai-card and disables backdrop-filter (including header.bar) during active scroll', () => {
   const css = fs.readFileSync(cssPath, 'utf8');
   const blocks = parseCssBlocks(css);
 
@@ -275,7 +260,7 @@ test('perf-scroll.css isolates .tile, #map, and .live-ai-card and suppresses non
   assert.deepEqual(containBlock.selector.split(',').map(s => s.trim()), ['.tile', '#map', '.live-ai-card']);
 
   const backdropDisable = blocks.find(
-    b => b.selector.includes(':root[data-scrolling="1"]') && /backdrop-filter:\s*none/.test(b.body)
+    b => b.selector.includes(':root[data-scrolling="1"]') && b.selector.includes(':not(header.bar *)') && /backdrop-filter:\s*none/.test(b.body)
   );
   assert.ok(backdropDisable, 'disables non-essential backdrop-filter during active scroll');
   assert.match(backdropDisable.selector, /:not\(header\.bar \*\)/, 'excludes header.bar descendants');
@@ -286,9 +271,10 @@ test('perf-scroll.css isolates .tile, #map, and .live-ai-card and suppresses non
   assert.ok(hoverShadowDisable, 'disables hover box-shadow recalculations during active scroll');
   assert.match(hoverShadowDisable.selector, /:not\(header\.bar \*\)/);
 
-  const headerCrisp = blocks.find(b => b.selector === ':root[data-scrolling="1"] header.bar');
-  assert.ok(headerCrisp, 'keeps sticky header.bar crisp during scroll');
-  assert.match(headerCrisp.body, /backdrop-filter:\s*saturate\(1\.4\)\s*blur\(10px\)/);
+  const headerSolidOnScroll = blocks.find(b => b.selector === ':root[data-scrolling="1"] header.bar');
+  assert.ok(headerSolidOnScroll, 'switches sticky header.bar to solid surface during active scroll');
+  assert.match(headerSolidOnScroll.body, /backdrop-filter:\s*none/);
+  assert.match(headerSolidOnScroll.body, /background:\s*color-mix\(in srgb,\s*var\(--paper\)\s*97%,\s*transparent\)/);
 });
 
 test('passive scroll listener toggles data-scrolling="1" with a 140 ms idle debounce and zero layout reads', () => {

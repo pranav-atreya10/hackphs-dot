@@ -327,7 +327,7 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
       <div class="callout node" data-a="n_phone" data-n="0"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Camera station<small>Streams JPEGs, no drone audio</small></div></div></div>
       <div class="callout node l" data-a="n_server" data-n="1"><div class="cin fi" style="--d:.9s"><i class="ln"></i><i class="dot"></i><div class="lb">API server<small>Evaluates video and assigns risk</small></div></div></div>
       <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Event log<small>Confirmed receipts support replay</small></div></div></div>
-      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Gemini<small>Optional advisory review</small></div></div></div>
+      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Local AI Model<small>In-browser advisory check</small></div></div></div>
       <div class="callout node" data-a="n_s2" data-n="4"><div class="cin fi" style="--d:1.3s"><i class="ln"></i><i class="dot"></i><div class="lb">MongoDB Atlas<small>Reports, with optional image retention</small></div></div></div>
       <div class="callout node" data-a="n_s3" data-n="5"><div class="cin fi" style="--d:1.4s"><i class="ln"></i><i class="dot"></i><div class="lb">Solana devnet<small>Optional report hash comparison</small></div></div></div>
       <div class="callout node" data-a="n_s4" data-n="6"><div class="cin fi" style="--d:1.5s"><i class="ln"></i><i class="dot"></i><div class="lb">Browser voice<small>Opt-in; fresh alerts only</small></div></div></div>
@@ -340,7 +340,7 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
         <header><span>SKYSENTRY TOWER · RUNWAY-EAST</span><span class="live">● LIVE</span><span id="clock">14:32:05</span><span class="demo">DEMO DATA</span><span class="pill">RISK: RED</span></header>
         <div class="col">
           <div class="tile"><span class="k y"><span>VOICE ALERT · BROWSER VOICE</span><span>▶ PLAYING</span></span><div class="voice"><span id="typed"></span><i class="cur"></i></div></div>
-          <div class="tile fu" style="--d:5s"><span class="k"><span>GEMINI INCIDENT REPORT</span><span>14:32:09</span></span><div class="report">At 2:32 PM, eight geese were detected east of the runway, moving toward the active runway. Confidence high. Risk level red.</div></div>
+          <div class="tile fu" style="--d:5s"><span class="k"><span>LOCAL AI MODEL INCIDENT REPORT</span><span>14:32:09</span></span><div class="report">At 2:32 PM, eight geese were detected east of the runway, moving toward the active runway. Confidence high. Risk level red.</div></div>
           <div class="tile fu" style="--d:6s"><span class="k"><span>ALERT LOG</span><span>LAST 3</span></span>
             <div class="log">
               <div><span>14:32:05</span><em style="background:#d13b2f">RED</em><span>Birds · 8 · toward runway</span></div>
@@ -371,7 +371,7 @@ body:has(#L4.on) .detail-badge,body:has(#L7.on) .detail-badge{display:none}
         <h2 class="fu" style="--d:.3s">SkySentry</h2>
         <p class="fu" style="--d:.9s">An advisory video-monitoring prototype. Not a source of runway clearance.</p>
         <span class="sign fi" style="--d:2s">BUILT IN 24 HOURS · HACKPHS 2026</span>
-        <span class="sp fi" style="--d:2.6s">Gemini · DigitalOcean · MongoDB Atlas · Solana</span>
+        <span class="sp fi" style="--d:2.6s">Local AI Model · DigitalOcean · MongoDB Atlas · Solana</span>
       </div>
     </div>
   </div>
@@ -641,7 +641,8 @@ async function startFilm({userInitiated = false} = {}) {
     W.spon.forEach((s, i) => W.anchors["n_s"+i] = s.p.clone().add(new T.Vector3(20, 0, -6)));
     detailReady = import("./film-enhancements.js").then(m => m.enhanceFilm({
       T, scene, renderer, camera, W, sun, ground, runwayMesh, taxiMesh, apronMesh,
-      trees, bush, station, phone, TW, std, basic, mesh, box, resize
+      trees, bush, station, phone, TW, std, basic, mesh, box, resize,
+      onBackgroundSettled: () => { if (ready && !playing) frame(); }
     }));
   }
 
@@ -818,6 +819,12 @@ async function startFilm({userInitiated = false} = {}) {
     segs.forEach((g, i) => { g.classList.toggle("cur", i === idx); g.firstChild.firstChild.style.width = (i < idx ? 100 : i > idx ? 0 : (t/s.dur)*100) + "%"; });
   }
   function loop(now) {
+    if (playing && ready && document.documentElement.dataset.scrolling === "1") {
+      perfStamp += now - last;
+      last = now;
+      requestAnimationFrame(loop);
+      return;
+    }
     if(playing)perfFrames++;
     if (now - perfStamp > 1200) {
       const fps = Math.round(perfFrames * 1000 / (now - perfStamp));

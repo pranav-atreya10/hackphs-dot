@@ -2,9 +2,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
@@ -35,7 +33,7 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   sky.material.uniforms.mieDirectionalG.value = .86;
   sky.material.uniforms.sunPosition.value.copy(sunDir);
   const skyScene = new T.Scene(); skyScene.add(sky);
-  const cubeRT = new T.WebGLCubeRenderTarget(512, {type:T.HalfFloatType, generateMipmaps:true, minFilter:T.LinearMipmapLinearFilter});
+  const cubeRT = new T.WebGLCubeRenderTarget(256, {type:T.HalfFloatType, generateMipmaps:true, minFilter:T.LinearMipmapLinearFilter});
   new T.CubeCamera(1, 20000, cubeRT).update(renderer, skyScene);
   scene.background = cubeRT.texture; scene.backgroundIntensity = .34;
   if (W.skyDome) W.skyDome.visible = false;
@@ -78,8 +76,8 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   flare.addElement(new LensflareElement(flareTex('rgba(160,200,255,.28)', 'rgba(160,200,255,0)'), 160, 1));
   scene.add(flare);
 
-  /* ---------- Sharper shadows ---------- */
-  sun.shadow.mapSize.set(2048, 2048); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  /* ---------- Balanced shadows ---------- */
+  sun.shadow.mapSize.set(1024, 1024); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
   sun.intensity = 2.3;
 
   /* ---------- Ground: greener, patchwork farmland outside the fence ---------- */
@@ -103,18 +101,6 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   /* ---------- Fix oversized edge lights: small glass domes ---------- */
   if (W.edgeLights) { W.edgeLights.geometry.dispose(); W.edgeLights.geometry = new T.SphereGeometry(.24, 10, 6, 0, Math.PI*2, 0, Math.PI/2); W.edgeLights.material = new T.MeshBasicMaterial({color:0xfff3cf}); W.edgeLights.position.y = -.35; }
   scene.traverse(o => { if (o.isMesh && o.geometry?.type === 'SphereGeometry' && o.geometry.parameters.radius === .6 && Math.abs(Math.abs(o.position.x) - 421) < 1) o.scale.setScalar(.45); });
-
-  /* ---------- Wind-swept grass near every close-up camera ---------- */
-  const bladeTex = canvasTex(128, 128, (c, w, h) => { for (let i = 0; i < 26; i++) { const x = 8 + rnd()*112, top = 10 + rnd()*60, bend = (rnd() - .5)*30; c.strokeStyle = `hsl(${78 + rnd()*20},${35 + rnd()*20}%,${28 + rnd()*22}%)`; c.lineWidth = 2 + rnd()*2.5; c.beginPath(); c.moveTo(x, h); c.quadraticCurveTo(x + bend*.3, (h + top)/2, x + bend, top); c.stroke(); } });
-  const tuftGeo = (() => { const a = new T.PlaneGeometry(1.6, 1.1); a.translate(0, .55, 0); const b = a.clone(); b.rotateY(Math.PI/2); const geos = [a, b]; const pos = [], uv = [], idx = []; let off = 0; geos.forEach(gg => { pos.push(...gg.attributes.position.array); uv.push(...gg.attributes.uv.array); idx.push(...Array.from(gg.index.array, v => v + off)); off += gg.attributes.position.count; }); const m = new T.BufferGeometry(); m.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); m.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); m.setIndex(idx); m.computeVertexNormals(); return m; })();
-  const grassMat = new T.MeshStandardMaterial({map:bladeTex, alphaTest:.45, side:T.DoubleSide, roughness:1});
-  const windU = {value:0};
-  grassMat.onBeforeCompile = sh => { sh.uniforms.uWind = windU; sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvec4 ip = instanceMatrix[3];\ntransformed.x += sin(uWind*1.9 + ip.x*.21 + ip.z*.13) * uv.y * .22;\ntransformed.z += cos(uWind*1.4 + ip.x*.17) * uv.y * .1;'); };
-  const patches = [[130, -30, 70, 3200], [-370, 22, 90, 2600], [-370, -22, 80, 1600], [60, 30, 120, 2000], [200, -110, 60, 900]];
-  const totalTufts = patches.reduce((s, p) => s + p[3], 0);
-  const tufts = new T.InstancedMesh(tuftGeo, grassMat, totalTufts); const dm = new T.Object3D(); let ti = 0;
-  patches.forEach(([cx, cz, r, n]) => { for (let i = 0; i < n; i++) { const a = rnd()*Math.PI*2, d = Math.sqrt(rnd())*r, x = cx + Math.cos(a)*d, z = cz + Math.sin(a)*d; if (Math.abs(z) < 23.5 || (Math.abs(z + 62) < 9.5 && Math.abs(x) < 372) || (z < -88 && z > -162 && Math.abs(x) < 172)) continue; dm.position.set(x, 0, z); const s = .28 + rnd()*.34; dm.scale.set(s, s*(.6 + rnd()*.6), s); dm.rotation.set(0, rnd()*6.28, 0); dm.updateMatrix(); tufts.setMatrixAt(ti, dm.matrix); tufts.setColorAt(ti++, new T.Color().setHSL(.18 + rnd()*.06, .22 + rnd()*.14, .36 + rnd()*.16)); } });
-  tufts.count = ti; tufts.receiveShadow = true; D.add(tufts);
 
   /* ---------- Navigation aids ---------- */
   // PAPI: four units left of runway 10's aiming point, two red / two white as seen on a correct glide path.
@@ -157,6 +143,7 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   for (let i = 0; i < poles.length - 1; i++) for (const dx of [-2.2, 0, 2.2]) { const pts = []; for (let j = 0; j <= 16; j++) { const s = j/16; pts.push(new T.Vector3(poles[i] + (poles[i + 1] - poles[i])*s + dx*0, 15.6 - Math.sin(s*Math.PI)*1.6, -246 + dx*.12)); } const l = new T.Line(new T.BufferGeometry().setFromPoints(pts), wireMat); l.position.x = dx; D.add(l); }
 
   /* ---------- Countryside: farmsteads, barns, silos and a village ---------- */
+  const dm = new T.Object3D();
   const houseWall = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), std(0xe8e2d4), 260);
   const roofGeo = new T.CylinderGeometry(.72, .72, 1, 3, 1); roofGeo.rotateZ(Math.PI/2); roofGeo.rotateX(-Math.PI/2); roofGeo.rotateY(Math.PI/2);
   const roofs = new T.InstancedMesh(roofGeo, std(0x5b4b45, {roughness:.9}), 260);
@@ -230,18 +217,7 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   const composer = new EffectComposer(renderer); composer.setPixelRatio(pr);
   const size = new T.Vector2(); renderer.getSize(size);
   composer.addPass(new RenderPass(scene, camera));
-  const gtao = new GTAOPass(scene, camera, size.x, size.y); gtao.blendIntensity = .8;
-  gtao.updateGtaoMaterial({radius:2.2, distanceExponent:1.4, thickness:2.5, scale:1, samples:12});
-  gtao.enabled = false; composer.addPass(gtao);
-  // AO is computed from solid geometry only; see-through sprites, grass cards and wires are hidden for its depth/normal pass.
-  const gtaoRender = gtao.render.bind(gtao);
-  gtao.render = (...args) => {
-    const hidden = [];
-    scene.traverseVisible(o => { const m = o.material; if (o.isSprite || o.isPoints || o.isLine || o === flare || o.userData.noAO || (m && !Array.isArray(m) && (m.transparent || m.alphaTest > 0))) hidden.push(o); });
-    hidden.forEach(o => o.visible = false); gtaoRender(...args); hidden.forEach(o => o.visible = true);
-  };
   const bloom = new UnrealBloomPass(new T.Vector2(size.x, size.y), .18, .5, .94); composer.addPass(bloom);
-  const bokeh = new BokehPass(scene, camera, {focus:60, aperture:.00012, maxblur:.006}); bokeh.enabled = false; composer.addPass(bokeh);
   composer.addPass(new OutputPass());
   const grade = new ShaderPass({
     uniforms:{tDiffuse:{value:null}, uTime:{value:0}, uVig:{value:.32}, uGrain:{value:.035}, uCA:{value:.0016}},
@@ -263,14 +239,16 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
   composer.addPass(grade);
   const smaa = new SMAAPass(); composer.addPass(smaa);
 
-  // Focus subject per shot; null keeps everything sharp.
-  const focusOn = {s1: () => W.plane.position, s3: t => t > 5.5 ? W.anchors.phone : null, s5: () => W.anchors.phone, s8: t => t > 4.4 ? W.plane.position : null};
-  const apertures = {s1:.00007, s3:.00016, s5:.00022, s8:.00006};
-  let slowFrames = 0, frames = 0, lastT = performance.now(), quality = 0, windowStart = performance.now();
-  const qualityRatio = () => quality === 0 ? pr : quality === -1 ? Math.min(pr, .9) : quality === -2 ? .75 : .6;
+  const start = renderer.domElement?.closest?.('#stage') || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
+  const stage = start;
+  const startT = performance.now();
+  let slowFrames = 0, frames = 0, lastT = startT, quality = 0, windowStart = startT, viewW = size.x || 1280, viewH = size.y || 720;
+  const qualityRatio = () => {
+    const base = quality === 0 ? pr : quality === -1 ? Math.min(pr, .95) : quality === -2 ? Math.min(pr, .9) : Math.min(pr, .85);
+    return Math.min(base, Math.max(.85, Math.sqrt(1600000 / Math.max(1, viewW * viewH))));
+  };
 
   W.cinemaUpdate = (id, t, gt) => {
-    windU.value = gt;
     updateDust(id, gt); updatePollen(id, gt);
     W.cumulus.forEach((c, k) => c.position.x = c.userData.x0 + (gt*(1.5 + k % 3)) % 300);
     if (W.beaconHead) W.beaconHead.rotation.y = gt*2.1;
@@ -279,20 +257,35 @@ export function enhanceCinema({T, scene, renderer, camera, W, sun, rnd}) {
     if (W.strobeGlow) W.strobeGlow.visible = W.plane.userData.strobe?.visible ?? false;
     // Subtle handheld breathing on live-action style shots.
     if (id !== 's6' && id !== 's7') { camera.rotateX(Math.sin(gt*.9)*.0012 + Math.sin(gt*2.3)*.0004); camera.rotateY(Math.cos(gt*.7)*.0012); }
-    const f = focusOn[id] && focusOn[id](t);
-    bokeh.enabled = false; // Avoid a second full scene/depth render on every frame.
-    if (f) { bokeh.uniforms.focus.value = camera.position.distanceTo(f); bokeh.uniforms.aperture.value = apertures[id]; }
   };
 
   return {
     render(id, t, gt) {
       grade.uniforms.uTime.value = gt;
       composer.render();
-      // Adaptive quality: reduce resolution, then costly screen effects on slow machines.
-      const now = performance.now(), dt = now - lastT; lastT = now; frames++;
-      if (dt > 28) slowFrames++;
-      if (now - windowStart > 1200 && frames >= 4) { windowStart = now; if (slowFrames > frames * 0.4 && quality > -3) { quality--; composer.setPixelRatio(qualityRatio()); if(quality <= -2){bloom.enabled=false;smaa.enabled=false;} } frames = slowFrames = 0; }
+      // Adaptive quality with 4s startup/asset-load grace window, .85 floor, SMAA retention, and upward recovery.
+      const now = performance.now(), dt = now - lastT; lastT = now;
+      if ((stage && stage.dataset.assets !== 'ready') || now - startT < 4000) {
+        windowStart = now; frames = slowFrames = 0; return;
+      }
+      frames++;
+      if (dt > 28 && dt < 250) slowFrames++;
+      if (now - windowStart > 1200 && frames >= 4) {
+        windowStart = now;
+        if (slowFrames > frames * 0.4 && quality > -3) {
+          quality--;
+          composer.setPixelRatio(qualityRatio());
+          if (quality <= -2) bloom.enabled = false;
+          if (quality <= -3) smaa.enabled = false;
+        } else if (slowFrames === 0 && frames >= 30 && quality < 0) {
+          quality++;
+          composer.setPixelRatio(qualityRatio());
+          if (quality > -3) smaa.enabled = true;
+          if (quality > -2) bloom.enabled = true;
+        }
+        frames = slowFrames = 0;
+      }
     },
-    resize(w, h) { composer.setPixelRatio(Math.min(qualityRatio(), Math.sqrt(1400000 / Math.max(1, w*h)))); composer.setSize(w, h); }
+    resize(w, h) { viewW = w; viewH = h; composer.setPixelRatio(qualityRatio()); composer.setSize(w, h); }
   };
 }

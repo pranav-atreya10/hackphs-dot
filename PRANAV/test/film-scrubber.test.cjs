@@ -592,8 +592,8 @@ test('computes exact hover scrub ghost timestamp (0:42) across the 100-second 8-
   assert.equal(scrubber.tooltip.style.getPropertyValue('--tooltip-x'), '780.0px');
 });
 
-test('interpolates playhead progress smoothly, pulses active chapter, and disables motion under prefers-reduced-motion', () => {
-  const { doc, mql, rafCallbacks, flushFrame } = createMockDOM({ hasFilmCss: true, reducedMotion: false });
+test('lets native style.width drive 60 fps playhead fill at zero rAF cost, pulses active chapter, and respects prefers-reduced-motion', () => {
+  const { doc, mql, rafCallbacks } = createMockDOM({ hasFilmCss: true, reducedMotion: false });
   const wrap = doc.createElement('div');
   wrap.className = 'wrap';
   const bar = doc.createElement('div');
@@ -611,15 +611,12 @@ test('interpolates playhead progress smoothly, pulses active chapter, and disabl
   assert.equal(bar.getAttribute('data-reduced-motion'), 'false');
   assert.equal(s1.btn.getAttribute('aria-current'), 'step');
 
-  // Film engine writes inline percentage width to <b>; scrubber interpolates --seg-progress via spring
+  // 60 fps inline width updates on <b> must NOT fire a duplicate JS spring rAF loop or override width
   s1.fill.style.width = '60%';
-  assert.ok(rafCallbacks.size > 0, 'expected spring rAF to be scheduled');
-  flushFrame(16);
-  const midProgress = parseFloat(s1.btn.style.getPropertyValue('--seg-progress'));
-  assert.ok(midProgress > 0 && midProgress < 0.6, `expected interpolated progress in (0, 0.6), got ${midProgress}`);
-  for (let i = 0; i < 40; i++) flushFrame(16);
+  assert.equal(rafCallbacks.size, 0, '60 fps playhead width updates must not schedule duplicate rAF');
+  assert.equal(s1.fill.style.width, '60%');
+  scrubber.syncPlayhead();
   assert.equal(s1.btn.style.getPropertyValue('--seg-progress'), '0.6000');
-  assert.equal(rafCallbacks.size, 0, 'spring loop must halt once settled');
 
   // Switching .cur chapter triggers tactile active-segment pulse
   s1.btn.classList.remove('cur');
@@ -629,7 +626,7 @@ test('interpolates playhead progress smoothly, pulses active chapter, and disabl
   assert.equal(s2.btn.getAttribute('aria-current'), 'step');
   assert.equal(s1.btn.getAttribute('aria-current'), null);
 
-  // Enabling prefers-reduced-motion clears pulse, halts rAF, and snaps playhead updates immediately
+  // Enabling prefers-reduced-motion clears pulse and halts any tooltip rAF immediately
   mql.setMatches(true);
   assert.equal(scrubber.isReducedMotion(), true);
   assert.equal(bar.getAttribute('data-reduced-motion'), 'true');
@@ -637,6 +634,7 @@ test('interpolates playhead progress smoothly, pulses active chapter, and disabl
 
   s2.fill.style.width = '85%';
   assert.equal(rafCallbacks.size, 0, 'no rAF under prefers-reduced-motion');
+  scrubber.syncPlayhead();
   assert.equal(s2.btn.style.getPropertyValue('--seg-progress'), '0.8500');
 });
 

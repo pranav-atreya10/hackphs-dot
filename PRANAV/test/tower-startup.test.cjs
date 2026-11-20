@@ -13,7 +13,7 @@ test('tower markup keeps the local advisory and Gemini consent separately off', 
   const consent = html.match(/<input id="birdCloudReview"[^>]*>/)?.[0] ?? '';
   assert.match(consent, /type="checkbox"[^>]+disabled/);
   assert.doesNotMatch(consent, /\schecked\b/);
-  assert.match(html, /allow the server to send eligible camera crops to Gemini/);
+  assert.match(html, /allow the server to send eligible camera crops to the Local AI Model/);
 });
 
 async function towerStartup(policy) {

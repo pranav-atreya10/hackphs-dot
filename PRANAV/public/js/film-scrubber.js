@@ -22,9 +22,6 @@ const FILM_SCRUBBER_CSS = `
 :is(#film,.wrap) .seg.cur span{font-weight:600;color:var(--on-surround)}
 @keyframes film-seg-pulse{0%{transform:scaleY(1);box-shadow:0 0 0 0 rgba(242,183,5,.48)}42%{transform:scaleY(1.55);box-shadow:0 0 0 4px rgba(242,183,5,0)}100%{transform:scaleY(1);box-shadow:0 0 0 0 rgba(242,183,5,0)}}
 :is(#film,.wrap) .seg.is-pulsing i{animation:film-seg-pulse .42s cubic-bezier(.22,1,.36,1)}
-@media (prefers-reduced-motion:no-preference){
-  .film-scrubber-ready:not([data-reduced-motion="true"]) .seg i b{width:100%!important;transform-origin:0 50%;transform:scaleX(var(--seg-progress,0));will-change:transform}
-}
 .film-chapter-tooltip{position:absolute;left:0;bottom:calc(100% + 28px);z-index:30;pointer-events:none;display:inline-flex;align-items:center;gap:0;white-space:nowrap;padding:6px 11px;border-radius:999px;background:var(--surround-2,#111);background:color-mix(in srgb,var(--surround-2,#111) 92%,transparent);border:1px solid var(--frame-line,var(--line-s,rgba(128,128,128,.26)));box-shadow:0 12px 28px -10px rgba(0,0,0,.38),0 2px 6px rgba(0,0,0,.12);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);color:var(--on-surround,#fafafa);font:500 .74rem/1.2 var(--body,system-ui,sans-serif);letter-spacing:-.005em;opacity:0;transform:translate3d(var(--tooltip-x,0px),6px,0) translateX(var(--tooltip-shift,0%)) scale(.96);transition:opacity .16s ease,transform .26s cubic-bezier(.22,1.24,.36,1);will-change:transform,opacity}
 .film-chapter-tooltip[data-mode="focus"]{bottom:calc(100% + 10px)}
 .film-chapter-tooltip[data-visible="true"]{opacity:1;transform:translate3d(var(--tooltip-x,0px),0,0) translateX(var(--tooltip-shift,0%)) scale(1)}
@@ -393,16 +390,11 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
 
   const isTipSettled = () =>
     Math.abs(tipSpring.target - tipSpring.current) <= 0.35 && Math.abs(tipSpring.velocity) <= 8;
-  const isSegSettled = st =>
-    Math.abs(st.target - st.current) <= 0.001 && Math.abs(st.velocity) <= 0.01;
 
   function needsAnimationTick() {
     if (reducedMotion) return false;
     if (tooltip && tooltip.getAttribute?.('data-visible') === 'true' && tipSpring.initialized && !isTipSettled()) {
       return true;
-    }
-    for (const st of segStates.values()) {
-      if (!isSegSettled(st)) return true;
     }
     return false;
   }
@@ -423,7 +415,6 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
 
   function step(dtMs = 16.67) {
     if (reducedMotion) {
-      syncPlayhead(true);
       if (tooltip) {
         tipSpring.current = tipSpring.target;
         tipSpring.velocity = 0;
@@ -436,7 +427,7 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
     const substeps = Math.max(1, Math.ceil(totalSec / 0.016));
     const dt = totalSec / substeps;
 
-    // 1. Tooltip horizontal spring (critically damped: k=320, c=35.8)
+    // Tooltip horizontal spring (critically damped: k=320, c=35.8)
     if (tooltip && tipSpring.initialized) {
       for (let k = 0; k < substeps; k++) {
         const force = (tipSpring.target - tipSpring.current) * 320 - tipSpring.velocity * 35.8;
@@ -450,28 +441,6 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
       if (tooltip.dataset) tooltip.dataset.spring = 'js';
       tooltip.setAttribute?.('data-spring', 'js');
       setCssVar(tooltip, '--tooltip-x', `${tipSpring.current.toFixed(1)}px`);
-    }
-
-    // 2. Playhead bar spring interpolation (critically damped: k=300, c=34.6)
-    for (const [seg, st] of segStates.entries()) {
-      if (isSegSettled(st)) {
-        if (st.current !== st.target || st.velocity !== 0) {
-          st.current = st.target;
-          st.velocity = 0;
-          setCssVar(seg, '--seg-progress', st.current.toFixed(4));
-        }
-        continue;
-      }
-      for (let k = 0; k < substeps; k++) {
-        const force = (st.target - st.current) * 300 - st.velocity * 34.6;
-        st.velocity += force * dt;
-        st.current = clamp(st.current + st.velocity * dt, 0, 1);
-      }
-      if (isSegSettled(st)) {
-        st.current = st.target;
-        st.velocity = 0;
-      }
-      setCssVar(seg, '--seg-progress', st.current.toFixed(4));
     }
 
     return needsAnimationTick();
@@ -821,34 +790,19 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
     }
   }
 
-  function syncPlayhead(immediate = false) {
+  function syncPlayhead() {
     boundSegs.forEach(seg => {
       const target = readSegmentRawProgress(seg);
-      let st = segStates.get(seg);
-      if (!st) {
-        st = { current: target, target, velocity: 0 };
-        segStates.set(seg, st);
-        setCssVar(seg, '--seg-progress', target.toFixed(4));
-        return;
-      }
-      st.target = target;
-      if (immediate || reducedMotion || !requestFrame) {
-        st.current = target;
-        st.velocity = 0;
-        setCssVar(seg, '--seg-progress', target.toFixed(4));
-      }
+      segStates.set(seg, { current: target, target, velocity: 0 });
+      setCssVar(seg, '--seg-progress', target.toFixed(4));
     });
-    if (!immediate && !reducedMotion) scheduleAnimationTick();
   }
 
-  let fillStyleObserver = null;
   let segClassObserver = null;
   let barChildObserver = null;
 
   function disconnectSegmentObservers() {
-    fillStyleObserver?.disconnect?.();
     segClassObserver?.disconnect?.();
-    fillStyleObserver = null;
     segClassObserver = null;
   }
 
@@ -920,18 +874,13 @@ function initFilmScrubber(root = globalThis.document, options = {}) {
     });
 
     syncActiveCurSegment(false);
-    syncPlayhead(true);
 
     disconnectSegmentObservers();
     if (Observer && boundSegs.length) {
-      fillStyleObserver = new Observer(() => syncPlayhead(false));
       segClassObserver = new Observer(() => {
         syncActiveCurSegment(true);
-        syncPlayhead(false);
       });
       boundSegs.forEach(seg => {
-        const fill = readFillElement(seg);
-        if (fill) fillStyleObserver.observe(fill, { attributes: true, attributeFilter: ['style'] });
         segClassObserver.observe(seg, { attributes: true, attributeFilter: ['class'] });
       });
     }

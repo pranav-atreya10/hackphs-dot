@@ -15,7 +15,7 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   const yellow = std(0xe9b622,{roughness:.7});
   const white = std(0xe1e3dc,{roughness:.63});
   const rubber = std(0x151b1e,{roughness:.88});
-  const glass = new T.MeshPhysicalMaterial({color:0x537989,metalness:.2,roughness:.18,transparent:true,opacity:.73,envMapIntensity:1.15});
+  const glass = std(0x537989,{metalness:.35,roughness:.16,transparent:true,opacity:.73,envMapIntensity:1.15});
   const B=(w,h,d,m,x,y,z,p=D)=>box(w,h,d,m,x,y,z,p);
   const cyl=(r,h,m,x,y,z,p=D,r2=r)=>mesh(new T.CylinderGeometry(r,r2,h,12),m,x,y,z,p);
   function rod(a,b,r=.1,m=metal,p=D){const start=new T.Vector3(...a),end=new T.Vector3(...b),dir=end.clone().sub(start);const o=cyl(r,dir.length(),m,...start.clone().add(end).multiplyScalar(.5).toArray(),p);o.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),dir.normalize());return o;}
@@ -24,31 +24,38 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   function textMaterial(text,bg='#18232a',fg='#efc53c',size=64){const tex=canvasTexture(512,128,(c,w,h)=>{c.fillStyle=bg;c.fillRect(0,0,w,h);c.fillStyle=fg;c.font=`600 ${size}px Arial`;c.textAlign='center';c.textBaseline='middle';c.fillText(text,w/2,h/2+4);});return new T.MeshStandardMaterial({map:tex,roughness:.65});}
   function sign(text,x,z,angle=0,w=5){const g=new T.Group();g.position.set(x,0,z);g.rotation.y=angle;D.add(g);B(w,1.3,.22,dark,0,1.3,0,g);plane(w-.1,1.15,textMaterial(text),0,1.3,.12,0,0,0,g);rod([-w*.35,.1,0],[-w*.35,.7,0],.12,metal,g);rod([w*.35,.1,0],[w*.35,.7,0],.12,metal,g);return g;}
 
-  // Real scanned ground surfaces and high dynamic range reflected daylight.
+  // Stage async downloads/decodes first, then apply materials/environment together so shaders compile once.
+  const applyTasks = [];
   pending.push(Promise.all([
     load.loadAsync(asset('clean_asphalt_diff_1k.jpg')),
     load.loadAsync(asset('clean_asphalt_nor_gl_1k.jpg')),
     load.loadAsync(asset('clean_asphalt_rough_1k.jpg'))
   ]).then(([diff,normal,rough])=>{
-    diff.colorSpace=T.SRGBColorSpace;
-    [diff,normal,rough].forEach(t=>{t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=maxAniso;});
-    const surface=(obj,x,z,tint=0xb2b4b5)=>{
-      const maps=[diff,normal,rough].map(t=>{const n=t.clone();n.repeat.set(x/4,z/4);n.needsUpdate=true;return n;});
-      const m=new T.MeshStandardMaterial({color:tint,map:maps[0],normalMap:maps[1],roughnessMap:maps[2],roughness:.97,normalScale:new T.Vector2(.42,.42)});
-      const side=std(0x6b706b,{roughness:1});obj.material=[side,side,m,side,side,side];
-    };
-    surface(runwayMesh,840,32,0x7c8389);surface(taxiMesh,740,16,0x969b9e);surface(apronMesh,340,70,0xb4b4ad);
+    applyTasks.push(()=>{
+      diff.colorSpace=T.SRGBColorSpace;
+      [diff,normal,rough].forEach(t=>{t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=maxAniso;});
+      const surface=(obj,x,z,tint=0xb2b4b5)=>{
+        const maps=[diff,normal,rough].map(t=>{const n=t.clone();n.repeat.set(x/4,z/4);n.needsUpdate=true;return n;});
+        const m=new T.MeshStandardMaterial({color:tint,map:maps[0],normalMap:maps[1],roughnessMap:maps[2],roughness:.97,normalScale:new T.Vector2(.42,.42)});
+        const side=std(0x6b706b,{roughness:1});obj.material=[side,side,m,side,side,side];
+      };
+      surface(runwayMesh,840,32,0x7c8389);surface(taxiMesh,740,16,0x969b9e);surface(apronMesh,340,70,0xb4b4ad);
+    });
   }));
   pending.push(load.loadAsync(asset('grass_ground_diff_1k.jpg')).then(grass=>{
-    grass.colorSpace=T.SRGBColorSpace;grass.wrapS=grass.wrapT=T.RepeatWrapping;grass.anisotropy=maxAniso;
-    if(!W.cinema)ground.material.color.setHex(0xa8bc87);
-    grass.repeat.set(430,430);ground.material.map=grass;ground.material.needsUpdate=true;
+    applyTasks.push(()=>{
+      grass.colorSpace=T.SRGBColorSpace;grass.wrapS=grass.wrapT=T.RepeatWrapping;grass.anisotropy=maxAniso;
+      if(!W.cinema)ground.material.color.setHex(0xa8bc87);
+      grass.repeat.set(430,430);ground.material.map=grass;ground.material.needsUpdate=true;
+    });
   }));
   pending.push(new HDRLoader().loadAsync(asset('derelict_airfield_01_1k.hdr')).then(hdr=>{
-    hdr.mapping=T.EquirectangularReflectionMapping;
-    const pmrem=new T.PMREMGenerator(renderer);W.environment=pmrem.fromEquirectangular(hdr);scene.environment=W.environment.texture;scene.environmentIntensity=.8;
-    scene.environmentRotation.y=.55;
-    W.clouds.forEach(c=>c.visible=false);hdr.dispose();pmrem.dispose();
+    applyTasks.push(()=>{
+      hdr.mapping=T.EquirectangularReflectionMapping;
+      const pmrem=new T.PMREMGenerator(renderer);W.environment=pmrem.fromEquirectangular(hdr);scene.environment=W.environment.texture;scene.environmentIntensity=.8;
+      scene.environmentRotation.y=.55;
+      W.clouds.forEach(c=>c.visible=false);hdr.dispose();pmrem.dispose();
+    });
   }));
 
   // Soft cloud banks, kept above the fictional horizon; HDR is used for lighting only.
@@ -60,23 +67,52 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
 
   // Replace only the lead plane's coarse visual shell; preserve its parent animation.
   pending.push(new GLTFLoader().loadAsync(asset('narrow-body-airliner.glb')).then(gltf=>{
-    const lead=W.plane, model=gltf.scene;
-    model.name='Detailed airliner';model.scale.setScalar(1.15);model.position.y=-5.3;
-    lead.children.forEach(c=>{if(c!==W.strobeGlow&&!W.landing?.includes(c))c.visible=false;});lead.add(model);
-    const retract=new T.Group();retract.position.y=4.1;model.add(retract);
-    const parts=[];
-    model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.material){o.material.envMapIntensity=.75;}if(/^(Main_(diagonal|oleo|seated_oleo|through_axle|torque|wheel)|Nose_(drag|fork|oleo|through|wheel))/.test(o.name))parts.push(o);}});
-    model.updateMatrixWorld(true);parts.forEach(o=>retract.attach(o));lead.userData.gear=retract;
-    const fanGroups=[];
-    for(const side of ['1','-1']){
-      const fanParts=[];model.traverse(o=>{if(o.isMesh&&o.name.startsWith('Turbofan_'+side+'_')&&(/fan_blade|tapered_fan_spinner|seated_rotating_shaft/.test(o.name)))fanParts.push(o);});
-      if(fanParts.length){const bounds=new T.Box3();fanParts.forEach(o=>bounds.expandByObject(o));const center=bounds.getCenter(new T.Vector3());model.worldToLocal(center);const rotor=new T.Group();rotor.position.copy(center);model.add(rotor);model.updateMatrixWorld(true);fanParts.forEach(o=>rotor.attach(o));fanGroups.push(rotor);}
-    }
-    W.fans=fanGroups;
-    const strobe=mesh(new T.SphereGeometry(.12,8,6),basic(0xffffff),-16,3.5,0,lead,{noCast:true});lead.userData.strobe=strobe;
-    const beacon=mesh(new T.SphereGeometry(.10,8,6),basic(0xff4c24),-1,3.1,0,lead,{noCast:true});W.planeBeacon=beacon;
-    // A narrow amber tail accent ties the sourced model to the existing SkySentry palette.
-    W.realPlaneLoaded=true;
+    applyTasks.push(()=>{
+      const lead=W.plane, model=gltf.scene;
+      model.name='Detailed airliner';model.scale.setScalar(1.15);model.position.y=-5.3;
+      const texSwap=new Map(), stdSwap=new Map();
+      const capTex=tex=>{
+        if(!tex?.image)return tex;
+        if(texSwap.has(tex))return texSwap.get(tex);
+        const img=tex.image, w=img.width||0, h=img.height||0;
+        if(w>512||h>512){
+          const tw=Math.min(512,w), th=Math.min(512,h), cv=document.createElement('canvas');
+          cv.width=tw;cv.height=th;cv.getContext('2d').drawImage(img,0,0,tw,th);
+          tex.image=cv;tex.needsUpdate=true;img.close?.();
+        }
+        texSwap.set(tex,tex);return tex;
+      };
+      const toStd=m=>{
+        if(!m)return m;
+        if(stdSwap.has(m))return stdSwap.get(m);
+        ['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap'].forEach(k=>{if(m[k])capTex(m[k]);});
+        if(!m.isMeshPhysicalMaterial){m.envMapIntensity=.75;stdSwap.set(m,m);return m;}
+        const s=new T.MeshStandardMaterial({
+          color:m.color,map:m.map,normalMap:m.normalMap,normalScale:m.normalScale,
+          roughnessMap:m.roughnessMap,metalnessMap:m.metalnessMap,aoMap:m.aoMap,
+          emissive:m.emissive,emissiveMap:m.emissiveMap,emissiveIntensity:m.emissiveIntensity,
+          roughness:m.transmission>0?Math.max(.16,m.roughness):m.roughness,
+          metalness:m.transmission>0?Math.max(.25,m.metalness):m.metalness,
+          transparent:m.transparent&&m.transmission===0,opacity:m.transmission>0?.88:m.opacity,
+          side:m.side,envMapIntensity:.75
+        });
+        m.dispose();stdSwap.set(m,s);return s;
+      };
+      const retract=new T.Group();retract.position.y=4.1;model.add(retract);
+      const parts=[];
+      model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.material=Array.isArray(o.material)?o.material.map(toStd):toStd(o.material);if(/^(Main_(diagonal|oleo|seated_oleo|through_axle|torque|wheel)|Nose_(drag|fork|oleo|through|wheel))/.test(o.name))parts.push(o);}});
+      lead.children.forEach(c=>{if(c!==W.strobeGlow&&!W.landing?.includes(c))c.visible=false;});lead.add(model);
+      model.updateMatrixWorld(true);parts.forEach(o=>retract.attach(o));lead.userData.gear=retract;
+      const fanGroups=[];
+      for(const side of ['1','-1']){
+        const fanParts=[];model.traverse(o=>{if(o.isMesh&&o.name.startsWith('Turbofan_'+side+'_')&&(/fan_blade|tapered_fan_spinner|seated_rotating_shaft/.test(o.name)))fanParts.push(o);});
+        if(fanParts.length){const bounds=new T.Box3();fanParts.forEach(o=>bounds.expandByObject(o));const center=bounds.getCenter(new T.Vector3());model.worldToLocal(center);const rotor=new T.Group();rotor.position.copy(center);model.add(rotor);model.updateMatrixWorld(true);fanParts.forEach(o=>rotor.attach(o));fanGroups.push(rotor);}
+      }
+      W.fans=fanGroups;
+      const strobe=mesh(new T.SphereGeometry(.12,8,6),basic(0xffffff),-16,3.5,0,lead,{noCast:true});lead.userData.strobe=strobe;
+      const beacon=mesh(new T.SphereGeometry(.10,8,6),basic(0xff4c24),-1,3.1,0,lead,{noCast:true});W.planeBeacon=beacon;
+      W.realPlaneLoaded=true;
+    });
   }));
 
   // Rubber build-up, patch seams and aggregate are visible on the low runway shots.
@@ -226,7 +262,9 @@ export async function enhanceWorld({T,scene,renderer,W,ground,runwayMesh,taxiMes
   for(const {mat,geos} of buckets.values()){try{const geo=mergeGeometries(geos);if(geo){const m=new T.Mesh(geo,mat);m.castShadow=!mat.transparent;m.receiveShadow=true;merged.add(m);}}finally{geos.forEach(g=>g.dispose());}}
   // All generated primitives have matching normal/uv attributes; instanced foliage stays separate.
   remove.forEach(o=>o.removeFromParent());scene.add(merged);
-  const results=await Promise.allSettled(pending);const failed=results.filter(r=>r.status==='rejected');
+  const results=await Promise.allSettled(pending);
+  applyTasks.forEach(fn=>fn());
+  const failed=results.filter(r=>r.status==='rejected');
   failed.forEach(r=>console.warn('World asset failed', r.reason));
   return failed.length === 0;
 }
