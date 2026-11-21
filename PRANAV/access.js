@@ -42,7 +42,8 @@ function resolveRuntimeAccess(env = {}, fixedAirports = new Map()) {
     warnings.push("configure both Clerk keys or neither");
   }
   const hasMongo = Boolean((env.MONGODB_URI || "").trim());
-  const clerkEnabled = clerkPairComplete && (!production || hasMongo);
+  const clerkEnabled = clerkPairComplete;
+  const clerkStorageConfigured = clerkPairComplete && (!production || hasMongo);
   if (production && clerkPairComplete && !hasMongo) {
     warnings.push("Clerk in production requires MONGODB_URI");
   }
@@ -74,7 +75,7 @@ function resolveRuntimeAccess(env = {}, fixedAirports = new Map()) {
   const towerAirport = towerKeyValid ? env.TOWER_API_AIRPORT : "";
   const towerKeyMisconfigured = Boolean(env.TOWER_API_KEY && !towerKeyValid);
 
-  if (production && (!cameraKeyValid || (!clerkEnabled && !towerKeyValid))) {
+  if (production && (!cameraKeyValid || (!clerkStorageConfigured && !towerKeyValid))) {
     warnings.push("production requires a bound camera key and either a bound tower key or Clerk with MongoDB");
   }
 
@@ -83,6 +84,7 @@ function resolveRuntimeAccess(env = {}, fixedAirports = new Map()) {
   return {
     demo,
     clerkEnabled,
+    clerkStorageConfigured,
     cameraKey,
     cameraAirport,
     towerKey,
