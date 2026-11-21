@@ -9,6 +9,7 @@
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <script src="/js/theme.js"></script>
@@ -49,6 +50,7 @@
   .new{animation:flashrow 1.6s ease-out} @keyframes flashrow{from{background:color-mix(in srgb,var(--go) 22%,transparent)}}
   @media (prefers-reduced-motion:reduce){.new{animation:none}}
 </style>
+<link rel="stylesheet" href="/css/admin-diagnostics.css">
 </head>
 <body class="app">
 <aside class="side" id="side">
@@ -87,11 +89,13 @@
     <table><thead><tr><th>Code</th><th>Name</th><th>Join code</th><th></th></tr></thead><tbody id="rows"></tbody></table>
     <p class="err" id="listErr" role="alert"></p>
   </section>
+  <section class="panel" id="diagPanel" hidden></section>
 </main>
 </div>
 <script type="module" src="/js/admin.js"></script>
 <script src="/js/smooth-details.js" defer></script>
 <script src="/js/scroll-perf-guard.js" defer></script>
 <script src="/js/reveal.js" defer></script>
+<script type="module" src="/js/pwa-install.mjs"></script>
 </body>
 </html>

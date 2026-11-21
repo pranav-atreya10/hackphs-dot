@@ -10,6 +10,14 @@ import { receiptProgress, reconcileIncidents } from '/js/incident-history.mjs';
 import { animateRowEnter, animateRowDismiss, applyEnrichmentBadges } from '/js/alert-choreography.mjs';
 import { watchRiskTransitions } from '/js/risk-beacon-fx.mjs';
 import { animateStatValue } from '/js/stat-counter.mjs';
+import { createIncidentRingBuffer } from '/js/incident-ring-buffer.mjs';
+import { mountIncidentReplay } from '/js/incident-replay-ui.mjs';
+import { mountSolanaProofDrawer } from '/js/solana-proof-drawer.mjs';
+import { mountIncidentExportToolbar } from '/js/shift-report-export.mjs';
+import { createRunwayOpsStore } from '/js/runway-ops-store.mjs';
+import { mountRunwayClashBoard } from '/js/runway-clash-board.mjs';
+import { createTowerStereoLayer } from '/js/tower-stereo-layer.mjs';
+import { createTowerAcousticHud } from '/js/tower-acoustic-pill.mjs';
 
 const $ = id => document.getElementById(id);
 const rowEnter = typeof animateRowEnter === 'function' ? animateRowEnter : el => el;
@@ -17,6 +25,20 @@ const rowDismiss = typeof animateRowDismiss === 'function' ? animateRowDismiss :
 const renderBadges = typeof applyEnrichmentBadges === 'function' ? applyEnrichmentBadges : null;
 const watchRisk = typeof watchRiskTransitions === 'function' ? watchRiskTransitions : null;
 const statCounter = typeof animateStatValue === 'function' ? animateStatValue : null;
+const makeRingBuffer = typeof createIncidentRingBuffer === 'function' ? createIncidentRingBuffer : null;
+const attachIncidentReplay = typeof mountIncidentReplay === 'function' ? mountIncidentReplay : null;
+const attachProofDrawer = typeof mountSolanaProofDrawer === 'function' ? mountSolanaProofDrawer : null;
+const attachExportToolbar = typeof mountIncidentExportToolbar === 'function' ? mountIncidentExportToolbar : null;
+const makeRunwayOpsStore = typeof createRunwayOpsStore === 'function' ? createRunwayOpsStore : null;
+const attachRunwayClashBoard = typeof mountRunwayClashBoard === 'function' ? mountRunwayClashBoard : null;
+const makeStereoLayer = typeof createTowerStereoLayer === 'function' ? createTowerStereoLayer : null;
+const makeAcousticHud = typeof createTowerAcousticHud === 'function'
+  ? createTowerAcousticHud
+  : (typeof createTowerAcousticPill === 'function' ? createTowerAcousticPill : null);
+
+const incidentRingBuffer = makeRingBuffer ? makeRingBuffer() : null;
+const runwayOpsStore = makeRunwayOpsStore ? makeRunwayOpsStore() : null;
+let activeReplay = null, activeProofDrawer = null, exportToolbar = null, clashBoard = null, acousticPill = null;
 const time = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
 let auth = null, socket = null, soundOn = false, audioCtx = null;
 // Airport picker: administrators select one airport. Kept in the URL
@@ -227,10 +249,11 @@ function refreshRisk() {
   const warningIds = new Set(snapshot.warnings.map(ev => ev.cameraId));
   layers?.prune(snapshot.cameraIds, warningIds);
   for (const ev of snapshot.warnings) layers?.pin(ev);
+  stereoLayer?.prune();
 }
 
 /* ---------- map: camera markers + field-of-view cones, threat pins and paths ---------- */
-let layers, leafletStyles;
+let layers, stereoLayer = null, pendingStereo = null, leafletStyles;
 const initMap = feature('Airport map', 'mapNote', async () => {
   await Promise.all([
     leafletStyles ||= loadAsset('link', '/vendor/leaflet/leaflet.css').catch(err => { leafletStyles = null; throw err; }),
@@ -242,9 +265,12 @@ const initMap = feature('Airport map', 'mapNote', async () => {
     map.setView([40.3987, -74.6586], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
     layers = createTowerLayers(L, map, { describe });
+    stereoLayer = makeStereoLayer ? makeStereoLayer(L, map, { describe, airport: view || null }) : null;
+    if (pendingStereo) stereoLayer?.updateStereo(pendingStereo);
     for (const ev of cameraPositions.values()) layers.placeCamera(ev);
     refreshRisk();
   } catch (err) {
+    stereoLayer?.destroy(); stereoLayer = null;
     map?.remove(); layers = null;
     throw err;
   }
@@ -308,6 +334,27 @@ const incidentEls = new Map();
 let incidentData = new Map(), historyRequest;
 let selectedIncident = null;
 let evidenceRequest, evidenceUrl;
+function cleanupIncidentDetail() {
+  activeReplay?.destroy(); activeReplay = null;
+  activeProofDrawer?.destroy(); activeProofDrawer = null;
+}
+function captureLiveIncidentClip(packet) {
+  if (!incidentRingBuffer || !operational(packet) || packet.airport !== view) return;
+  const incidentId = typeof packet._id === 'string' && packet._id ? packet._id : (typeof packet.id === 'string' && packet.id ? packet.id : null);
+  const cameraId = typeof packet.camera_id === 'string' && packet.camera_id ? packet.camera_id : (typeof packet.cameraId === 'string' && packet.cameraId ? packet.cameraId : null);
+  if (!incidentId || !cameraId || incidentRingBuffer.hasIncidentClip(incidentId)) return;
+  const parsedTime = typeof packet.time === 'number' ? packet.time : Date.parse(packet.time);
+  const atMs = Number.isFinite(parsedTime) ? parsedTime : Date.now();
+  if (Date.now() - atMs > 30000) return;
+  const clip = incidentRingBuffer.captureIncidentClip(incidentId, {
+    airport: view,
+    cameraId,
+    atMs,
+  });
+  if (clip && selectedIncident === incidentId && activeReplay) {
+    activeReplay.updateClip(clip);
+  }
+}
 function incidentItem(inc, prevRow = null) {
   const li = document.createElement('li'), b = document.createElement('button');
   b.innerHTML = '<b></b><span></span>';
@@ -344,11 +391,15 @@ function updateIncidents(rows, source) {
   const selected = next.get(selectedIncident), previous = incidentData.get(selectedIncident);
   if (selected && selected !== previous) {
     renderIncidentReport(selected.row, $('incidentReport'), previous?.row ?? null);
+    if (activeReplay && incidentRingBuffer) {
+      activeReplay.updateClip(incidentRingBuffer.getIncidentClip(selected.row._id));
+    }
     if (selected.row.snapshot_state === 'stored' && previous?.row.snapshot_state !== 'stored') void loadEvidence(selected.row, $('incidentEvidence'));
   }
   if (!selected && selectedIncident) {
     evidenceRequest?.abort();
     if (evidenceUrl) URL.revokeObjectURL(evidenceUrl);
+    cleanupIncidentDetail();
     selectedIncident = evidenceUrl = null;
     $('detail').replaceChildren(); $('detail').hidden = true;
   }
@@ -359,6 +410,7 @@ function showIncident(d) {
   if (selectedIncident === d._id) return;
   evidenceRequest?.abort();
   if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
+  cleanupIncidentDetail();
   selectedIncident = d._id;
   const box = $('detail'); box.hidden = false; box.replaceChildren();
   const evidence = document.createElement('div');
@@ -366,6 +418,17 @@ function showIncident(d) {
   const text = document.createElement('div');
   text.id = 'incidentReport'; text.style.cssText = 'display:grid;gap:6px;align-content:start';
   box.append(evidence, text);
+  if (attachIncidentReplay) {
+    const replayHost = document.createElement('div');
+    replayHost.id = 'incidentReplay';
+    if (replayHost.style) replayHost.style.cssText = 'grid-column:1/-1;min-width:0';
+    box.append(replayHost);
+    activeReplay = attachIncidentReplay(replayHost, {
+      clip: incidentRingBuffer?.getIncidentClip(d._id) ?? null,
+      doc: document,
+      win: typeof window !== 'undefined' ? window : undefined,
+    });
+  }
   renderIncidentReport(d, text);
   loadEvidence(d, evidence);
 }
@@ -399,6 +462,7 @@ async function loadEvidence(d, container) {
   }
 }
 function renderIncidentReport(d, text, prevRow = null) {
+  activeProofDrawer?.destroy(); activeProofDrawer = null;
   text.replaceChildren();
   if (renderBadges) {
     const badges = document.createElement('div');
@@ -430,6 +494,18 @@ function renderIncidentReport(d, text, prevRow = null) {
   if (d.solana_error) { const p = document.createElement('p'); p.textContent = `Solana: ${d.solana_error}`; text.append(p); }
   else if (d.type === 'drone' && d.solana_status === 'hash only') { const p = document.createElement('p'); p.textContent = 'Report hashed locally. Connect a funded devnet wallet to stamp it on Solana.'; text.append(p); }
   if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Inspect the devnet transaction'; text.append(a); }
+  if (attachProofDrawer) {
+    if (text && typeof text === 'object' && !text.ownerDocument) {
+      try { text.ownerDocument = document; } catch {}
+    }
+    activeProofDrawer = attachProofDrawer(text, { ...d, airport: d.airport || view }, {
+      fetchImpl: typeof fetch === 'function' ? fetch : undefined,
+      getHeaders: async () => ({
+        ...(auth ? await auth.headers() : {}),
+        ...(view ? { 'x-airport': view } : {}),
+      }),
+    });
+  }
 }
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { ...(await auth.headers()), ...(view ? { 'x-airport': view } : {}), ...(opts.headers || {}) } });
@@ -455,7 +531,7 @@ async function loadIncidents() {
 /* ---------- hourly chart ---------- */
 // Monochrome bars from the page's theme tokens; recoloured when the theme switches (js/theme.js).
 const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-let chart, loadingHourly = false;
+let chart, loadingHourly = false, latestHourlyRows = [];
 const initChart = feature('Hourly chart', 'chartNote', async () => {
   if (!window.Chart) await loadAsset('script', '/vendor/chart.umd.min.js');
   Chart.defaults.font.family = token('--sans');
@@ -481,6 +557,7 @@ async function loadHourly() {
   loadingHourly = true;
   try {
     const rows = await api('/api/hourly', { signal: AbortSignal.timeout(10000) });
+    latestHourlyRows = Array.isArray(rows) ? rows : [];
     const hours = [...new Set(rows.map(r => new Date(r.hour).toISOString()))].sort();
     const val = (h, type, field) => Number(rows.find(r => new Date(r.hour).toISOString() === h && r.type === type)?.[field] ?? 0);
     chart.data.labels = hours.map(h => new Date(h).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', timeZone: 'UTC' }));
@@ -550,6 +627,12 @@ async function setupAirports() {
       : (airports.find(a => label(a).toLowerCase() === q || a.code.toLowerCase() === q) || airports.find(a => label(a).toLowerCase().includes(q)))?.code;
     if (next === undefined || (auth.airportRequired && !next)) { $('airportHint').textContent = 'Select an authorized airport.'; return; }
     if (next === view) { input.value = next ? label(airports.find(a => a.code === next)) : ''; return; }
+    if (view) incidentRingBuffer?.clearAirport(view);
+    latestHourlyRows = [];
+    pendingStereo = null;
+    stereoLayer?.setAirport(next || null);
+    acousticPill?.setAirport(next || null);
+    clashBoard?.setAirport(next || '');
     try { localStorage.setItem('skysentry.towerAirport', next); } catch {}
     const url = new URL(location.href);
     next ? url.searchParams.set('airport', next) : url.searchParams.delete('airport');
@@ -603,7 +686,7 @@ async function connect() {
       if (pendingFeed.size > 64) pendingFeed.delete(pendingFeed.keys().next().value);
     });
   }
-  let visualBirds, policyRequest, policyGeneration = 0, cloudJudge = null;
+  let visualBirds, feedsApi = null, policyRequest, policyGeneration = 0, cloudJudge = null;
   const cloudReview = $('birdCloudReview');
   cloudReview.addEventListener('change', () => {
     if (cloudJudge) visualBirds.setJudge(!cloudReview.disabled && cloudReview.checked ? cloudJudge : null);
@@ -655,10 +738,10 @@ async function connect() {
   const initFeeds = feature('Camera feeds', 'feedsLoad', async () => {
     const { startFeeds } = await import('/js/feeds.js');
     const { VisualBirdVerifier } = await import('/js/visual-ai.js');
-    const button = $('birdCheck');
-    let feedsApi = null;
+    const button = $('birdCheck'), modelSelect = $('birdModelTier');
     visualBirds = new VisualBirdVerifier({
       button,
+      modelSelect,
       status: $('birdCheckStatus'),
       reviewStatus: $('birdReviewStatus'),
       onProgress: ({ cameraId } = {}) => {
@@ -670,19 +753,64 @@ async function connect() {
     feedsApi = startFeeds({
       on: (name, receive) => feedEvents.set(name, receive),
     }, { container: $('feeds'), hint: $('feedsHint'), demo: false,
-      onFeed: t => visualBirds.onFeed(t), onRemove: id => visualBirds.onRemove(id),
+      onFeed: t => visualBirds.onFeed(t),
+      onRemove: id => { visualBirds.onRemove(id); acousticPill?.clearCamera(id); },
+      onFrameSample: sample => {
+        if (!incidentRingBuffer || !view || !socket?.connected) return;
+        incidentRingBuffer.pushFrame({ ...sample, airport: view });
+        if (selectedIncident && activeReplay && incidentRingBuffer.hasIncidentClip(selectedIncident)) {
+          activeReplay.updateClip(incidentRingBuffer.getIncidentClip(selectedIncident));
+        }
+      },
+      getOperations: () => (runwayOpsStore && view ? runwayOpsStore.activeOperations(view) : []),
+      onForecastUpdate: sources => clashBoard?.updateForecasts(sources),
       getTrackVote: (cameraId, trackId, meta) => visualBirds.getTrackVote?.(cameraId, trackId, meta) ?? null,
     });
     for (const [name, data] of pendingFeed.values()) deliverFeed(name, data);
     pendingFeed.clear();
+    clashBoard?.updateForecasts(feedsApi?.getForecastSources?.() ?? null);
     button.disabled = false;
+    if (modelSelect) modelSelect.disabled = false;
     void loadBirdPolicy();
   });
   let started = false;
   socket.on('connect', () => {
     status('Live'); $('conn').dataset.ok = '1';
-    for (const id of ['dashboard', 'sideRisk', 'cams']) $(id).hidden = false;
+    for (const id of ['dashboard', 'sideRisk', 'cams', 'acousticPill']) $(id).hidden = false;
     monitoring.setConnected(true); refreshRisk();
+    stereoLayer?.setAirport(view || null);
+    if (!exportToolbar && attachExportToolbar) {
+      exportToolbar = attachExportToolbar($('incidentExportToolbar'), {
+        doc: document,
+        win: typeof window !== 'undefined' ? window : undefined,
+        getIncidents: () => [...incidentData.values()].map(v => v.row),
+        getHourlyRows: () => latestHourlyRows,
+        getAirport: () => view,
+      });
+    }
+    if (!clashBoard && attachRunwayClashBoard) {
+      clashBoard = attachRunwayClashBoard($('clashBoardMount') || $('clashBoardCard'), {
+        document,
+        store: runwayOpsStore ?? undefined,
+        airport: view || '',
+        getAirport: () => view,
+        getForecasts: () => feedsApi?.getForecastSources?.() ?? null,
+        onClashChange: () => feedsApi?.redrawAll?.(),
+      });
+    } else {
+      clashBoard?.setAirport(view || '');
+      clashBoard?.updateForecasts(feedsApi?.getForecastSources?.() ?? null);
+    }
+    if (!acousticPill && makeAcousticHud) {
+      acousticPill = makeAcousticHud({
+        doc: document,
+        sidebarContainer: $('acousticPill'),
+        airport: view || null,
+        getCameraContainer: id => feedsApi?.getCameraContainer?.(id) ?? null,
+      });
+    } else {
+      acousticPill?.setAirport(view || null);
+    }
     void loadIncidents();
     replayAlerts();
     activateMore();
@@ -704,7 +832,13 @@ async function connect() {
     $('alertSync').textContent = 'Alert history unavailable while disconnected.';
     announcements.clear();
     if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
-    if (selectedIncident) { $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
+    if (selectedIncident) { cleanupIncidentDetail(); $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
+    if (view) incidentRingBuffer?.clearAirport(view);
+    else incidentRingBuffer?.disconnect();
+    pendingStereo = null;
+    stereoLayer?.clear();
+    acousticPill?.reset();
+    clashBoard?.updateForecasts(null);
     monitoring.setConnected(false); refreshRisk();
     status(['io server disconnect', 'io client disconnect'].includes(reason)
       ? 'Access ended; reload to reconnect' : 'Reconnecting…');
@@ -720,7 +854,13 @@ async function connect() {
     monitoring.setConnected(false); refreshRisk();
   });
   socket.on('camera:status', packet => {
-    if (packet?.cameraId) layers?.setCameraStatus?.(packet.cameraId, { online: Boolean(packet.online), risk: packet.online ? 'blue' : 'offline', pulse: false });
+    if (packet?.cameraId) {
+      layers?.setCameraStatus?.(packet.cameraId, { online: Boolean(packet.online), risk: packet.online ? 'blue' : 'offline', pulse: false });
+      if (!packet.online) {
+        acousticPill?.clearCamera(packet.cameraId);
+        incidentRingBuffer?.clearCamera(packet.cameraId, { airport: view, includeIncidents: false });
+      }
+    }
     if (monitoring.status(packet)) refreshRisk();
   });
   socket.on('camera:heartbeat', packet => monitoring.heartbeat(packet));
@@ -733,6 +873,15 @@ async function connect() {
       layers?.setCameraStatus?.(packet.cameraId, { online: true, risk: ['green', 'yellow', 'red'].includes(r) ? r : 'blue', pulse: r === 'yellow' || r === 'red' });
     }
   });
+  socket.on('bot:stereo', packet => {
+    if (!packet || (packet.airport && packet.airport !== view)) return;
+    pendingStereo = packet;
+    stereoLayer?.updateStereo(packet);
+  });
+  socket.on('bot:audio', packet => {
+    if (!packet || (packet.airport && packet.airport !== view)) return;
+    acousticPill?.update(packet);
+  });
   socket.on('camera:event', packet => {
     const ev = monitoring.event(packet);
     if (!ev) return;
@@ -744,15 +893,26 @@ async function connect() {
       catch (err) { $('mapNote').textContent = 'Some map markers could not be displayed.'; console.warn(err); }
     }
   });
-  socket.on('incident', packet => { if (operational(packet) && packet.airport === view) updateIncidents([packet], 'live'); });
-  socket.on('alert_pending', data => showAlert(data, { provisional: true }));
-  socket.on('alert', data => showAlert(data));
+  socket.on('incident', packet => {
+    if (operational(packet) && packet.airport === view) {
+      captureLiveIncidentClip(packet);
+      updateIncidents([packet], 'live');
+    }
+  });
+  socket.on('alert_pending', data => {
+    captureLiveIncidentClip(data);
+    showAlert(data, { provisional: true });
+  });
+  socket.on('alert', data => {
+    captureLiveIncidentClip(data);
+    showAlert(data);
+  });
   socket.on('alert_acknowledged', data => { if (scopedAlert(data)) acknowledgeAlert(data.id); });
   socket.connect();
 }
 function showStartupError(err) {
   $('conn').textContent = 'Could not connect';
-  for (const id of ['dashboard', 'sideRisk', 'cams', 'airportBox']) $(id).hidden = true;
+  for (const id of ['dashboard', 'sideRisk', 'cams', 'acousticPill', 'airportBox']) $(id).hidden = true;
   const card = panel($('auth'), '<h2>Could not open the tower</h2><p></p><button type="button">Retry</button> <a href="/tower.html?airport=">Select an airport</a>');
   card.querySelector('p').textContent = err.message;
   card.querySelector('button').onclick = () => location.reload();

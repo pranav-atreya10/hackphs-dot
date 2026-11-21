@@ -3,6 +3,7 @@ import { DetectionEngine, SyntheticSky, SCENARIOS, HumDetector, PRESETS, DroneAu
 import { CocoVerifier } from '/detection/adapters/coco.js';
 import { signIn, refreshSocketAuth } from '/js/auth.js';
 import { DetectorStatus } from '/js/detector-status.mjs';
+import { createCameraAudioTelemetry } from '/js/camera-audio-telemetry.mjs';
 
 const $ = id => document.getElementById(id);
 const video = $('video'), srcCanvas = $('src'), overlay = $('overlay');
@@ -15,11 +16,12 @@ const COLORS = { bird: '#4f9cff', drone: '#ff5a4a', unknown: '#f2b705', rejected
 let engine = null, sky = null, coco = null, running = false, rafId = 0, t0 = 0, wakeLock = null;
 let cocoTimer = null, cocoGeneration = 0, cocoLoad = null;
 let activeSource = null, activeMode = null, generation = 0, starting = false, clipURL = null;
-let draftMask = [], approvedMask = [];
+let draftMask = [], approvedMask = [], activeStreamId = '';
 let drawing = null, socket = null, auth = null, inFlight = false, lastSent = 0, framesSent = 0, lastVideoTime = -1;
 const detector = new DetectorStatus();
 const frameCanvas = document.createElement('canvas'), frameCtx = frameCanvas.getContext('2d');
 const STREAM_W = 640, STREAM_FPS = 15;
+const ACOUSTIC_OFF_NOTE = 'Acoustic telemetry off · raw audio never leaves this browser.';
 
 /* ---------- form state ---------- */
 for (const [k, s] of Object.entries(SCENARIOS)) $('scenario').add(new Option(s.describe ? `${k.replace(/_/g, ' ')}: ${s.describe}` : k, k));
@@ -47,13 +49,45 @@ store.set('skysentry.cameraId', $('cameraId').value);
 const mode = () => activeMode || $('mode').value;
 const live = () => running && activeSource === 'webcam';
 const sendsFrames = () => live() && mode() === 'stream';
+const audioTelemetry = typeof createCameraAudioTelemetry === 'function'
+  ? createCameraAudioTelemetry({
+      transport: 'socket',
+      mediaDevices: typeof navigator !== 'undefined' ? navigator?.mediaDevices : undefined,
+      AudioContext: typeof AudioContext === 'function' ? AudioContext : (typeof webkitAudioContext === 'function' ? webkitAudioContext : undefined),
+      getSocket: () => (sendsFrames() && socket?.connected ? socket : null),
+      isLiveStream: () => Boolean(sendsFrames() && socket?.connected),
+      getSource: () => (sendsFrames() ? 'live' : 'local'),
+      getStreamId: () => (sendsFrames() && socket?.connected ? (activeStreamId || deviceId) : ''),
+      getTimestamp: () => (running ? +Math.max(0, (performance.now() - t0) / 1000).toFixed(3) : 0),
+      onSummary: summary => {
+        if (!audioTelemetry?.enabled) return;
+        const pct = Math.round((summary.droneProb || 0) * 100);
+        setAcousticUi(
+          true,
+          summary.humDetected
+            ? `Sharing advisory summary · ${summary.dominantHz} Hz rotor hum (${pct}%) · no raw audio sent.`
+            : 'Sharing advisory summary · mic on (no rotor hum) · raw audio never leaves this browser.',
+        );
+      },
+    })
+  : null;
+function setAcousticUi(pressed, text = ACOUSTIC_OFF_NOTE) {
+  $('acousticTelemetryBtn')?.setAttribute?.('aria-pressed', pressed ? 'true' : 'false');
+  if ($('acousticTelemetryStatus')) $('acousticTelemetryStatus').textContent = text;
+}
+function stopAcousticTelemetry(text = ACOUSTIC_OFF_NOTE) {
+  if (audioTelemetry) void audioTelemetry.disable();
+  setAcousticUi(false, text);
+}
 $('mode').value = store.get('skysentry.mode', 'stream');
 $('mode').addEventListener('change', () => {
   store.set('skysentry.mode', $('mode').value);
+  if ($('mode').value !== 'stream') stopAcousticTelemetry();
   if (running || starting) stop();
 });
 function sendConfig() {
   approvedMask = [];
+  activeStreamId = '';
   detector.reset();
   if (sendsFrames() && socket?.connected) socket.emit('camera:config', {
     source: 'live', cameraLabel: $('cameraId').value, camera: cameraConfig(), preset: [$('tuning').value],
@@ -73,6 +107,7 @@ fetch('/clips/clips.json').then(r => r.json()).then(list => {
 const showSourceFields = () => { $('scenarioWrap').hidden = $('source').value !== 'synthetic'; $('clipWrap').hidden = $('source').value !== 'clip'; $('demoWrap').hidden = $('source').value !== 'demo'; };
 $('source').addEventListener('change', () => {
   showSourceFields();
+  if ($('source').value !== 'webcam') stopAcousticTelemetry();
   if (running || starting) stop();
 });
 // Every device starts on its own camera. The synthetic sky and demo clips stay in Settings / the Demos page.
@@ -130,13 +165,21 @@ async function connect() {
   refreshSocketAuth(socket, auth);
   socket.on('connect', () => { $('conn').textContent = 'Connected'; $('conn').dataset.ok = '1'; inFlight = false; sendConfig(); if (!running && !starting) status('Connected. Press Start.'); });
   socket.on('camera:config', cfg => {
+    if (sendsFrames() && typeof cfg?.streamId === 'string' && cfg.streamId) activeStreamId = cfg.streamId;
     const pose = cameraConfig();
     approvedMask = sendsFrames() && cfg.surveyId && Array.isArray(cfg.corridor) &&
       Object.keys(pose).every(key => pose[key] === cfg.camera?.[key]) ? cfg.corridor : [];
   });
-  socket.on('bot:state', result => { if (sendsFrames()) detector.accept(result); });
+  socket.on('bot:state', result => {
+    if (sendsFrames()) {
+      if (typeof result?.streamId === 'string' && result.streamId) activeStreamId = result.streamId;
+      detector.accept(result);
+    }
+  });
   socket.on('bot:status', result => { if (sendsFrames()) detector.update(result); });
   socket.on('disconnect', reason => {
+    activeStreamId = '';
+    stopAcousticTelemetry();
     detector.reset('unavailable', 'camera disconnected'); approvedMask = [];
     $('conn').textContent = reason === 'io server disconnect' ? 'Access ended' : 'Reconnecting…'; $('conn').dataset.ok = '0';
     status(reason === 'io server disconnect' ? 'Reload to reauthorize this camera.' : 'Lost the server, reconnecting automatically…');
@@ -298,6 +341,7 @@ async function start() {
     }
     if (gen !== generation) return;
     t0 = performance.now(); starting = false; running = true; lastSent = 0;
+    if (!sendsFrames()) stopAcousticTelemetry();
     sendConfig();
     if (mode() === 'stream') { $('aiStatus').textContent = 'The server checks video only; it does not check drone audio.'; }
     else { $('aiStatus').textContent = 'Local preview only. Nothing is sent to the tower.'; }
@@ -357,6 +401,7 @@ function streamFrame(t) {
         if (!current()) return;
         inFlight = false;
         if (!err && ack?.ok) {
+          if (typeof ack.streamId === 'string' && ack.streamId) activeStreamId = ack.streamId;
           framesSent++;
           $('sSent').textContent = framesSent;
         } else detector.reset('unavailable', 'camera frame not accepted');
@@ -376,8 +421,8 @@ function stop() {
   if (sendsFrames() && socket?.connected) socket.emit('camera:stop');
   generation++;
   running = starting = false; activeSource = activeMode = null;
-  sky = null; approvedMask = []; detector.reset();
-  cancelAnimationFrame(rafId); ticker.postMessage(0); stopCoco(); stopMic();
+  sky = null; approvedMask = []; activeStreamId = ''; detector.reset();
+  cancelAnimationFrame(rafId); ticker.postMessage(0); stopCoco(); stopMic(); stopAcousticTelemetry();
   video.srcObject?.getTracks().forEach(tr => tr.stop());
   video.pause();
   video.srcObject = null; video.removeAttribute('src'); video.load();
@@ -523,6 +568,32 @@ $('fakeDrone').addEventListener('click', () => {
   const on = $('fakeDrone').getAttribute('aria-pressed') !== 'true';
   $('fakeDrone').setAttribute('aria-pressed', String(on));
   engine?.simulateDroneSound(on);
+});
+$('acousticTelemetryBtn')?.addEventListener?.('click', async () => {
+  const wantOn = $('acousticTelemetryBtn').getAttribute('aria-pressed') !== 'true';
+  if (!wantOn) { stopAcousticTelemetry(); return; }
+  if (!sendsFrames() || !socket?.connected) {
+    setAcousticUi(false, 'Start live webcam streaming while connected to the server before sharing rotor-hum telemetry.');
+    return;
+  }
+  if (!audioTelemetry) {
+    setAcousticUi(false, 'Acoustic telemetry is unavailable in this browser.');
+    return;
+  }
+  const gen = generation;
+  setAcousticUi(true, 'Requesting microphone for local spectral summary…');
+  const res = await audioTelemetry.enable();
+  if (!res?.ok || gen !== generation || !sendsFrames() || !socket?.connected) {
+    stopAcousticTelemetry(
+      res?.reason === 'NotAllowedError' || res?.reason === 'SecurityError'
+        ? 'Microphone permission blocked · acoustic telemetry remains off.'
+        : !sendsFrames() || !socket?.connected
+          ? ACOUSTIC_OFF_NOTE
+          : `Acoustic telemetry unavailable (${res?.reason || 'microphone error'}).`,
+    );
+    return;
+  }
+  setAcousticUi(true, 'Sharing advisory summary · mic on · raw audio never leaves this browser.');
 });
 
 draw(null);
