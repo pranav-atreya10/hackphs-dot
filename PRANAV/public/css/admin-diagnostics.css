@@ -1,0 +1,352 @@
+/* Admin Deployment & Subsystem Readiness panel styles (/css/admin-diagnostics.css).
+   Monochrome Geist tokens from /css/app.css (--card, --paper-2, --ink, --mute, --line, --line-2, --go, --warn, --stop, --sans, --mono).
+   Strictly compositor/paint-safe transitions and keyframes; fully disabled under prefers-reduced-motion: reduce. */
+
+.diag-panel {
+  background-color: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 14px;
+  padding: 22px;
+  color: var(--ink, #0a0a0a);
+}
+
+.diag-panel[hidden] {
+  display: none !important;
+}
+
+.diag-root {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.diag-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.diag-title-wrap {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diag-title {
+  margin: 0;
+  font: 600 1.05rem/1.3 var(--sans, "Geist", system-ui, sans-serif);
+  letter-spacing: -0.02em;
+  color: var(--ink, #0a0a0a);
+}
+
+.diag-meta {
+  margin: 0;
+  font: 500 0.78rem/1.35 var(--mono, "Geist Mono", ui-monospace, monospace);
+  color: var(--mute, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.diag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2, #d4d4d8);
+  background-color: var(--paper-2, #f4f4f5);
+  color: var(--ink, #0a0a0a);
+  font: 600 0.74rem/1.2 var(--mono, "Geist Mono", ui-monospace, monospace);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  transition:
+    opacity 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.diag-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--mute, #6b7280);
+}
+
+.diag-badge[data-state="ready"] {
+  border-color: color-mix(in srgb, var(--go, #16a34a) 45%, var(--line, #e5e7eb));
+  background-color: color-mix(in srgb, var(--go, #16a34a) 10%, var(--card, #fff));
+}
+
+.diag-badge[data-state="ready"]::before {
+  background-color: var(--go, #16a34a);
+}
+
+.diag-badge[data-state="degraded"] {
+  border-color: color-mix(in srgb, var(--warn, #ca8a04) 50%, var(--line, #e5e7eb));
+  background-color: color-mix(in srgb, var(--warn, #ca8a04) 11%, var(--card, #fff));
+}
+
+.diag-badge[data-state="degraded"]::before {
+  background-color: var(--warn, #ca8a04);
+}
+
+.diag-badge[data-state="action-required"] {
+  border-color: color-mix(in srgb, var(--stop, #dc2626) 55%, var(--line, #e5e7eb));
+  background-color: color-mix(in srgb, var(--stop, #dc2626) 11%, var(--card, #fff));
+}
+
+.diag-badge[data-state="action-required"]::before {
+  background-color: var(--stop, #dc2626);
+}
+
+.diag-refresh-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e5e7eb);
+  background-color: var(--card, #fff);
+  color: var(--ink, #0a0a0a);
+  font: 500 0.82rem/1.25 var(--sans, "Geist", system-ui, sans-serif);
+  cursor: pointer;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.diag-refresh-btn:hover:not(:disabled) {
+  opacity: 1;
+  background-color: var(--hover, #f4f4f5);
+  border-color: var(--line-2, #d4d4d8);
+}
+
+.diag-refresh-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.diag-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.diag-section-title {
+  margin: 0;
+  font: 600 0.8rem/1.3 var(--sans, "Geist", system-ui, sans-serif);
+  letter-spacing: 0.01em;
+  color: var(--mute, #6b7280);
+}
+
+.diag-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--stop, #dc2626) 45%, var(--line, #e5e7eb));
+  background-color: color-mix(in srgb, var(--stop, #dc2626) 8%, var(--card, #fff));
+  color: var(--stop, #dc2626);
+  font: 500 0.86rem/1.4 var(--sans, "Geist", system-ui, sans-serif);
+}
+
+/* ---------- Subsystem probe grid ---------- */
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.diag-item {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e5e7eb);
+  background-color: var(--paper-2, #f4f4f5);
+  min-width: 0;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.diag-item[data-status="ready"] {
+  border-color: color-mix(in srgb, var(--go, #16a34a) 32%, var(--line, #e5e7eb));
+}
+
+.diag-item[data-status="unavailable"],
+.diag-item[data-status="timed_out"] {
+  border-color: color-mix(in srgb, var(--stop, #dc2626) 38%, var(--line, #e5e7eb));
+}
+
+.diag-item[data-status="not_configured"] {
+  border-color: color-mix(in srgb, var(--warn, #ca8a04) 38%, var(--line, #e5e7eb));
+}
+
+.diag-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.diag-item-name {
+  font: 600 0.86rem/1.3 var(--sans, "Geist", system-ui, sans-serif);
+  color: var(--ink, #0a0a0a);
+}
+
+.diag-item-key {
+  font: 400 0.74rem/1.3 var(--mono, "Geist Mono", ui-monospace, monospace);
+  color: var(--mute, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.diag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2, #d4d4d8);
+  background-color: var(--card, #fff);
+  color: var(--mute, #6b7280);
+  font: 500 0.71rem/1.35 var(--mono, "Geist Mono", ui-monospace, monospace);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-pill[data-tone="ok"] {
+  color: var(--go, #16a34a);
+  border-color: color-mix(in srgb, var(--go, #16a34a) 45%, var(--line, #e5e7eb));
+}
+
+.diag-pill[data-tone="warn"] {
+  color: var(--warn, #ca8a04);
+  border-color: color-mix(in srgb, var(--warn, #ca8a04) 45%, var(--line, #e5e7eb));
+}
+
+.diag-pill[data-tone="bad"] {
+  color: var(--stop, #dc2626);
+  border-color: color-mix(in srgb, var(--stop, #dc2626) 48%, var(--line, #e5e7eb));
+}
+
+/* ---------- Environment binding checklist ---------- */
+.diag-env-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--line, #e5e7eb);
+}
+
+.diag-env-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.diag-env-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.diag-env-label {
+  font: 600 0.88rem/1.3 var(--sans, "Geist", system-ui, sans-serif);
+  color: var(--ink, #0a0a0a);
+}
+
+.diag-env-detail {
+  font: 400 0.8rem/1.35 var(--sans, "Geist", system-ui, sans-serif);
+  color: var(--mute, #6b7280);
+}
+
+.diag-env-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Remediation guidance ---------- */
+.diag-remediation {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e5e7eb);
+  background-color: var(--paper-2, #f4f4f5);
+}
+
+.diag-remediation-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.diag-remediation-item {
+  font: 400 0.84rem/1.45 var(--sans, "Geist", system-ui, sans-serif);
+  color: var(--ink, #0a0a0a);
+}
+
+.diag-remediation-empty {
+  margin: 0;
+  font: 400 0.84rem/1.4 var(--sans, "Geist", system-ui, sans-serif);
+  color: var(--mute, #6b7280);
+}
+
+@media (max-width: 640px) {
+  .diag-panel {
+    padding: 16px;
+  }
+  .diag-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .diag-actions {
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes diag-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .diag-root {
+    animation: diag-fade-in 180ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diag-panel,
+  .diag-panel *,
+  .diag-panel *::before,
+  .diag-panel *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}

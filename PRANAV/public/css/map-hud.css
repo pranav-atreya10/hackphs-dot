@@ -1,0 +1,93 @@
+/* Leaflet HUD styling for SkySentry Tower camera FOV cones, pins, and detection pulse ripples.
+   Animations degrade cleanly to static risk cues under prefers-reduced-motion. */
+
+@keyframes sky-fov-breathe {
+  0%, 100% {
+    fill-opacity: 0.08;
+    stroke-opacity: 0.78;
+  }
+  50% {
+    fill-opacity: 0.16;
+    stroke-opacity: 0.96;
+  }
+}
+
+@keyframes sky-radar-ripple {
+  0% {
+    transform: scale(0.55);
+    stroke-opacity: 0.92;
+    fill-opacity: 0.28;
+  }
+  75% {
+    stroke-opacity: 0.24;
+    fill-opacity: 0.04;
+  }
+  100% {
+    transform: scale(2.35);
+    stroke-opacity: 0;
+    fill-opacity: 0;
+  }
+}
+
+.sky-fov-cone,
+.sky-cam-pin,
+.sky-threat-pin {
+  transition:
+    stroke 200ms ease,
+    fill 200ms ease,
+    fill-opacity 200ms ease,
+    stroke-opacity 200ms ease,
+    filter 200ms ease;
+}
+
+.sky-fov-cone {
+  animation: sky-fov-breathe 3.6s ease-in-out infinite;
+}
+
+.sky-fov-cone[data-risk="offline"] {
+  animation: none;
+  stroke-dasharray: 4 4;
+  opacity: 0.55;
+}
+
+.sky-fov-cone[data-risk="yellow"] {
+  animation-duration: 2.4s;
+  filter: drop-shadow(0 0 5px rgb(217 154 0 / 0.38));
+}
+
+.sky-fov-cone[data-risk="red"] {
+  animation-duration: 1.7s;
+  filter: drop-shadow(0 0 8px rgb(220 38 38 / 0.58));
+}
+
+.sky-cam-pin[data-risk="red"] {
+  filter: drop-shadow(0 0 5px rgb(220 38 38 / 0.55));
+}
+
+.sky-threat-pin {
+  filter: drop-shadow(0 0 6px rgb(217 154 0 / 0.65));
+}
+
+.sky-threat-pin[data-risk="red"] {
+  filter: drop-shadow(0 0 8px rgb(220 38 38 / 0.78));
+}
+
+.sky-map-pulse {
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sky-radar-ripple 1.6s cubic-bezier(0.16, 0.84, 0.32, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky-fov-cone,
+  .sky-fov-cone[data-risk="yellow"],
+  .sky-fov-cone[data-risk="red"],
+  .sky-cam-pin,
+  .sky-threat-pin,
+  .sky-map-pulse {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

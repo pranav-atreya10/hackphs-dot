@@ -32,6 +32,67 @@ function accessConfig(env, fixedAirports) {
   return { demo };
 }
 
+function resolveRuntimeAccess(env = {}, fixedAirports = new Map()) {
+  const production = env.NODE_ENV === "production";
+  const warnings = [];
+  const hasClerkSecret = Boolean((env.CLERK_SECRET_KEY || "").trim());
+  const hasClerkPublishable = Boolean((env.CLERK_PUBLISHABLE_KEY || "").trim());
+  const clerkPairComplete = hasClerkSecret && hasClerkPublishable;
+  if (hasClerkSecret !== hasClerkPublishable) {
+    warnings.push("configure both Clerk keys or neither");
+  }
+  const hasMongo = Boolean((env.MONGODB_URI || "").trim());
+  const clerkEnabled = clerkPairComplete && (!production || hasMongo);
+  if (production && clerkPairComplete && !hasMongo) {
+    warnings.push("Clerk in production requires MONGODB_URI");
+  }
+
+  const keysDistinct = !(env.CAMERA_API_KEY && env.CAMERA_API_KEY === env.TOWER_API_KEY);
+  if (!keysDistinct) {
+    warnings.push("camera and tower keys must be distinct");
+  }
+
+  const cameraAirportBound = Boolean(
+    env.CAMERA_API_KEY && hasCode(env.CAMERA_API_AIRPORT) && fixedAirports.has(env.CAMERA_API_AIRPORT)
+  );
+  if (env.CAMERA_API_KEY && !cameraAirportBound) {
+    warnings.push("CAMERA_API_AIRPORT must name a registered AIRPORT_CODES entry when CAMERA_API_KEY is set");
+  }
+  const cameraKeyValid = cameraAirportBound && keysDistinct;
+  const cameraKey = cameraKeyValid ? env.CAMERA_API_KEY : "";
+  const cameraAirport = cameraKeyValid ? env.CAMERA_API_AIRPORT : "";
+  const cameraKeyMisconfigured = Boolean(env.CAMERA_API_KEY && !cameraKeyValid);
+
+  const towerAirportBound = Boolean(
+    env.TOWER_API_KEY && hasCode(env.TOWER_API_AIRPORT) && fixedAirports.has(env.TOWER_API_AIRPORT)
+  );
+  if (env.TOWER_API_KEY && !towerAirportBound) {
+    warnings.push("TOWER_API_AIRPORT must name a registered AIRPORT_CODES entry when TOWER_API_KEY is set");
+  }
+  const towerKeyValid = towerAirportBound && keysDistinct;
+  const towerKey = towerKeyValid ? env.TOWER_API_KEY : "";
+  const towerAirport = towerKeyValid ? env.TOWER_API_AIRPORT : "";
+  const towerKeyMisconfigured = Boolean(env.TOWER_API_KEY && !towerKeyValid);
+
+  if (production && (!cameraKeyValid || (!clerkEnabled && !towerKeyValid))) {
+    warnings.push("production requires a bound camera key and either a bound tower key or Clerk with MongoDB");
+  }
+
+  const demo = !production && env.ALLOW_UNAUTHENTICATED_TOWER === "true" && !(hasClerkSecret || hasClerkPublishable) && !env.TOWER_API_KEY;
+
+  return {
+    demo,
+    clerkEnabled,
+    cameraKey,
+    cameraAirport,
+    towerKey,
+    towerAirport,
+    cameraKeyMisconfigured,
+    towerKeyMisconfigured,
+    warnings,
+  };
+}
+
 function createAccess({ airports, lookup, cameraKey, cameraAirport, towerKey, towerAirport, demo }) {
   const known = (airport) => hasCode(airport) && airports.has(airport);
   function view(grant, requested) {
@@ -129,4 +190,4 @@ function createSocketAccess(namespaces) {
   return { revoke, install, epoch: () => epoch };
 }
 
-module.exports = { accessConfig, createAccess, createSocketAccess, hasCode, keyMatches };
+module.exports = { accessConfig, resolveRuntimeAccess, createAccess, createSocketAccess, hasCode, keyMatches };

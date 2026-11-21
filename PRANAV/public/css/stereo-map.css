@@ -1,0 +1,170 @@
+/* Leaflet aviation HUD styling for SkySentry advisory stereo bearing intersections.
+   Animations and transitions touch ONLY compositor/SVG paint properties (transform,
+   opacity, stroke-dashoffset) and obey prefers-reduced-motion. */
+
+.stereo-fix-marker {
+  cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke: #d99a00;
+  fill: #d99a00;
+  filter: drop-shadow(0 0 6px rgb(217 154 0 / 0.62));
+}
+
+.stereo-fix-marker[data-risk="red"],
+.stereo-fix-marker[data-classification="drone"] {
+  stroke: #dc2626;
+  fill: #dc2626;
+  filter: drop-shadow(0 0 8px rgb(220 38 38 / 0.76));
+}
+
+.stereo-fix-pulse {
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.stereo-ray-line {
+  pointer-events: none;
+  stroke-dasharray: 6 5;
+  stroke-linecap: round;
+  opacity: 0.82;
+}
+
+.stereo-ray-line[data-risk="red"],
+.stereo-ray-line[data-classification="drone"] {
+  opacity: 0.9;
+}
+
+.stereo-uncertainty-poly {
+  pointer-events: none;
+  stroke-dasharray: 3 3;
+  opacity: 0.85;
+}
+
+.stereo-popup {
+  white-space: pre-line;
+  color: var(--ink, #fafafa);
+  background: var(--card, #111214);
+  border: 1px solid var(--line-2, #3f3f46);
+  border-left: 3px solid #d99a00;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 500 0.76rem/1.45 var(--mono, "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0.015em;
+}
+
+html[data-theme="light"] .stereo-popup {
+  color: var(--ink, #0a0a0a);
+  background: var(--card, #ffffff);
+  border-color: var(--line-2, #d4d4d8);
+  border-left-color: #d99a00;
+}
+
+.stereo-popup-shell .leaflet-popup-content-wrapper {
+  background: transparent;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.36);
+  padding: 0;
+  border-radius: 8px;
+}
+
+.stereo-popup-shell .leaflet-popup-content {
+  margin: 0;
+}
+
+.stereo-tooltip {
+  font: 600 0.72rem/1.3 var(--mono, "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes stereo-fix-pulse-ring {
+    0% {
+      transform: scale(0.68);
+      opacity: 0.88;
+    }
+    75% {
+      opacity: 0.22;
+    }
+    100% {
+      transform: scale(2.15);
+      opacity: 0;
+    }
+  }
+
+  @keyframes stereo-fix-beacon {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.96;
+    }
+    50% {
+      transform: scale(1.12);
+      opacity: 0.78;
+    }
+  }
+
+  @keyframes stereo-ray-march {
+    from {
+      stroke-dashoffset: 22;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .stereo-fix-marker,
+  .stereo-ray-line,
+  .stereo-uncertainty-poly,
+  .stereo-popup {
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      stroke-dashoffset 180ms linear;
+  }
+
+  .stereo-fix-marker {
+    animation: stereo-fix-beacon 1.9s ease-in-out infinite;
+  }
+
+  .stereo-fix-marker[data-risk="red"],
+  .stereo-fix-marker[data-classification="drone"] {
+    animation-duration: 1.3s;
+  }
+
+  .stereo-fix-pulse {
+    animation: stereo-fix-pulse-ring 1.65s cubic-bezier(0.16, 0.84, 0.32, 1) infinite;
+  }
+
+  .stereo-ray-line {
+    animation: stereo-ray-march 1.4s linear infinite;
+  }
+}
+
+[data-reduced-motion="true"] .stereo-fix-marker,
+[data-reduced-motion="true"] .stereo-fix-pulse,
+[data-reduced-motion="true"] .stereo-ray-line,
+[data-reduced-motion="true"] .stereo-uncertainty-poly,
+[data-reduced-motion="true"] .stereo-popup {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stereo-fix-marker,
+  .stereo-fix-marker[data-risk="red"],
+  .stereo-fix-marker[data-classification="drone"],
+  .stereo-fix-pulse,
+  .stereo-ray-line,
+  .stereo-uncertainty-poly,
+  .stereo-popup {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

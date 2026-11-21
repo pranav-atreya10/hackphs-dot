@@ -26,7 +26,7 @@ services:
         value: "*"
       # Secrets: don't commit real values. Set them in the DO dashboard
       # (App → Settings → web → Environment Variables, tick "Encrypt").
-      # The server refuses to start in production without CAMERA_API_KEY.
+      # Unbound CAMERA_API_KEY / TOWER_API_KEY values stay fail-closed disabled until paired with *_API_AIRPORT in AIRPORT_CODES.
       - key: CAMERA_API_KEY
         type: SECRET
         scope: RUN_TIME

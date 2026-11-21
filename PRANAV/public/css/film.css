@@ -1,5 +1,6 @@
 /* Standalone film (film.html) frame: monochrome Geist look in light + dark, matching css/app.css.
-   Linked after the film's own styles by scripts/sync-web.mjs; the 3D stage and its in-scene colours are untouched. */
+   Linked after the film's own styles by scripts/sync-web.mjs; the 3D stage and its in-scene colours are untouched.
+   Also houses shared chapter-scrubber, playhead-spring and #filmPoster enhancement rules mirrored by js/film-scrubber.js. */
 :root{--surround:#fafafa;--surround-2:#fff;--on-surround:#0a0a0a;--on-surround-mute:#6b7280;--frame-line:#e5e7eb;
   --display:"Geist",system-ui,-apple-system,sans-serif;--body:var(--display);--mono:"Geist Mono",ui-monospace,Menlo,monospace;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--surround:#0a0a0a;--surround-2:#111;--on-surround:#fafafa;--on-surround-mute:#a1a1aa;--frame-line:#262626;color-scheme:dark}}
@@ -21,3 +22,104 @@ body{-webkit-font-smoothing:antialiased}
 #assetLoader{background:#0a0a0a;color:#fafafa}
 .load-sub,.load-note{color:#a1a1aa}
 .load-track{background:linear-gradient(90deg,transparent,#fafafa,transparent);background-size:200%}
+
+/* Chapter scrubbing, playhead spring & poster tilt progressive enhancement (js/film-scrubber.js) */
+#bar,.film-scrubber-bar{position:relative;touch-action:manipulation}
+.seg{position:relative;padding-block:4px 2px;margin-block:-4px -2px;transition:opacity .18s ease}
+.seg i{position:relative;background:var(--frame-line,var(--line-s,#24384f));background:color-mix(in srgb,var(--on-surround,#0a0a0a) 13%,var(--frame-line,var(--line-s,#e5e7eb)));transition:transform .2s cubic-bezier(.22,1,.36,1),background-color .2s ease,box-shadow .2s ease;transform-origin:50% 50%}
+.seg:is(:hover,:focus-visible) i{transform:scaleY(1.34)}
+.seg[data-hovered="true"] i::after{content:"";position:absolute;inset:0;background:color-mix(in srgb,var(--on-surround,#0a0a0a) 24%,transparent);transform-origin:0 50%;transform:scaleX(var(--seg-hover-p,0));pointer-events:none}
+.seg.cur i{box-shadow:0 0 0 1px color-mix(in srgb,var(--on-surround,#0a0a0a) 22%,transparent)}
+.seg.cur span{font-weight:600;color:var(--on-surround)}
+
+@keyframes film-seg-pulse{
+  0%{transform:scaleY(1);box-shadow:0 0 0 0 rgba(242,183,5,.48)}
+  42%{transform:scaleY(1.55);box-shadow:0 0 0 4px rgba(242,183,5,0)}
+  100%{transform:scaleY(1);box-shadow:0 0 0 0 rgba(242,183,5,0)}
+}
+.seg.is-pulsing i{animation:film-seg-pulse .42s cubic-bezier(.22,1,.36,1)}
+
+.film-chapter-tooltip{
+  position:absolute;left:0;bottom:calc(100% + 28px);z-index:30;pointer-events:none;
+  display:inline-flex;align-items:center;gap:0;white-space:nowrap;
+  padding:6px 11px;border-radius:999px;
+  background:var(--surround-2,#111);
+  background:color-mix(in srgb,var(--surround-2,#111) 90%,transparent);
+  border:1px solid var(--frame-line,var(--line-s,rgba(128,128,128,.26)));
+  box-shadow:0 12px 28px -10px rgba(0,0,0,.38),0 2px 6px rgba(0,0,0,.12);
+  backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);
+  color:var(--on-surround,#fafafa);
+  font:500 .74rem/1.2 var(--body,system-ui,sans-serif);letter-spacing:-.005em;
+  opacity:0;
+  transform:translate3d(var(--tooltip-x,0px),6px,0) translateX(var(--tooltip-shift,0%)) scale(.96);
+  transition:opacity .16s ease,transform .26s cubic-bezier(.22,1.24,.36,1);
+  will-change:transform,opacity;
+}
+.film-chapter-tooltip[data-mode="focus"]{bottom:calc(100% + 10px)}
+.film-chapter-tooltip[data-visible="true"]{
+  opacity:1;
+  transform:translate3d(var(--tooltip-x,0px),0,0) translateX(var(--tooltip-shift,0%)) scale(1);
+}
+.film-chapter-tooltip[data-spring="js"]{transition:opacity .16s ease}
+.film-chapter-idx{font:600 .7rem/1 var(--mono,monospace);font-variant-numeric:tabular-nums;color:var(--on-surround);opacity:.86}
+.film-chapter-sep{color:var(--on-surround-mute);white-space:pre}
+.film-chapter-title{font-weight:600;color:var(--on-surround)}
+.film-chapter-range{font:500 .7rem/1 var(--mono,monospace);font-variant-numeric:tabular-nums;color:var(--on-surround-mute)}
+
+.film-scrub-ghost{
+  position:absolute;left:0;top:0;z-index:28;pointer-events:none;
+  opacity:0;transform:translate3d(var(--scrub-x,0px),0,0);
+  transition:opacity .12s ease;will-change:transform,opacity;
+}
+.film-scrub-ghost[data-visible="true"]{opacity:1}
+.film-scrub-ghost-line{
+  display:block;position:absolute;left:-1px;top:-3px;width:2px;height:12px;border-radius:999px;
+  background:var(--sign,#f2b705);
+  box-shadow:0 0 0 1px rgba(10,10,10,.28),0 0 8px rgba(242,183,5,.55);
+}
+.film-scrub-ghost-time{
+  position:absolute;left:0;top:-24px;transform:translateX(var(--scrub-badge-shift,-50%));
+  padding:2px 6px;border-radius:5px;white-space:nowrap;
+  background:var(--on-surround,#0a0a0a);color:var(--surround,#fafafa);
+  font:500 .66rem/1.25 var(--mono,monospace);font-variant-numeric:tabular-nums;letter-spacing:.02em;
+  box-shadow:0 4px 12px rgba(0,0,0,.22);
+}
+
+#filmPoster.film-poster-interactive{
+  overflow:hidden;transform-style:preserve-3d;
+  transform:perspective(1100px) rotateX(var(--poster-rx,0deg)) rotateY(var(--poster-ry,0deg)) scale(var(--poster-scale,1));
+  transition:transform .28s cubic-bezier(.22,1,.36,1),box-shadow .28s ease;
+  will-change:transform;
+}
+#filmPoster.film-poster-interactive::before{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  opacity:var(--poster-glow-opacity,0);
+  background:radial-gradient(420px circle at var(--poster-glow-x,50%) var(--poster-glow-y,50%),rgba(242,183,5,.22),rgba(255,255,255,.08) 42%,transparent 72%);
+  transition:opacity .24s ease;
+}
+#filmPoster.film-poster-interactive img{
+  transform:scale(1.035) translate3d(var(--poster-img-x,0px),var(--poster-img-y,0px),0);
+  transition:transform .32s cubic-bezier(.22,1,.36,1);
+  will-change:transform;
+}
+#filmPoster.film-poster-interactive :is(a,button,span){z-index:2}
+#filmPoster.film-poster-interactive #filmLaunch{
+  transform:translate3d(var(--launch-mx,0px),var(--launch-my,0px),0);
+  transition:transform .22s cubic-bezier(.22,1.2,.36,1),box-shadow .22s ease,background-color .18s ease,border-color .18s ease,opacity .18s ease;
+  box-shadow:0 10px 28px -8px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.14);
+  will-change:transform;
+}
+
+@media (prefers-reduced-motion:reduce){
+  .seg,.seg i,.seg i b,.film-chapter-tooltip,.film-scrub-ghost,#filmPoster,#filmPoster img,#filmPoster #filmLaunch{
+    transition:none!important;animation:none!important;
+  }
+  .seg:is(:hover,:focus-visible) i{transform:none!important}
+  .seg i b,.film-chapter-tooltip,.film-scrub-ghost,#filmPoster.film-poster-interactive,#filmPoster.film-poster-interactive img,#filmPoster.film-poster-interactive #filmLaunch{
+    will-change:auto!important;
+  }
+  .seg i b{transform:none!important}
+  #filmPoster.film-poster-interactive,#filmPoster.film-poster-interactive img,#filmPoster.film-poster-interactive #filmLaunch{
+    transform:none!important;
+  }
+}

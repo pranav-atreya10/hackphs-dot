@@ -1,15 +1,14 @@
 # CLAUDE.md
 
-## Open deploy blocker (read first)
+## DigitalOcean deployment & key-binding rule (read first)
 
-The live site is stuck on an old version: since PR #56, production startup throws
-"CAMERA_API_AIRPORT must name a registered AIRPORT_CODES entry when CAMERA_API_KEY is set", and DigitalOcean keeps
-the previous deployment. The fix is DigitalOcean environment variables, which only Pranav can set (see the box at
-the top of `README.md`). Until it is done:
-- Tell the person this is still pending if they ask why the live site hasn't changed. Code merged to `main` is NOT live yet.
-- Don't "fix" it by loosening `PRANAV/access.js`: tying each key to one airport is a deliberate safety rule.
-- Check: `curl -s -o /dev/null -w "%{http_code}" https://lancerhacks-rvs8r.ondigitalocean.app/ready` returns 404
-  while blocked; 200 or 503 once the new version is running. When it isn't 404, remove this section and the README box.
+Production boots cleanly on DigitalOcean App Platform (`GET /health` returns `200`) even when DigitalOcean
+environment variables are still missing `CAMERA_API_AIRPORT` / `TOWER_API_AIRPORT` / `AIRPORT_CODES`, while
+`resolveRuntimeAccess` (`PRANAV/access.js`) keeps any unbound `CAMERA_API_KEY` or `TOWER_API_KEY` **100% fail-closed
+disabled** and surfaces the degraded/missing state in `GET /ready` and `/admin.html` Diagnostics (`GET /api/deploy-diagnostics`):
+- Don't loosen `PRANAV/access.js`: tying each key to one airport is a deliberate safety rule, and unbound keys must never authenticate.
+- Until `CAMERA_API_AIRPORT` (and `TOWER_API_AIRPORT` if `TOWER_API_KEY` is set) are configured in DigitalOcean to name an entry in `AIRPORT_CODES` (see the box at the top of `README.md`), API-key camera/tower authentication stays disabled (`403`) and `/ready` reports `camera_access` as `degraded` or `not_configured`.
+- Check: `curl -s -o /dev/null -w "%{http_code}" https://lancerhacks-rvs8r.ondigitalocean.app/ready` returns `404` only before DigitalOcean finishes rolling out `main`, and `503` (or `200` on persistent spool hosts) once the updated build is live.
 
 Team workflow rules (branches, PRs, explanations per person) are in `AI.md`.
 

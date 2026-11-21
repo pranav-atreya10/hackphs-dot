@@ -1,0 +1,421 @@
+{
+  "schema_version": 1,
+  "run_id": "v5-1-temporal-kinematics-svanstrom-research-select",
+  "status": "complete",
+  "scope": "authors-only Svanstrom development SELECT (not test); FBD-SV-2024 and test_media untouched",
+  "hypothesis": "Fusing 5 chronological v5 MobileNetV3 Large frame logit triples with 6 bbox motion/scale kinematics features via a <8K-parameter residual temporal attention head will preserve or improve 5-frame bird/drone classification and aircraft rejection on SELECT while remaining browser-exportable.",
+  "git_commit_base": "ca33d55707ef7903f550fcbf895b1e63ceacef51",
+  "started_utc": "2026-11-21T15:21:07Z",
+  "finished_utc": "2026-11-21T15:22:33Z",
+  "elapsed_seconds": 85.844,
+  "benchmark_performed": false,
+  "frozen_test_sets_touched": false,
+  "fbd_sv_read": false,
+  "backbone": {
+    "arch": "mobilenet_v3_large",
+    "checkpoint_path": "Shreyansh Local Ai Model/runs/v5/best.pt",
+    "checkpoint_sha256": "2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b",
+    "frozen": true
+  },
+  "temporal_model": {
+    "arch": "v5_temporal_kinematics",
+    "parameters": 5453,
+    "max_parameters_cap": 8000,
+    "window_size": 5,
+    "kinematics_features": [
+      "dx",
+      "dy",
+      "speed",
+      "turn_cos",
+      "log_box_px",
+      "scale_delta"
+    ],
+    "config": {
+      "d_model": 24,
+      "n_heads": 4,
+      "mlp_dim": 48,
+      "window_size": 5,
+      "num_classes": 3,
+      "num_kinematics": 6
+    }
+  },
+  "dataset": {
+    "source": "Svanstrom CC0 visible-light Video_V (authors-only clips)",
+    "manifest_sha256": "f372f1a067df5b4821c03e3562932b7ed180643826d53046041f87dcfb6613e7",
+    "crop_files": {
+      "shreyansh_crops_v3/svan_train_X.npy": {
+        "bytes": 858267776,
+        "sha256": "8cbb8035f0af9b392c93fec3bdcec5095a8c88e70186aeeb52915f64abbcb9b0"
+      },
+      "shreyansh_crops_v3/svan_train_meta.npz": {
+        "bytes": 667849,
+        "sha256": "f7512a62ab506cc20b4878f5c5b90b11db00e5029d04a65545a41df4def5c1f9"
+      },
+      "shreyansh_crops_v3/svan_select_X.npy": {
+        "bytes": 88694912,
+        "sha256": "b862a277d6c857fae87e8afa210d9e0383ef134e5a155529436d6c853b8d0648"
+      },
+      "shreyansh_crops_v3/svan_select_meta.npz": {
+        "bytes": 207083,
+        "sha256": "b302ef7ae3b1edfda6a29698ec93f40d8bc0c72e7aed1cfd90c5d036881149ee"
+      }
+    },
+    "clip_disjoint_verified": true,
+    "train": {
+      "clips_total": 153,
+      "fit_clips": 119,
+      "internal_val_clips": 29,
+      "foreground_rows": 11275,
+      "excluded_generated_background_rows": 12007,
+      "fit_windows_augmented": 25785,
+      "fit_window_class_counts": {
+        "bird": 4743,
+        "drone": 12777,
+        "other": 8265
+      },
+      "internal_val_windows": 422,
+      "internal_val_class_counts": {
+        "bird": 71,
+        "drone": 213,
+        "other": 138
+      }
+    },
+    "select": {
+      "clips_total": 35,
+      "foreground_rows": 3540,
+      "excluded_generated_background_rows": 3678,
+      "contiguous_5_frame_windows": 691,
+      "window_class_counts": {
+        "bird": 137,
+        "drone": 348,
+        "aircraft_other": 206
+      }
+    }
+  },
+  "recipe": {
+    "seed": 44,
+    "epochs": 24,
+    "selected_epoch": 18,
+    "selection_rule": "best balanced accuracy on 20% internal TRAIN-clip holdout (SELECT never used for stopping or tuning)",
+    "batch_size": 128,
+    "optimizer": "AdamW",
+    "lr": 0.002,
+    "weight_decay": 0.001,
+    "label_smoothing": 0.03,
+    "logit_jitter_std": 0.15,
+    "scheduler": "OneCycleLR (pct_start=0.15)",
+    "deterministic_algorithms": true,
+    "class_weights": [
+      1.812144,
+      0.672693,
+      1.039927
+    ]
+  },
+  "runtime": {
+    "os": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.0",
+    "torch": "2.8.0+cu126",
+    "torchvision": "0.23.0+cu126",
+    "numpy": "2.2.6",
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "gpu_bytes": 6441926656,
+    "capability": [
+      8,
+      6
+    ],
+    "cuda": "12.6",
+    "cudnn": 91002,
+    "peak_cuda_reserved_bytes": 849346560
+  },
+  "artifacts": {
+    "pytorch_checkpoint": {
+      "path": "Shreyansh Local Ai Model/runs/v5_temporal/best.pt",
+      "bytes": 29845,
+      "sha256": "3dd84a92beed41a37e7e52e5ed3ae247331e858dc9344bc68184d6985223f540"
+    },
+    "onnx_opset17": {
+      "path": "Shreyansh Local Ai Model/runs/v5_temporal/best.onnx",
+      "bytes": 29474,
+      "sha256": "43dcfc303cc03c6f224cabd7b83e503307e300eb785e76c218f4f44dffb421f9",
+      "opset_version": 17,
+      "max_abs_error_batch1": 5.960464477539063e-08,
+      "max_abs_error_batch4": 2.384185791015625e-07
+    },
+    "browser_json": {
+      "path": "Shreyansh Local Ai Model/runs/v5_temporal/skysentry_v5_temporal.json",
+      "bytes": 36678,
+      "sha256": "ddc5c2ca2500ddebbe9e0ccad8b15394edcd3ff985ddee80c615581884f4bbd3",
+      "max_abs_error_batch1": 2.980232238769531e-07,
+      "max_abs_error_batch4": 8.344650268554688e-07,
+      "select_691_windows_max_abs_error": 1.430511474609375e-06,
+      "node_v8_runtime_max_abs_error": 4.76837158203125e-07
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.268655,
+      "internal_val_loss": 0.128757,
+      "internal_val_balanced_accuracy": 0.968871,
+      "internal_val_recalls": {
+        "bird": 0.971831,
+        "drone": 1.0,
+        "other": 0.934783
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.223717,
+      "internal_val_loss": 0.083642,
+      "internal_val_balanced_accuracy": 0.964176,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.934783
+      }
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.207507,
+      "internal_val_loss": 0.071709,
+      "internal_val_balanced_accuracy": 0.976254,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.971014
+      }
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.204375,
+      "internal_val_loss": 0.086356,
+      "internal_val_balanced_accuracy": 0.968871,
+      "internal_val_recalls": {
+        "bird": 0.971831,
+        "drone": 1.0,
+        "other": 0.934783
+      }
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.200714,
+      "internal_val_loss": 0.11906,
+      "internal_val_balanced_accuracy": 0.954515,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.905797
+      }
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.197831,
+      "internal_val_loss": 0.0872,
+      "internal_val_balanced_accuracy": 0.966592,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.942029
+      }
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.197678,
+      "internal_val_loss": 0.097808,
+      "internal_val_balanced_accuracy": 0.959345,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.92029
+      }
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.193863,
+      "internal_val_loss": 0.102113,
+      "internal_val_balanced_accuracy": 0.954515,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.905797
+      }
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.192794,
+      "internal_val_loss": 0.095358,
+      "internal_val_balanced_accuracy": 0.971423,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.956522
+      }
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.191343,
+      "internal_val_loss": 0.107851,
+      "internal_val_balanced_accuracy": 0.964176,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.934783
+      }
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.190872,
+      "internal_val_loss": 0.090272,
+      "internal_val_balanced_accuracy": 0.966592,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.942029
+      }
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.187886,
+      "internal_val_loss": 0.076405,
+      "internal_val_balanced_accuracy": 0.978669,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.978261
+      }
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.186166,
+      "internal_val_loss": 0.088825,
+      "internal_val_balanced_accuracy": 0.969007,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.949275
+      }
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.184423,
+      "internal_val_loss": 0.088088,
+      "internal_val_balanced_accuracy": 0.973838,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.963768
+      }
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.184356,
+      "internal_val_loss": 0.091989,
+      "internal_val_balanced_accuracy": 0.966592,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.942029
+      }
+    },
+    {
+      "epoch": 16,
+      "train_loss": 0.183507,
+      "internal_val_loss": 0.093414,
+      "internal_val_balanced_accuracy": 0.966592,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.942029
+      }
+    },
+    {
+      "epoch": 17,
+      "train_loss": 0.181201,
+      "internal_val_loss": 0.077652,
+      "internal_val_balanced_accuracy": 0.976254,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.971014
+      }
+    },
+    {
+      "epoch": 18,
+      "train_loss": 0.179537,
+      "internal_val_loss": 0.076139,
+      "internal_val_balanced_accuracy": 0.978669,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.978261
+      }
+    },
+    {
+      "epoch": 19,
+      "train_loss": 0.179775,
+      "internal_val_loss": 0.085505,
+      "internal_val_balanced_accuracy": 0.969007,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.949275
+      }
+    },
+    {
+      "epoch": 20,
+      "train_loss": 0.178841,
+      "internal_val_loss": 0.080956,
+      "internal_val_balanced_accuracy": 0.971423,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.956522
+      }
+    },
+    {
+      "epoch": 21,
+      "train_loss": 0.177073,
+      "internal_val_loss": 0.08245,
+      "internal_val_balanced_accuracy": 0.971423,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.956522
+      }
+    },
+    {
+      "epoch": 22,
+      "train_loss": 0.176886,
+      "internal_val_loss": 0.082832,
+      "internal_val_balanced_accuracy": 0.973838,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.963768
+      }
+    },
+    {
+      "epoch": 23,
+      "train_loss": 0.176282,
+      "internal_val_loss": 0.081882,
+      "internal_val_balanced_accuracy": 0.973838,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.963768
+      }
+    },
+    {
+      "epoch": 24,
+      "train_loss": 0.176287,
+      "internal_val_loss": 0.081462,
+      "internal_val_balanced_accuracy": 0.973838,
+      "internal_val_recalls": {
+        "bird": 0.957746,
+        "drone": 1.0,
+        "other": 0.963768
+      }
+    }
+  ]
+}

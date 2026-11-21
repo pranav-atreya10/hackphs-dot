@@ -118,14 +118,11 @@ a.step3:hover{border-color:var(--line-2);box-shadow:0 8px 28px -14px rgba(0,0,0,
 @media (max-width:860px){.hero{padding-block:64px 40px;gap:40px}.sec{padding-block:104px 0}.sec-head{margin-bottom:40px}.split2{gap:48px}.foot{margin-top:104px}}
 
 /* ---------- motion ----------
-   Hero plays once on load. Everything below is scroll-driven CSS (animation-timeline): no JS, nothing can get stuck
-   hidden, and browsers without support just show the page still. All of it is off under prefers-reduced-motion. */
+   Hero plays once on load. Below-the-fold sections reveal once via reveal.js's zero-scroll-overhead
+   IntersectionObserver (no continuous scroll-scrubbed view() animations on the 3D stage or sections). */
 @keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-@keyframes settle{from{opacity:.35;transform:scale(.93) translateY(30px)}to{opacity:1;transform:none}}
 @keyframes progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes hero-out{to{opacity:.2;transform:translateY(-48px)}}
-@keyframes bar-in{to{border-bottom-color:var(--line-s);box-shadow:0 6px 24px -18px rgba(0,0,0,.35)}}
 @media (prefers-reduced-motion:no-preference){
   header.bar{animation:fade .5s ease-out both}
   .hero .eyebrow-s,.hero h1,.hero p,.hero .cta,.sheet div{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
@@ -141,23 +138,9 @@ a.step3:hover{border-color:var(--line-2);box-shadow:0 8px 28px -14px rgba(0,0,0,
   .bar-link:active{opacity:.55}
   .faq details[open] p{animation:rise .35s cubic-bezier(.2,.7,.2,1) both}
 
-  @supports (animation-timeline:view()){
-    /* reading-progress line under the top bar, and the bar gains its edge once you scroll */
-    header.bar{border-bottom-color:transparent;animation:fade .5s ease-out both,bar-in linear both;animation-timeline:auto,scroll(root);animation-range:normal,0 120px}
+  @supports (animation-timeline:scroll()){
+    /* lightweight GPU scaleX reading-progress line under the top bar */
     header.bar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink-s);transform-origin:0 50%;animation:progress linear both;animation-timeline:scroll(root)}
-    /* hero drifts up and fades as the film arrives */
-    .hero{animation:hero-out linear both;animation-timeline:scroll(root);animation-range:0 85vh}
-    /* the film stage settles into place */
-    #film .stage{animation:settle linear both;animation-timeline:view();animation-range:entry 0% cover 35%}
-    #film .stage:fullscreen{animation:none}
-    /* sections rise in as they enter; siblings are staggered by offsetting their ranges */
-    .sec-head,.step3,.fact,.risk-row,.journey li,.stack div,.limits,.faq details,.foot > div{
-      animation:rise linear both;animation-timeline:view();animation-range:entry 5% entry 60%}
-    :is(.step3,.fact):nth-child(2),.stack div:nth-child(3n+2),.foot > div:nth-child(2){animation-range:entry 12% entry 67%}
-    :is(.step3,.fact):nth-child(3),.stack div:nth-child(3n){animation-range:entry 19% entry 74%}
-    /* risk dots pop as their row arrives */
-    .lvl i{animation:dot-pop linear both;animation-timeline:view();animation-range:entry 30% entry 80%}
-    @keyframes dot-pop{from{transform:scale(0)}70%{transform:scale(1.35)}to{transform:scale(1)}}
   }
 }
 
@@ -166,12 +149,4 @@ a.step3:hover{border-color:var(--line-2);box-shadow:0 8px 28px -14px rgba(0,0,0,
 .promo-card{margin:0;border:1px solid var(--line-s);border-radius:14px;overflow:hidden;background:var(--paper-2);aspect-ratio:9/16}
 .promo-card video{display:block;width:100%;height:100%;object-fit:cover}
 @media (max-width:860px){.promo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
-@media (prefers-reduced-motion:no-preference){
-  @supports (animation-timeline:view()){
-    .promo-card{animation:rise linear both;animation-timeline:view();animation-range:entry 5% entry 60%}
-    .promo-card:nth-child(2){animation-range:entry 12% entry 67%}
-    .promo-card:nth-child(3){animation-range:entry 19% entry 74%}
-    .promo-card:nth-child(4){animation-range:entry 26% entry 81%}
-  }
-}
 
