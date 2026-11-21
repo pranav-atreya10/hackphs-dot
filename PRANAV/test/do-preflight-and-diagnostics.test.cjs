@@ -711,7 +711,7 @@ async function getFreePort() {
   return port;
 }
 
-async function bootServerInVm(t, envOverrides) {
+async function bootServerInVm(t, envOverrides, moduleOverrides = {}) {
   const timers = new Set();
   const logs = [];
   let server;
@@ -748,6 +748,7 @@ async function bootServerInVm(t, envOverrides) {
         health: () => ({ configured: false }),
       }),
     },
+    ...moduleOverrides,
   };
 
   const serverSource = await fs.promises.readFile(path.join(pranavRoot, 'server.js'), 'utf8');
@@ -1072,5 +1073,115 @@ describe('DigitalOcean production startup resilience & source_dir isolation', ()
     });
     assert.equal(okCamRes.status, 200);
     assert.equal((await okCamRes.json()).ok, true);
+  });
+
+  test('production Clerk pair without MONGODB_URI keeps /api/auth/config sign-in active while /api/auth/join, /ready, unbound keys, and malformed MONGODB_URI fail closed', async t => {
+    const pubKey = 'pk_test_live_do_clerk_98765';
+    const secKey = 'sk_test_live_do_clerk_98765';
+    const unboundCamKey = 'UNBOUND_DO_CAM_SECRET_445566';
+
+    const mockClerkModule = {
+      createClerkClient: () => ({
+        users: {
+          getCount: async () => 1,
+          getUser: async sub => sub === 'admin-1'
+            ? {
+                publicMetadata: {},
+                emailAddresses: [{ emailAddress: 'admin@skysentry.org', verification: { status: 'verified' } }],
+              }
+            : {
+                publicMetadata: { role: 'dashboard', airport: 'KPCT' },
+                emailAddresses: [{ emailAddress: 'tower@skysentry.org', verification: { status: 'verified' } }],
+              },
+        },
+        sessions: {
+          getSession: async sid => ({ status: 'active', userId: sid }),
+        },
+      }),
+      verifyToken: async token => ({ sub: token, sid: token }),
+    };
+
+    // 1. Live DigitalOcean shape: CLERK_* set, MONGODB_URI="" (unset), CAMERA_API_KEY unbound
+    const liveDoSrv = await bootServerInVm(
+      t,
+      {
+        NODE_ENV: 'production',
+        AIRPORT_CODES: 'KPCT=kpct-join-4821',
+        CAMERA_API_KEY: unboundCamKey,
+        CAMERA_API_AIRPORT: '',
+        CLERK_PUBLISHABLE_KEY: pubKey,
+        CLERK_SECRET_KEY: secKey,
+        ADMIN_EMAILS: 'admin@skysentry.org',
+        MONGODB_URI: '',
+      },
+      { '@clerk/express': mockClerkModule }
+    );
+
+    const authConfigRes = await liveDoSrv.request('/api/auth/config');
+    assert.equal(authConfigRes.status, 200);
+    assert.deepEqual(await authConfigRes.json(), { publishableKey: pubKey, demoTower: false });
+
+    // Verified admin and fixed-airport Clerk users can sign in when MONGODB_URI is unset
+    const adminMeRes = await liveDoSrv.request('/api/auth/me', {
+      headers: { authorization: 'Bearer admin-1' },
+    });
+    assert.equal(adminMeRes.status, 200);
+    assert.equal((await adminMeRes.json()).admin, true);
+
+    const dashHourlyRes = await liveDoSrv.request('/api/hourly?airport=KPCT', {
+      headers: { authorization: 'Bearer tower-1' },
+    });
+    assert.equal(dashHourlyRes.status, 200);
+
+    // /api/auth/join refuses with 503 because MongoDB is not configured
+    const joinRes = await liveDoSrv.request('/api/auth/join', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer tower-1',
+      },
+      body: JSON.stringify({ role: 'dashboard', code: 'kpct-join-4821' }),
+    });
+    assert.equal(joinRes.status, 503);
+
+    // /ready returns 503 and unbound CAMERA_API_KEY fails closed with 403
+    const readyRes = await liveDoSrv.request('/ready');
+    assert.equal(readyRes.status, 503);
+    const readyBody = await readyRes.json();
+    assert.equal(readyBody.checks.camera_access, 'not_configured');
+    assert.equal(readyBody.checks.tower_access, 'not_configured');
+
+    const camRes = await liveDoSrv.request('/api/camera-config', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': unboundCamKey,
+        'x-airport': 'KPCT',
+        'x-camera-source': 'live',
+        'x-camera-device': crypto.randomUUID(),
+        'x-camera-session': crypto.randomUUID(),
+      },
+      body: JSON.stringify({ source: 'live' }),
+    });
+    assert.equal(camRes.status, 403);
+
+    // 2. If MONGODB_URI IS set but malformed (mongo === null), clerkAccess fails closed (401) so role_requests cannot be bypassed
+    const brokenMongoSrv = await bootServerInVm(
+      t,
+      {
+        NODE_ENV: 'production',
+        AIRPORT_CODES: 'KPCT=kpct-join-4821',
+        CLERK_PUBLISHABLE_KEY: pubKey,
+        CLERK_SECRET_KEY: secKey,
+        ADMIN_EMAILS: 'admin@skysentry.org',
+        MONGODB_URI: 'not-a-valid-mongo-uri',
+      },
+      { '@clerk/express': mockClerkModule }
+    );
+
+    const brokenMeRes = await brokenMongoSrv.request('/api/auth/me', {
+      headers: { authorization: 'Bearer admin-1' },
+    });
+    assert.equal(brokenMeRes.status, 401);
   });
 });

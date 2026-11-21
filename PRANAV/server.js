@@ -180,12 +180,8 @@ async function logBirdVerdict(v, airport, image = null) {
 const journal = createEventJournal(mongo ? withMongo : null);
 const memIncidents = [];
 
-const canInitClerk = runtimeAccess.clerkEnabled && (process.env.NODE_ENV !== "production" || Boolean(mongo));
-if (runtimeAccess.clerkEnabled && !canInitClerk) {
-  console.warn("startup access configuration warning: Clerk disabled in production because MongoDB client initialization failed");
-}
 let clerk = null;
-if (canInitClerk) {
+if (runtimeAccess.clerkEnabled) {
   try {
     clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY, publishableKey: CLERK_PUBLISHABLE_KEY });
   } catch (err) {
@@ -208,6 +204,7 @@ async function clerkSession(token) {
 
 async function clerkAccess(token) {
   if (!clerk || typeof token !== "string" || !token) return null;
+  if (MONGODB_URI && !mongo) return null;
   try {
     const epoch = socketAccessEpoch();
     const sub = await clerkSession(token);
@@ -615,12 +612,13 @@ const readiness = createReadiness({
     return airports.size ? "ready" : "not_configured";
   },
   camera_access: () => {
-    if (cameraKeyMisconfigured) return clerk ? "degraded" : "not_configured";
-    return CAMERA_API_KEY || clerk ? "ready" : "not_configured";
+    if (cameraKeyMisconfigured) return clerk && mongo ? "degraded" : "not_configured";
+    if (CAMERA_API_KEY || (clerk && (process.env.NODE_ENV !== "production" || mongo))) return "ready";
+    return clerk ? "degraded" : "not_configured";
   },
   tower_access: async () => {
     if (!clerk) return TOWER_API_KEY ? "ready" : "not_configured";
-    if (!mongo) return TOWER_API_KEY ? (towerKeyMisconfigured ? "degraded" : "ready") : "not_configured";
+    if (!mongo) return "not_configured";
     await Promise.all([
       clerk.users.getCount(),
       withMongo(mdb => mdb.collection("role_requests").findOne({ _id: "skysentry:readiness:v1" })),

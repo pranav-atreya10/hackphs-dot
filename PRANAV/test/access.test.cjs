@@ -92,7 +92,8 @@ test("resolveRuntimeAccess never throws and fail-closes unbound, duplicate, or p
     CLERK_PUBLISHABLE_KEY: "pk_test_1",
     MONGODB_URI: "   ",
   }, airports);
-  assert.equal(clerkNoMongoProd.clerkEnabled, false);
+  assert.equal(clerkNoMongoProd.clerkEnabled, true);
+  assert.equal(clerkNoMongoProd.clerkStorageConfigured, false);
   assert.ok(clerkNoMongoProd.warnings.includes("Clerk in production requires MONGODB_URI"));
 
   const partialClerkDev = resolveRuntimeAccess({
