@@ -27,9 +27,6 @@ const failureMessages = {
   local_failed: 'The local bird-judge model could not be reached; check LOCAL_JUDGE_URL and that the model is running.',
   local_timeout: 'The local bird-judge model did not answer in time.',
   local_invalid: 'The local bird-judge model did not return a usable result.',
-  onnx_failed: 'The local v5 ONNX bird-judge model could not run; check Python onnxruntime and runs/v5/best.onnx.',
-  onnx_tampered: 'The local v5 ONNX bird-judge model failed SHA-256 verification.',
-  onnx_timeout: 'The local v5 ONNX bird-judge model did not answer in time.',
 };
 const retryable = new Set(['timeout', 'network', 'service', 'model']);
 
@@ -206,7 +203,7 @@ async function analyzeEvent(event) {
 // The rubric, answer format and confidence floor live in bird-judge.spec.json (shared with local models).
 const judge = require('./bird-judge');
 const { BIRD_RUBRIC, normalizeBirdVerdict } = judge;
-const JUDGE = config.BIRD_JUDGE; // 'gemini' | 'local' | 'onnx' | 'off'
+const JUDGE = config.BIRD_JUDGE; // 'gemini' | 'local' | 'off'
 
 async function askGeminiIsBird(model, image, context, timeLimitMs) {
   const hint = judge.hintText(context);
@@ -236,25 +233,6 @@ function unavailableBird(reason) {
 async function verifyBird(snapshot, context = '') {
   const image = stripDataUrl(snapshot);
   if (JUDGE === 'off') return unavailableBird('judge_off');
-  if (JUDGE === 'onnx') {
-    // Local v5 MobileNetV3 Large ONNX runs on the server CPU without cloud uploads or API keys.
-    if (!image) return unavailableBird('no_image');
-    try {
-      const opts = { timeoutMs: TIMEOUT_MS };
-      if (config.ONNX_V5_MODEL_PATH) opts.onnxPath = config.ONNX_V5_MODEL_PATH;
-      const v = await judge.askOnnxIsBird(image, context, opts);
-      Object.assign(judge.localState, { lastSuccessAt: Date.now(), lastError: null });
-      return v;
-    } catch (err) {
-      const reason = err.name === 'AbortError' || err.name === 'TimeoutError' ? 'onnx_timeout'
-        : err.reason === 'onnx_tampered' ? 'onnx_tampered'
-        : err.reason === 'invalid_response' ? 'local_invalid'
-        : 'onnx_failed';
-      Object.assign(judge.localState, { lastError: failureMessages[reason], lastErrorAt: Date.now() });
-      console.warn(`[ai] bird judge: local v5 ONNX: ${config.redact(err.message).slice(0, 160)}`);
-      return unavailableBird(reason);
-    }
-  }
   if (JUDGE === 'local') {
     // A local model runs on the operator's own machine, so the Gemini cloud-upload policy doesn't apply to it.
     if (!image) return unavailableBird('no_image');

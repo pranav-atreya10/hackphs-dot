@@ -11,8 +11,7 @@
     "check:web": "node scripts/sync-web.mjs --check",
     "record-film": "node scripts/record-film.mjs",
     "export-judge": "node scripts/export-judge-dataset.mjs",
-    "eval-local-judge": "node scripts/eval-local-judge.mjs",
-    "preflight:do": "node scripts/do-deploy-preflight.mjs"
+    "eval-local-judge": "node scripts/eval-local-judge.mjs"
   },
   "engines": {
     "node": ">=20.12"

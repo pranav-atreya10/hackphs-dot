@@ -1,3 +1,0 @@
-train {'clips': 153, 'crops': 23282, 'bird': 2082, 'drone': 5583, 'other': 15617, 'bird_size_px_p10_p50_p90': [23.4, 28.0, 38.0]}
-select {'clips': 35, 'crops': 7218, 'bird': 714, 'drone': 1773, 'other': 4731, 'bird_size_px_p10_p50_p90': [23.8, 27.3, 32.7]}
-test {'clips': 97, 'crops': 19961, 'bird': 794, 'drone': 2391, 'other': 16776, 'bird_size_px_p10_p50_p90': [24.2, 29.1, 39.2]}

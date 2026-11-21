@@ -14,10 +14,8 @@ const config = {
   GEMINI_API_KEY: value('GEMINI_API_KEY'),
   GEMINI_MODEL: value('GEMINI_MODEL', 'gemini-3.5-flash'),
   GEMINI_BACKUP_MODEL: value('GEMINI_BACKUP_MODEL', 'gemini-3.5-flash-lite'),
-  // Bird judge: 'gemini' (default), 'local' (any OpenAI-compatible server: Ollama, LM Studio, llama.cpp, vLLM),
-  // 'onnx' (local v5 MobileNetV3 Large ONNX runtime, zero API keys) or 'off'.
-  BIRD_JUDGE: (['gemini', 'local', 'onnx', 'off'].includes(value('BIRD_JUDGE')) ? value('BIRD_JUDGE') : 'gemini'),
-  ONNX_V5_MODEL_PATH: value('ONNX_V5_MODEL_PATH'),
+  // Bird judge: 'gemini' (default), 'local' (any OpenAI-compatible server: Ollama, LM Studio, llama.cpp, vLLM) or 'off'.
+  BIRD_JUDGE: (['gemini', 'local', 'off'].includes(value('BIRD_JUDGE')) ? value('BIRD_JUDGE') : 'gemini'),
   LOCAL_JUDGE_URL: value('LOCAL_JUDGE_URL', 'http://localhost:11434/v1'),
   LOCAL_JUDGE_MODEL: value('LOCAL_JUDGE_MODEL', 'qwen2.5vl:7b'),
   LOCAL_JUDGE_KEY: value('LOCAL_JUDGE_KEY'),

@@ -7,38 +7,8 @@ import { createTowerMonitoring, imageEta, operational, RISK_RANK } from '/js/tow
 import { createTowerLayers } from '/js/tower-layers.mjs';
 import { createAlertPlayer } from '/js/alert-player.mjs';
 import { receiptProgress, reconcileIncidents } from '/js/incident-history.mjs';
-import { animateRowEnter, animateRowDismiss, applyEnrichmentBadges } from '/js/alert-choreography.mjs';
-import { watchRiskTransitions } from '/js/risk-beacon-fx.mjs';
-import { animateStatValue } from '/js/stat-counter.mjs';
-import { createIncidentRingBuffer } from '/js/incident-ring-buffer.mjs';
-import { mountIncidentReplay } from '/js/incident-replay-ui.mjs';
-import { mountSolanaProofDrawer } from '/js/solana-proof-drawer.mjs';
-import { mountIncidentExportToolbar } from '/js/shift-report-export.mjs';
-import { createRunwayOpsStore } from '/js/runway-ops-store.mjs';
-import { mountRunwayClashBoard } from '/js/runway-clash-board.mjs';
-import { createTowerStereoLayer } from '/js/tower-stereo-layer.mjs';
-import { createTowerAcousticHud } from '/js/tower-acoustic-pill.mjs';
 
 const $ = id => document.getElementById(id);
-const rowEnter = typeof animateRowEnter === 'function' ? animateRowEnter : el => el;
-const rowDismiss = typeof animateRowDismiss === 'function' ? animateRowDismiss : (_el, done) => done?.();
-const renderBadges = typeof applyEnrichmentBadges === 'function' ? applyEnrichmentBadges : null;
-const watchRisk = typeof watchRiskTransitions === 'function' ? watchRiskTransitions : null;
-const statCounter = typeof animateStatValue === 'function' ? animateStatValue : null;
-const makeRingBuffer = typeof createIncidentRingBuffer === 'function' ? createIncidentRingBuffer : null;
-const attachIncidentReplay = typeof mountIncidentReplay === 'function' ? mountIncidentReplay : null;
-const attachProofDrawer = typeof mountSolanaProofDrawer === 'function' ? mountSolanaProofDrawer : null;
-const attachExportToolbar = typeof mountIncidentExportToolbar === 'function' ? mountIncidentExportToolbar : null;
-const makeRunwayOpsStore = typeof createRunwayOpsStore === 'function' ? createRunwayOpsStore : null;
-const attachRunwayClashBoard = typeof mountRunwayClashBoard === 'function' ? mountRunwayClashBoard : null;
-const makeStereoLayer = typeof createTowerStereoLayer === 'function' ? createTowerStereoLayer : null;
-const makeAcousticHud = typeof createTowerAcousticHud === 'function'
-  ? createTowerAcousticHud
-  : (typeof createTowerAcousticPill === 'function' ? createTowerAcousticPill : null);
-
-const incidentRingBuffer = makeRingBuffer ? makeRingBuffer() : null;
-const runwayOpsStore = makeRunwayOpsStore ? makeRunwayOpsStore() : null;
-let activeReplay = null, activeProofDrawer = null, exportToolbar = null, clashBoard = null, acousticPill = null;
 const time = ms => new Date(ms).toLocaleTimeString('en-US', { hour12: false });
 let auth = null, socket = null, soundOn = false, audioCtx = null;
 // Airport picker: administrators select one airport. Kept in the URL
@@ -119,17 +89,14 @@ const announcements = createAlertPlayer({
 const alerts = new Map(), acknowledgedAlerts = new Set();
 let alertSyncGeneration = 0;
 const scopedAlert = row => operational(row) && row.airport === view && typeof row.id === 'string';
-function removeAlert(id, animated = false) {
-  const entry = alerts.get(id);
+function removeAlert(id) {
+  alerts.get(id)?.row.remove();
   alerts.delete(id);
-  if (!entry?.row) return;
-  if (animated && typeof animateRowDismiss === 'function') rowDismiss(entry.row, () => entry.row.remove());
-  else entry.row.remove();
 }
 function acknowledgeAlert(id) {
   if (acknowledgedAlerts.size >= 1000) acknowledgedAlerts.delete(acknowledgedAlerts.values().next().value);
   acknowledgedAlerts.add(id);
-  removeAlert(id, true);
+  removeAlert(id);
 }
 function showAlert(data, { replay = false, provisional = false } = {}) {
   if (!scopedAlert(data) || acknowledgedAlerts.has(data.id)) return;
@@ -152,7 +119,6 @@ function showAlert(data, { replay = false, provisional = false } = {}) {
     });
     row.append(label, status, button);
     $('unacknowledgedAlerts').append(row);
-    rowEnter(row, { replay });
     entry = { row, status, button, committed: false, progress: -1 };
     alerts.set(id, entry);
   }
@@ -209,7 +175,6 @@ function replayAlerts() {
 /* ---------- operational risk and coverage ---------- */
 const monitoring = createTowerMonitoring();
 const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
-let riskWatcher = null, lastCamsText = '';
 function describe(ev) {
   if (!ev || ev.risk === 'green') return 'No detections in monitored video';
   if (ev.direction === 'heard, not seen') return 'Drone heard, not seen';
@@ -219,12 +184,11 @@ function describe(ev) {
   return typeof ev.direction === 'string' && ev.direction ? `${target} · ${ev.direction}` : target;
 }
 function refreshRisk() {
-  if (!riskWatcher && watchRisk) riskWatcher = watchRisk($('risk'), { beaconEl: $('beaconView') });
   const snapshot = monitoring.snapshot();
   const { level, coverage, reason, top, online } = snapshot;
   const what = top ? describe(top) : level === 'green' ? 'No detections in monitored video'
     : coverage === 'degraded' ? 'Limited monitoring' : 'No usable monitoring';
-  if ($('risk').dataset.risk !== level) $('risk').dataset.risk = level;
+  $('risk').dataset.risk = level;
   setText($('riskLvl'), level.toUpperCase());
   setText($('riskWhat'), what);
   const side = $('sideRisk');
@@ -239,21 +203,15 @@ function refreshRisk() {
   const coverageLimit = ' · Video only; drone audio not monitored. Not a clearance.';
   const detail = (top ? ` · ${top.cameraLabel}${eta === null ? '' : ` · projected image-mask entry in ${Math.round(eta)} s`}` : '') + coverageLimit;
   setText($('riskWhy'), `${reason}${detail}`);
-  const nextCamsText = online.length ? `${online.length} camera${online.length > 1 ? 's' : ''}: ${online.join(', ')}` : 'No live cameras';
-  if (nextCamsText !== lastCamsText) {
-    lastCamsText = nextCamsText;
-    if (statCounter && online.length) statCounter($('cams'), nextCamsText, { animateInitial: false });
-    else setText($('cams'), nextCamsText);
-  }
+  setText($('cams'), online.length ? `${online.length} camera${online.length > 1 ? 's' : ''}: ${online.join(', ')}` : 'No live cameras');
   renderBeacon(snapshot, what, detail);
   const warningIds = new Set(snapshot.warnings.map(ev => ev.cameraId));
   layers?.prune(snapshot.cameraIds, warningIds);
   for (const ev of snapshot.warnings) layers?.pin(ev);
-  stereoLayer?.prune();
 }
 
 /* ---------- map: camera markers + field-of-view cones, threat pins and paths ---------- */
-let layers, stereoLayer = null, pendingStereo = null, leafletStyles;
+let layers, leafletStyles;
 const initMap = feature('Airport map', 'mapNote', async () => {
   await Promise.all([
     leafletStyles ||= loadAsset('link', '/vendor/leaflet/leaflet.css').catch(err => { leafletStyles = null; throw err; }),
@@ -265,12 +223,9 @@ const initMap = feature('Airport map', 'mapNote', async () => {
     map.setView([40.3987, -74.6586], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
     layers = createTowerLayers(L, map, { describe });
-    stereoLayer = makeStereoLayer ? makeStereoLayer(L, map, { describe, airport: view || null }) : null;
-    if (pendingStereo) stereoLayer?.updateStereo(pendingStereo);
     for (const ev of cameraPositions.values()) layers.placeCamera(ev);
     refreshRisk();
   } catch (err) {
-    stereoLayer?.destroy(); stereoLayer = null;
     map?.remove(); layers = null;
     throw err;
   }
@@ -287,7 +242,6 @@ function feed(ev) {
   description.textContent = `${ev.cameraLabel || ev.cameraId} · ${describe(ev)}`;
   li.append(at, level, description);
   $('feed').prepend(li); while ($('feed').children.length > 80) $('feed').lastChild.remove();
-  rowEnter(li);
 }
 
 /* ---------- beacon: Vivan's protocol, rendered in software ---------- */
@@ -334,38 +288,12 @@ const incidentEls = new Map();
 let incidentData = new Map(), historyRequest;
 let selectedIncident = null;
 let evidenceRequest, evidenceUrl;
-function cleanupIncidentDetail() {
-  activeReplay?.destroy(); activeReplay = null;
-  activeProofDrawer?.destroy(); activeProofDrawer = null;
-}
-function captureLiveIncidentClip(packet) {
-  if (!incidentRingBuffer || !operational(packet) || packet.airport !== view) return;
-  const incidentId = typeof packet._id === 'string' && packet._id ? packet._id : (typeof packet.id === 'string' && packet.id ? packet.id : null);
-  const cameraId = typeof packet.camera_id === 'string' && packet.camera_id ? packet.camera_id : (typeof packet.cameraId === 'string' && packet.cameraId ? packet.cameraId : null);
-  if (!incidentId || !cameraId || incidentRingBuffer.hasIncidentClip(incidentId)) return;
-  const parsedTime = typeof packet.time === 'number' ? packet.time : Date.parse(packet.time);
-  const atMs = Number.isFinite(parsedTime) ? parsedTime : Date.now();
-  if (Date.now() - atMs > 30000) return;
-  const clip = incidentRingBuffer.captureIncidentClip(incidentId, {
-    airport: view,
-    cameraId,
-    atMs,
-  });
-  if (clip && selectedIncident === incidentId && activeReplay) {
-    activeReplay.updateClip(clip);
-  }
-}
-function incidentItem(inc, prevRow = null) {
+function incidentItem(inc) {
   const li = document.createElement('li'), b = document.createElement('button');
   b.innerHTML = '<b></b><span></span>';
   const n = inc.object_count;
   b.firstChild.textContent = `${inc.risk === 'red' ? 'Red' : 'Yellow'} · ${inc.type === 'drone' ? 'Drone' : n > 1 ? `${n} ${inc.type}s` : inc.type} · ${inc.camera_id}`;
   b.lastChild.textContent = `${new Date(inc.time).toLocaleString()}${inc.report ? ' · report ready' : ''}${inc.solana_status === 'confirmed' ? ' · devnet memo confirmed' : inc.solana_status === 'pending' ? ' · memo pending' : inc.solana_error ? ' · memo needs attention' : ''}`;
-  if (renderBadges) {
-    const badges = document.createElement('div');
-    renderBadges(badges, inc, prevRow ? { previous: prevRow } : {});
-    b.append(badges);
-  }
   b.addEventListener('click', () => showIncident(inc));
   li.appendChild(b); return li;
 }
@@ -377,12 +305,10 @@ function updateIncidents(rows, source) {
   let at = $('incidents').firstChild;
   for (const [id, entry] of next) {
     let el = incidentEls.get(id);
-    const priorEntry = incidentData.get(id);
-    if (priorEntry !== entry || !el) {
-      const replacement = incidentItem(entry.row, priorEntry?.row ?? null);
+    if (incidentData.get(id) !== entry || !el) {
+      const replacement = incidentItem(entry.row);
       if (el && el === at) at = replacement;
       el?.replaceWith(replacement);
-      if (!priorEntry) rowEnter(replacement, { replay: source === 'history' });
       incidentEls.set(id, replacement); el = replacement;
     }
     if (el !== at || !el.parentNode) $('incidents').insertBefore(el, at);
@@ -390,16 +316,12 @@ function updateIncidents(rows, source) {
   }
   const selected = next.get(selectedIncident), previous = incidentData.get(selectedIncident);
   if (selected && selected !== previous) {
-    renderIncidentReport(selected.row, $('incidentReport'), previous?.row ?? null);
-    if (activeReplay && incidentRingBuffer) {
-      activeReplay.updateClip(incidentRingBuffer.getIncidentClip(selected.row._id));
-    }
+    renderIncidentReport(selected.row, $('incidentReport'));
     if (selected.row.snapshot_state === 'stored' && previous?.row.snapshot_state !== 'stored') void loadEvidence(selected.row, $('incidentEvidence'));
   }
   if (!selected && selectedIncident) {
     evidenceRequest?.abort();
     if (evidenceUrl) URL.revokeObjectURL(evidenceUrl);
-    cleanupIncidentDetail();
     selectedIncident = evidenceUrl = null;
     $('detail').replaceChildren(); $('detail').hidden = true;
   }
@@ -410,7 +332,6 @@ function showIncident(d) {
   if (selectedIncident === d._id) return;
   evidenceRequest?.abort();
   if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
-  cleanupIncidentDetail();
   selectedIncident = d._id;
   const box = $('detail'); box.hidden = false; box.replaceChildren();
   const evidence = document.createElement('div');
@@ -418,17 +339,6 @@ function showIncident(d) {
   const text = document.createElement('div');
   text.id = 'incidentReport'; text.style.cssText = 'display:grid;gap:6px;align-content:start';
   box.append(evidence, text);
-  if (attachIncidentReplay) {
-    const replayHost = document.createElement('div');
-    replayHost.id = 'incidentReplay';
-    if (replayHost.style) replayHost.style.cssText = 'grid-column:1/-1;min-width:0';
-    box.append(replayHost);
-    activeReplay = attachIncidentReplay(replayHost, {
-      clip: incidentRingBuffer?.getIncidentClip(d._id) ?? null,
-      doc: document,
-      win: typeof window !== 'undefined' ? window : undefined,
-    });
-  }
   renderIncidentReport(d, text);
   loadEvidence(d, evidence);
 }
@@ -461,14 +371,8 @@ async function loadEvidence(d, container) {
     container.replaceChildren(err.message === 'HTTP 404' ? 'No snapshot available yet. ' : 'Could not load snapshot. ', retry);
   }
 }
-function renderIncidentReport(d, text, prevRow = null) {
-  activeProofDrawer?.destroy(); activeProofDrawer = null;
+function renderIncidentReport(d, text) {
   text.replaceChildren();
-  if (renderBadges) {
-    const badges = document.createElement('div');
-    renderBadges(badges, d, prevRow ? { previous: prevRow } : {});
-    text.append(badges);
-  }
   const label = document.createElement('p'); label.innerHTML = '<b>Advisory report:</b> ';
   label.append(d.gemini_label ?? (d.receipt_state === 'retrying' ? 'waiting for storage retry'
     : d.receipt_state === 'retrying_volatile' ? 'waiting for an in-memory storage retry'
@@ -478,7 +382,7 @@ function renderIncidentReport(d, text, prevRow = null) {
   if (d.bird_verdict?.status === 'verified') {
     const p = document.createElement('p');
     const { verdict, confidence, evidence } = d.bird_verdict;
-    const who = d.bird_verdict.source === 'local' ? `Local AI Model${d.bird_verdict.model ? ` (${d.bird_verdict.model})` : ''}` : 'Local AI Model';
+    const who = d.bird_verdict.source === 'local' ? `Local model${d.bird_verdict.model ? ` (${d.bird_verdict.model})` : ''}` : 'Gemini';
     p.textContent = `${who} bird check: ${verdict.replace('_', ' ')} (${Math.round(confidence * 100)}%). ${evidence}`;
     text.append(p);
   } else if (d.bird_verdict?.status === 'unavailable') {
@@ -494,18 +398,6 @@ function renderIncidentReport(d, text, prevRow = null) {
   if (d.solana_error) { const p = document.createElement('p'); p.textContent = `Solana: ${d.solana_error}`; text.append(p); }
   else if (d.type === 'drone' && d.solana_status === 'hash only') { const p = document.createElement('p'); p.textContent = 'Report hashed locally. Connect a funded devnet wallet to stamp it on Solana.'; text.append(p); }
   if (d.solana_tx) { const a = document.createElement('a'); a.href = `https://explorer.solana.com/tx/${d.solana_tx}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Inspect the devnet transaction'; text.append(a); }
-  if (attachProofDrawer) {
-    if (text && typeof text === 'object' && !text.ownerDocument) {
-      try { text.ownerDocument = document; } catch {}
-    }
-    activeProofDrawer = attachProofDrawer(text, { ...d, airport: d.airport || view }, {
-      fetchImpl: typeof fetch === 'function' ? fetch : undefined,
-      getHeaders: async () => ({
-        ...(auth ? await auth.headers() : {}),
-        ...(view ? { 'x-airport': view } : {}),
-      }),
-    });
-  }
 }
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { ...(await auth.headers()), ...(view ? { 'x-airport': view } : {}), ...(opts.headers || {}) } });
@@ -531,7 +423,7 @@ async function loadIncidents() {
 /* ---------- hourly chart ---------- */
 // Monochrome bars from the page's theme tokens; recoloured when the theme switches (js/theme.js).
 const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-let chart, loadingHourly = false, latestHourlyRows = [];
+let chart, loadingHourly = false;
 const initChart = feature('Hourly chart', 'chartNote', async () => {
   if (!window.Chart) await loadAsset('script', '/vendor/chart.umd.min.js');
   Chart.defaults.font.family = token('--sans');
@@ -557,7 +449,6 @@ async function loadHourly() {
   loadingHourly = true;
   try {
     const rows = await api('/api/hourly', { signal: AbortSignal.timeout(10000) });
-    latestHourlyRows = Array.isArray(rows) ? rows : [];
     const hours = [...new Set(rows.map(r => new Date(r.hour).toISOString()))].sort();
     const val = (h, type, field) => Number(rows.find(r => new Date(r.hour).toISOString() === h && r.type === type)?.[field] ?? 0);
     chart.data.labels = hours.map(h => new Date(h).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', timeZone: 'UTC' }));
@@ -627,12 +518,6 @@ async function setupAirports() {
       : (airports.find(a => label(a).toLowerCase() === q || a.code.toLowerCase() === q) || airports.find(a => label(a).toLowerCase().includes(q)))?.code;
     if (next === undefined || (auth.airportRequired && !next)) { $('airportHint').textContent = 'Select an authorized airport.'; return; }
     if (next === view) { input.value = next ? label(airports.find(a => a.code === next)) : ''; return; }
-    if (view) incidentRingBuffer?.clearAirport(view);
-    latestHourlyRows = [];
-    pendingStereo = null;
-    stereoLayer?.setAirport(next || null);
-    acousticPill?.setAirport(next || null);
-    clashBoard?.setAirport(next || '');
     try { localStorage.setItem('skysentry.towerAirport', next); } catch {}
     const url = new URL(location.href);
     next ? url.searchParams.set('airport', next) : url.searchParams.delete('airport');
@@ -686,135 +571,34 @@ async function connect() {
       if (pendingFeed.size > 64) pendingFeed.delete(pendingFeed.keys().next().value);
     });
   }
-  let visualBirds, feedsApi = null, policyRequest, policyGeneration = 0, cloudJudge = null;
-  const cloudReview = $('birdCloudReview');
-  cloudReview.addEventListener('change', () => {
-    if (cloudJudge) visualBirds.setJudge(!cloudReview.disabled && cloudReview.checked ? cloudJudge : null);
-  });
-  function clearBirdPolicy() {
-    policyGeneration++;
-    policyRequest?.abort();
-    policyRequest = null;
-    cloudJudge = null;
-    cloudReview.checked = false;
-    cloudReview.disabled = true;
-    $('birdCloudReviewControl').hidden = true;
-    visualBirds?.setJudge(null);
-  }
-  async function loadBirdPolicy() {
-    clearBirdPolicy();
-    if (!socket.connected || !visualBirds) return;
-    const generation = policyGeneration, airport = view, request = new AbortController();
-    policyRequest = request;
-    const current = () => generation === policyGeneration && airport === view && socket.connected;
-    const judgeFor = provider => async ({ cameraId, streamId, frameId, trackId }, signal) => {
-      if (!current() || signal.aborted || (provider === 'gemini' && (cloudReview.disabled || !cloudReview.checked))) {
-        throw new DOMException('Bird review consent is no longer active', 'AbortError');
-      }
-      const result = await api('/api/verify-bird', { method: 'POST',
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-        headers: { 'content-type': 'application/json', 'x-bird-review-provider': provider },
-        body: JSON.stringify({ cameraId, streamId, frameId, trackId }) });
-      if (result.status === 'verified' && result.source !== provider) throw new Error('Bird review provider changed');
-      return result;
-    };
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10000)]);
-    try {
-      const policy = await api('/api/cloud-evidence-policy', { signal });
-      if (!current() || signal.aborted || policy?.providerBinding !== true || policy.reviewEnabled !== true) return;
-      if (policy.birdJudge === 'local') visualBirds.setJudge(judgeFor('local'));
-      else if (policy.birdJudge === 'gemini' && policy.cloudEvidenceEnabled === true) {
-        cloudJudge = judgeFor('gemini');
-        cloudReview.disabled = false;
-        $('birdCloudReviewControl').hidden = false;
-      }
-    } catch (error) {
-      if (current() && !request.signal.aborted) console.warn('Could not configure bird evidence review:', error.message);
-    } finally {
-      if (policyRequest === request) policyRequest = null;
-    }
-  }
-
   const initFeeds = feature('Camera feeds', 'feedsLoad', async () => {
     const { startFeeds } = await import('/js/feeds.js');
     const { VisualBirdVerifier } = await import('/js/visual-ai.js');
-    const button = $('birdCheck'), modelSelect = $('birdModelTier');
-    visualBirds = new VisualBirdVerifier({
-      button,
-      modelSelect,
-      status: $('birdCheckStatus'),
-      reviewStatus: $('birdReviewStatus'),
-      onProgress: ({ cameraId } = {}) => {
-        if (!feedsApi) return;
-        if (cameraId) feedsApi.redraw?.(cameraId);
-        else feedsApi.redrawAll?.();
-      },
-    });
-    feedsApi = startFeeds({
+    const visualBirds = new VisualBirdVerifier({ button: $('birdCheck'), status: $('birdCheckStatus'), reviewStatus: $('birdReviewStatus') });
+    api('/api/cloud-evidence-policy').then(({ cloudEvidenceEnabled, reviewEnabled }) => {
+      // reviewEnabled: Gemini uploads are opted in, or the bird judge is a local model (older servers only send cloudEvidenceEnabled)
+      if ((reviewEnabled ?? cloudEvidenceEnabled) === true) {
+        visualBirds.judge = ref => api('/api/verify-bird', { method: 'POST', signal: AbortSignal.timeout(15000),
+          headers: { 'content-type': 'application/json' }, body: JSON.stringify(ref) });
+      }
+    }).catch(() => { /* An unknown policy means local-only. */ });
+    startFeeds({
       on: (name, receive) => feedEvents.set(name, receive),
     }, { container: $('feeds'), hint: $('feedsHint'), demo: false,
-      onFeed: t => visualBirds.onFeed(t),
-      onRemove: id => { visualBirds.onRemove(id); acousticPill?.clearCamera(id); },
-      onFrameSample: sample => {
-        if (!incidentRingBuffer || !view || !socket?.connected) return;
-        incidentRingBuffer.pushFrame({ ...sample, airport: view });
-        if (selectedIncident && activeReplay && incidentRingBuffer.hasIncidentClip(selectedIncident)) {
-          activeReplay.updateClip(incidentRingBuffer.getIncidentClip(selectedIncident));
-        }
-      },
-      getOperations: () => (runwayOpsStore && view ? runwayOpsStore.activeOperations(view) : []),
-      onForecastUpdate: sources => clashBoard?.updateForecasts(sources),
-      getTrackVote: (cameraId, trackId, meta) => visualBirds.getTrackVote?.(cameraId, trackId, meta) ?? null,
+      onFeed: t => visualBirds.onFeed(t), onRemove: id => visualBirds.feeds.delete(id),
     });
     for (const [name, data] of pendingFeed.values()) deliverFeed(name, data);
     pendingFeed.clear();
-    clashBoard?.updateForecasts(feedsApi?.getForecastSources?.() ?? null);
-    button.disabled = false;
-    if (modelSelect) modelSelect.disabled = false;
-    void loadBirdPolicy();
   });
   let started = false;
   socket.on('connect', () => {
     status('Live'); $('conn').dataset.ok = '1';
-    for (const id of ['dashboard', 'sideRisk', 'cams', 'acousticPill']) $(id).hidden = false;
+    for (const id of ['dashboard', 'sideRisk', 'cams']) $(id).hidden = false;
     monitoring.setConnected(true); refreshRisk();
-    stereoLayer?.setAirport(view || null);
-    if (!exportToolbar && attachExportToolbar) {
-      exportToolbar = attachExportToolbar($('incidentExportToolbar'), {
-        doc: document,
-        win: typeof window !== 'undefined' ? window : undefined,
-        getIncidents: () => [...incidentData.values()].map(v => v.row),
-        getHourlyRows: () => latestHourlyRows,
-        getAirport: () => view,
-      });
-    }
-    if (!clashBoard && attachRunwayClashBoard) {
-      clashBoard = attachRunwayClashBoard($('clashBoardMount') || $('clashBoardCard'), {
-        document,
-        store: runwayOpsStore ?? undefined,
-        airport: view || '',
-        getAirport: () => view,
-        getForecasts: () => feedsApi?.getForecastSources?.() ?? null,
-        onClashChange: () => feedsApi?.redrawAll?.(),
-      });
-    } else {
-      clashBoard?.setAirport(view || '');
-      clashBoard?.updateForecasts(feedsApi?.getForecastSources?.() ?? null);
-    }
-    if (!acousticPill && makeAcousticHud) {
-      acousticPill = makeAcousticHud({
-        doc: document,
-        sidebarContainer: $('acousticPill'),
-        airport: view || null,
-        getCameraContainer: id => feedsApi?.getCameraContainer?.(id) ?? null,
-      });
-    } else {
-      acousticPill?.setAirport(view || null);
-    }
     void loadIncidents();
     replayAlerts();
     activateMore();
-    if (started) { void loadBirdPolicy(); return; }
+    if (started) return;
     started = true;
     if (auth.airport) void setupAirports().catch(err => {
       $('airportBox').hidden = false; $('airportSearch').disabled = true;
@@ -832,56 +616,23 @@ async function connect() {
     $('alertSync').textContent = 'Alert history unavailable while disconnected.';
     announcements.clear();
     if (evidenceUrl) { URL.revokeObjectURL(evidenceUrl); evidenceUrl = null; }
-    if (selectedIncident) { cleanupIncidentDetail(); $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
-    if (view) incidentRingBuffer?.clearAirport(view);
-    else incidentRingBuffer?.disconnect();
-    pendingStereo = null;
-    stereoLayer?.clear();
-    acousticPill?.reset();
-    clashBoard?.updateForecasts(null);
+    if (selectedIncident) { $('detail').replaceChildren(); $('detail').hidden = true; selectedIncident = null; }
     monitoring.setConnected(false); refreshRisk();
     status(['io server disconnect', 'io client disconnect'].includes(reason)
       ? 'Access ended; reload to reconnect' : 'Reconnecting…');
     $('conn').dataset.ok = '0';
-    clearBirdPolicy();
-    visualBirds?.reset();
   });
   socket.on('connect_error', err => {
-    clearBirdPolicy();
     if (err.message === 'unauthorized' || !socket.active) showStartupError(new Error('The tower did not authorize this connection.'));
     else status('Offline — reconnecting…');
     $('conn').dataset.ok = '0';
     monitoring.setConnected(false); refreshRisk();
   });
-  socket.on('camera:status', packet => {
-    if (packet?.cameraId) {
-      layers?.setCameraStatus?.(packet.cameraId, { online: Boolean(packet.online), risk: packet.online ? 'blue' : 'offline', pulse: false });
-      if (!packet.online) {
-        acousticPill?.clearCamera(packet.cameraId);
-        incidentRingBuffer?.clearCamera(packet.cameraId, { airport: view, includeIncidents: false });
-      }
-    }
-    if (monitoring.status(packet)) refreshRisk();
-  });
+  socket.on('camera:status', packet => { if (monitoring.status(packet)) refreshRisk(); });
   socket.on('camera:heartbeat', packet => monitoring.heartbeat(packet));
   socket.on('camera:frame', packet => monitoring.heartbeat(packet));
   socket.on('bot:status', packet => { if (monitoring.mode(packet)) refreshRisk(); });
-  socket.on('bot:state', packet => {
-    const accepted = monitoring.detector(packet);
-    if (accepted && packet?.cameraId) {
-      const r = packet.state?.risk;
-      layers?.setCameraStatus?.(packet.cameraId, { online: true, risk: ['green', 'yellow', 'red'].includes(r) ? r : 'blue', pulse: r === 'yellow' || r === 'red' });
-    }
-  });
-  socket.on('bot:stereo', packet => {
-    if (!packet || (packet.airport && packet.airport !== view)) return;
-    pendingStereo = packet;
-    stereoLayer?.updateStereo(packet);
-  });
-  socket.on('bot:audio', packet => {
-    if (!packet || (packet.airport && packet.airport !== view)) return;
-    acousticPill?.update(packet);
-  });
+  socket.on('bot:state', packet => monitoring.detector(packet));
   socket.on('camera:event', packet => {
     const ev = monitoring.event(packet);
     if (!ev) return;
@@ -893,26 +644,15 @@ async function connect() {
       catch (err) { $('mapNote').textContent = 'Some map markers could not be displayed.'; console.warn(err); }
     }
   });
-  socket.on('incident', packet => {
-    if (operational(packet) && packet.airport === view) {
-      captureLiveIncidentClip(packet);
-      updateIncidents([packet], 'live');
-    }
-  });
-  socket.on('alert_pending', data => {
-    captureLiveIncidentClip(data);
-    showAlert(data, { provisional: true });
-  });
-  socket.on('alert', data => {
-    captureLiveIncidentClip(data);
-    showAlert(data);
-  });
+  socket.on('incident', packet => { if (operational(packet) && packet.airport === view) updateIncidents([packet], 'live'); });
+  socket.on('alert_pending', data => showAlert(data, { provisional: true }));
+  socket.on('alert', data => showAlert(data));
   socket.on('alert_acknowledged', data => { if (scopedAlert(data)) acknowledgeAlert(data.id); });
   socket.connect();
 }
 function showStartupError(err) {
   $('conn').textContent = 'Could not connect';
-  for (const id of ['dashboard', 'sideRisk', 'cams', 'acousticPill', 'airportBox']) $(id).hidden = true;
+  for (const id of ['dashboard', 'sideRisk', 'cams', 'airportBox']) $(id).hidden = true;
   const card = panel($('auth'), '<h2>Could not open the tower</h2><p></p><button type="button">Retry</button> <a href="/tower.html?airport=">Select an airport</a>');
   card.querySelector('p').textContent = err.message;
   card.querySelector('button').onclick = () => location.reload();

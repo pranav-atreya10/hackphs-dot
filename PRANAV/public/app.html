@@ -2,216 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SkySentry App · Mobile, PWA &amp; iOS Camera Hub</title>
-<meta name="description" content="Install the SkySentry standalone web app, pair a mobile camera via QR code, launch the Tower Dashboard or Local AI Model sandbox, or build the native iOS SkySentryCam app.">
-<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SkySentry">
-<link rel="manifest" href="/manifest.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkySentry App</title>
+<meta name="description" content="The SkySentry app is still under progress.">
+<meta name="robots" content="noindex">
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"></noscript>
 <script src="/js/theme.js"></script>
 <link rel="stylesheet" href="/css/app.css">
-<link rel="stylesheet" href="/css/view-transitions.css">
-<link rel="stylesheet" href="/css/smooth-details.css">
-<link rel="stylesheet" href="/css/perf-scroll.css">
-<link rel="stylesheet" href="/css/app-hub.css">
+<style>
+  body{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
+  .top{display:flex;align-items:center;gap:8px;max-width:1080px;width:100%;margin:0 auto;padding:14px 24px}
+  main{display:grid;place-items:center;align-content:center;gap:18px;padding:24px 16px 96px;text-align:center}
+  main .mark{width:44px;height:52px}
+  main h1{margin:0;font:600 clamp(2rem,6vw,3.2rem)/1.1 var(--sans)}
+  main a{font:500 .92rem var(--sans);color:var(--mute)}
+  main a:hover{color:var(--ink)}
+</style>
 </head>
-<body class="hub-body">
-<header class="hub-top">
-  <div class="hub-top-inner">
-    <a class="brand" href="/"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
-    <nav class="hub-nav" aria-label="App navigation">
-      <a class="btn-hub ghost" href="#launchpad">Roles</a>
-      <a class="btn-hub ghost" href="#ios-native">iOS Native</a>
-      <a class="btn-hub ghost" href="/demo.html">Demos</a>
-      <a class="btn-hub ghost" href="/account.html">Account</a>
-    </nav>
-    <div class="hub-status-row">
-      <span class="hub-pill" data-pwa-sw-status data-state="checking" aria-live="polite">Offline shell: checking…</span>
-      <span class="hub-pill" data-pwa-network-status data-online="true" aria-live="polite">Network: online</span>
-      <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch theme"></button>
-    </div>
-  </div>
+<body>
+<header class="top">
+  <a class="brand" href="/"><svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>SkySentry</a>
 </header>
-
-<main class="hub-main" id="appHub">
-  <section class="hub-hero">
-    <span class="hub-eyebrow">Mobile &amp; Desktop App Hub · PWA + Native iOS</span>
-    <h1>Deploy SkySentry on phones, tablets, and tower workstations</h1>
-    <p class="hub-lead">Install the standalone Progressive Web App for instant home-screen launch and offline shell resilience, pair a mobile field camera via QR code, or build the zero-dependency native SwiftUI iPhone uploader (<code>ATHARV/ios/SkySentryCam</code>). SkySentry is an advisory monitoring prototype—only the server detector sets live tower risk, and optional Local AI Model reviews remain strictly advisory.</p>
-  </section>
-
-  <section class="hub-primary-grid" aria-label="Install and mobile pairing">
-    <article class="hub-card pwa-card">
-      <div class="hub-card-head">
-        <div>
-          <span class="hub-kicker">Installable Web App</span>
-          <h2>Standalone PWA Shell</h2>
-        </div>
-        <span class="hub-badge ok" data-pwa-standalone-badge hidden>Standalone active</span>
-      </div>
-      <p class="hub-note">Installs directly to your dock or home screen with full-bleed monochrome chrome, app shortcuts to Camera Station and Tower Dashboard, and a strict static-shell Service Worker that never caches live <code>/api/*</code>, <code>/socket.io/*</code>, or authenticated traffic.</p>
-      <div class="hub-actions">
-        <button class="btn-hub primary" type="button" data-pwa-install>Install SkySentry App</button>
-        <a class="btn-hub ghost" href="/settings.html">App Settings</a>
-      </div>
-      <p class="hub-note" data-pwa-install-note aria-live="polite">Checking browser installation support…</p>
-      <div class="ios-steps" data-pwa-ios-steps hidden>
-        <strong>Install on iPhone or iPad (Safari):</strong>
-        <ol>
-          <li>Tap the Safari <b>Share</b> icon in the address or bottom toolbar (<b>Share → Add to Home Screen</b>).</li>
-          <li>Choose <b>Add to Home Screen</b> from the sheet.</li>
-          <li>Tap <b>Add</b> to launch <b>SkySentry</b> in standalone full-screen mode.</li>
-        </ol>
-      </div>
-    </article>
-
-    <article class="hub-card qr-card">
-      <div class="hub-card-head">
-        <div>
-          <span class="hub-kicker">Field Camera Onboarding</span>
-          <h2>Instant QR Camera Pairing</h2>
-        </div>
-        <span class="hub-badge">HTTPS · No secrets in QR</span>
-      </div>
-      <div class="qr-layout">
-        <div class="qr-frame">
-          <div class="qr-box" data-camera-qr role="img" aria-label="QR code to open the SkySentry Camera Station on a phone">
-            <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><rect x="6" y="6" width="20" height="20" fill="none" stroke="#0a0a0a" stroke-width="4"/><rect x="38" y="6" width="20" height="20" fill="none" stroke="#0a0a0a" stroke-width="4"/><rect x="6" y="38" width="20" height="20" fill="none" stroke="#0a0a0a" stroke-width="4"/><rect x="13" y="13" width="6" height="6" fill="#0a0a0a"/><rect x="45" y="13" width="6" height="6" fill="#0a0a0a"/><rect x="13" y="45" width="6" height="6" fill="#0a0a0a"/><rect x="38" y="38" width="8" height="8" fill="#0a0a0a"/><rect x="50" y="50" width="8" height="8" fill="#0a0a0a"/></svg>
-          </div>
-        </div>
-        <div class="camera-url-row">
-          <p class="hub-note">Point a phone camera at this QR code to open the Camera Station directly. Camera credentials and Clerk sign-in stay on the device and are never embedded in the URL.</p>
-          <code class="camera-url" data-camera-url>/camera.html</code>
-          <div class="hub-actions">
-            <button class="btn-hub ghost" type="button" data-copy-camera-url>Copy camera link</button>
-            <a class="btn-hub" href="/camera.html">Open Camera →</a>
-          </div>
-        </div>
-      </div>
-    </article>
-  </section>
-
-  <section class="hub-section" id="launchpad" aria-labelledby="launchpadHeading">
-    <div class="hub-section-head">
-      <span class="hub-kicker">Role Launchpad</span>
-      <h2 id="launchpadHeading">Choose your station or browser sandbox</h2>
-      <p class="hub-note">Live airport monitoring separates camera capture from tower supervision; recorded demos and the Local AI Model sandbox run locally without triggering live alerts.</p>
-    </div>
-    <div class="launchpad-grid">
-      <article class="launch-card">
-        <div>
-          <span class="hub-kicker">Field Capture</span>
-          <h3>Camera Station</h3>
-          <p class="hub-note">Stream 640 px rear-camera frames from any phone or laptop to the server detector, calibrate compass heading &amp; FOV, or preview synthetic sky scenarios locally.</p>
-        </div>
-        <a class="btn-hub primary" href="/camera.html">Launch Camera Station →</a>
-      </article>
-
-      <article class="launch-card">
-        <div>
-          <span class="hub-kicker">Operations Supervision</span>
-          <h3>Tower Dashboard</h3>
-          <p class="hub-note">View server-assigned advisory risk, multi-camera HUD overlays, majority-acknowledged alert receipts, coverage cones, and opt-in Local AI Model crop verification.</p>
-        </div>
-        <a class="btn-hub primary" href="/tower.html">Open Tower Dashboard →</a>
-      </article>
-
-      <article class="launch-card">
-        <div>
-          <span class="hub-kicker">Browser Evaluation</span>
-          <h3>Local AI Model Sandbox</h3>
-          <p class="hub-note">Inspect browser-side wingbeat kinematics, synthetic flock trajectories, and the Local AI Model classifier on curated footage without touching live airport channels.</p>
-        </div>
-        <a class="btn-hub" href="/#promo">Explore Local AI Sandbox →</a>
-      </article>
-    </div>
-  </section>
-
-  <section class="hub-section" id="ios-native" aria-labelledby="iosHeading">
-    <div class="hub-section-head">
-      <span class="hub-kicker">Native iPhone App · ATHARV/ios/SkySentryCam</span>
-      <h2 id="iosHeading">Native iOS <code>SkySentryCam</code> Architecture &amp; Xcode Guide</h2>
-      <p class="hub-note">Built exclusively with <code>SwiftUI</code>, <code>AVFoundation</code>, <code>CoreImage</code>, <code>Security</code>, and <code>URLSession</code> (iOS 17+, bundle ID <code>com.skysentry.camera</code>)—zero third-party Swift packages, builds completely offline.</p>
-    </div>
-
-    <div class="spec-grid">
-      <article class="spec-card">
-        <span class="spec-mono">StreamController.swift</span>
-        <h3>Single-Flight 15 fps Uploader</h3>
-        <p>Captures 1280×720 rear-camera frames, scales long edge to 640 px (JPEG quality <code>0.6</code>) off the main thread, and enforces at most 1 HTTP upload in flight so slow cellular links shed rate instead of adding latency.</p>
-      </article>
-
-      <article class="spec-card">
-        <span class="spec-mono">Settings.swift · Keychain</span>
-        <h3>Hardware Keychain Security</h3>
-        <p>Migrates legacy defaults and stores both <code>api-key</code> and persistent UUID <code>device-id</code> in the iOS Keychain under <code>kSecAttrAccessibleWhenUnlockedThisDeviceOnly</code>—never synced to iCloud or backups.</p>
-      </article>
-
-      <article class="spec-card">
-        <span class="spec-mono">SkyAPI.swift · Ephemeral TLS</span>
-        <h3>Airport-Bound Ingress</h3>
-        <p>Uses <code>URLSessionConfiguration.ephemeral</code> (zero disk cache) posting to <code>/api/camera-config</code>, <code>/api/camera-frame</code>, and <code>/api/camera-stop</code> with <code>x-api-key</code>, <code>x-airport</code>, <code>x-camera-device</code>, and <code>x-camera-source: live</code>.</p>
-      </article>
-
-      <article class="spec-card">
-        <span class="spec-mono">OverlayView.swift · Fail-Closed</span>
-        <h3>Server-Authoritative HUD</h3>
-        <p>Renders surveyed terracotta corridor masks, bird/drone/unknown tracks, and flock ETAs across Fill and Fit modes—and automatically expires annotations via <code>remaining_ms</code> if fresh server results stop.</p>
-      </article>
-    </div>
-
-    <div class="ios-guide-stack">
-      <details class="card fold" open>
-        <summary>Build &amp; run in Xcode or Simulator (<code>ATHARV/ios</code>)</summary>
-        <div>
-          <p class="hub-note">Open <code>ATHARV/ios/SkySentryCam.xcodeproj</code> in Xcode 16+, choose the <b>SkySentryCam</b> scheme, and run on an iPhone or Simulator. In Simulator (no rear camera), select <b>Demo sky</b>—synthetic previews never upload to the live server or trigger tower alerts.</p>
-          <pre class="hub-code"><code>cd ATHARV/ios
-xcodebuild -project SkySentryCam.xcodeproj -scheme SkySentryCam \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-
-# Optional launch arguments (ephemeral, never persisted to UserDefaults/Keychain):
-xcrun simctl launch booted com.skysentry.camera \
-  -autoOpenCamera YES -autoStart YES -apiKey &lt;key&gt; -serverURL https://your-host.example -cameraId sim-1</code></pre>
-        </div>
-      </details>
-
-      <details class="card fold">
-        <summary>Provisioning on a physical iPhone with a free Apple ID</summary>
-        <div>
-          <ol class="hub-list">
-            <li>Connect the iPhone via USB-C/Lightning, tap <b>Trust</b>, and enable <b>Settings → Privacy &amp; Security → Developer Mode</b> (iOS 16+).</li>
-            <li>In Xcode, add your Apple ID under <b>Settings → Accounts</b>, then select target <b>SkySentryCam → Signing &amp; Capabilities</b> and pick your <b>Personal Team</b> (adjust bundle ID if needed, e.g. <code>com.yourname.skysentry</code>).</li>
-            <li>Build &amp; Run to the iPhone, then trust your developer certificate under <b>Settings → General → VPN &amp; Device Management</b>. Free Personal Team builds refresh every 7 days.</li>
-            <li>Use <code>https://</code> for remote deployments; iOS App Transport Security (<code>NSAllowsLocalNetworking</code>) permits plain <code>http://</code> only on isolated LAN addresses.</li>
-          </ol>
-        </div>
-      </details>
-    </div>
-  </section>
+<main>
+  <svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fill-rule="evenodd" d="M50 4 L88 16 L88 48 Q88 78 50 96 Q12 78 12 48 L12 16 Z M24 44 Q38 26 50 50 Q62 26 76 44 Q62 34 50 60 Q38 34 24 44 Z"/></svg>
+  <h1>Still Under Progress</h1>
+  <a href="/">← Back to SkySentry</a>
 </main>
-
-<footer class="hub-foot">
-  <div class="hub-foot-inner">
-    <span><b>SkySentry</b> · Advisory airfield video-monitoring prototype. Not a source of runway clearance.</span>
-    <a href="/">← Back to SkySentry Home</a>
-  </div>
-</footer>
-
-<script src="/vendor/qrcode.min.js" defer></script>
-<script type="module" src="/js/pwa-install.mjs"></script>
-<script src="/js/smooth-details.js" defer></script>
-<script src="/js/scroll-perf-guard.js" defer></script>
 <script src="/js/reveal.js" defer></script>
 </body>
 </html>

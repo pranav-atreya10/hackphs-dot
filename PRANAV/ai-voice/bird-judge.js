@@ -1,6 +1,6 @@
-// Bird judge: model-independent parts (rubric, answer format, confidence floor) plus the local-model providers.
+// Bird judge: model-independent parts (rubric, answer format, confidence floor) plus the local-model provider.
 // Everything that defines the judge lives in bird-judge.spec.json, so Gemini and a local/open model get identical
-// instructions. Which one runs is one setting: BIRD_JUDGE=gemini (default) | local | onnx | off.
+// instructions. Which one runs is one setting: BIRD_JUDGE=gemini (default) | local | off.
 //
 // "local" talks to any OpenAI-compatible chat endpoint with image support, which is what Ollama, LM Studio,
 // llama.cpp's server and vLLM all expose, e.g. LOCAL_JUDGE_URL=http://localhost:11434/v1 LOCAL_JUDGE_MODEL=qwen2.5vl:7b
@@ -84,10 +84,4 @@ async function askLocalIsBird(image, context, { url, model, key, timeoutMs = 100
   return normalizeBirdVerdict(parseJsonLoose(text), model, 'local');
 }
 
-let onnxV5Judge;
-async function askOnnxIsBird(image, context, options = {}) {
-  onnxV5Judge ??= require('./onnx-v5-judge');
-  return onnxV5Judge.askOnnxV5IsBird(image, context, options);
-}
-
-module.exports = { spec, BIRD_RUBRIC, BIRD_CONFIDENCE_FLOOR, GEMINI_SCHEMA, hintText, normalizeBirdVerdict, parseJsonLoose, localMessages, askLocalIsBird, askOnnxIsBird, localState };
+module.exports = { spec, BIRD_RUBRIC, BIRD_CONFIDENCE_FLOOR, GEMINI_SCHEMA, hintText, normalizeBirdVerdict, parseJsonLoose, localMessages, askLocalIsBird, localState };
