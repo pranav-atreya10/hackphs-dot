@@ -8,6 +8,7 @@
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <script src="/js/theme.js"></script>
@@ -18,6 +19,11 @@
 <link rel="stylesheet" href="/css/map-hud.css">
 <link rel="stylesheet" href="/css/alerts-motion.css">
 <link rel="stylesheet" href="/css/beacon-risk-motion.css">
+<link rel="stylesheet" href="/css/incident-replay.css">
+<link rel="stylesheet" href="/css/incident-tools.css">
+<link rel="stylesheet" href="/css/runway-clash.css">
+<link rel="stylesheet" href="/css/stereo-map.css">
+<link rel="stylesheet" href="/css/acoustic-hud.css">
 <style>
   main.grid{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}
   .more{background:var(--paper-2);box-shadow:none}
@@ -37,7 +43,7 @@
   .incidents{list-style:none;margin:0;padding:0;display:grid;max-height:280px;overflow:auto}
   .incidents button{all:unset;cursor:pointer;display:grid;gap:2px;width:100%;border-top:1px solid var(--line);padding:8px 2px}
   .incidents button:hover b,.incidents button:focus-visible b{text-decoration:underline;text-underline-offset:3px} .incidents b{font:500 .95rem var(--sans)} .incidents span{font:400 .78rem var(--mono);color:var(--mute)}
-  #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0}
+  #detail{display:grid;grid-template-columns:180px 1fr;gap:12px} #detail img{width:100%;border-radius:8px;background:var(--paper-2)} #detail p{margin:0} #incidentReplay{grid-column:1/-1;min-width:0}
   #beaconView{padding:8px 0} #beaconView:fullscreen{display:grid;align-content:center;justify-items:center;gap:12px;background:var(--paper,#000);padding:6vmin;text-align:center;font-size:clamp(1rem,3vw,2.4rem)}
   #beaconLamps [data-text]{display:none}
   #beaconLamps [data-arrow]{color:var(--mute)}
@@ -60,7 +66,7 @@
   .chat .meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
   .chat .chip{font:500 .7rem var(--mono);color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:2px 8px;background:var(--card)}
   .chat button.chip{cursor:pointer;color:var(--ink)} .chat button.chip:hover{opacity:1;background:var(--hover)}
-  .ask-head{display:flex;justify-content:space-between;align-items:center}
+  .ask-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
   .phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center} #qr{width:112px;height:112px;background:#fff;border-radius:8px;padding:6px;border:1px solid var(--line)}
   #qr canvas,#qr img{width:100%!important;height:100%!important}
   canvas#chart{max-height:220px}
@@ -92,7 +98,7 @@
   </div>
   <nav class="side-nav" aria-label="App"><a href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>Home</a><a href="/admin.html" data-admin-only hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Admin</a><a href="/tower.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l-1.5 6h-7z"/><path d="M9.5 10v11h5V10M6 21h12"/></svg>Tower</a><a href="/camera.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="14" height="12" rx="2"/><path d="m16.5 10.5 5-3v9l-5-3"/></svg>Camera</a></nav>
   <p class="side-label">Status</p>
-  <div class="side-status"><a class="pill side-risk" id="sideRisk" href="#risk" data-risk="unavailable" aria-live="polite" title="Current risk · jump to the risk card"><span><b>UNAVAILABLE</b> · No usable monitoring</span></a><span class="pill" id="conn" role="status">Connecting…</span><span class="pill" id="cams" hidden>No live cameras</span></div>
+  <div class="side-status"><a class="pill side-risk" id="sideRisk" href="#risk" data-risk="unavailable" aria-live="polite" title="Current risk · jump to the risk card"><span><b>UNAVAILABLE</b> · No usable monitoring</span></a><span class="pill" id="conn" role="status">Connecting…</span><span class="pill" id="cams" hidden>No live cameras</span><span class="pill acoustic-pill" id="acousticPill" role="status" aria-live="polite" hidden></span></div>
   <div class="side-airport" id="airportBox" hidden>
     <p class="side-label"><label for="airportSearch">Airport</label></p>
     <input id="airportSearch" type="search" list="airportList" placeholder="Select an airport" autocomplete="off" spellcheck="false">
@@ -117,7 +123,7 @@
       <div id="feeds"></div>
       <p class="hint" id="feedsHint">When a phone streams, its live video appears here with the bot’s boxes drawn on it.</p>
       <p class="hint" id="feedsLoad" role="status"></p>
-      <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false" aria-describedby="birdCheckHelp" disabled>Enable local video advisory</button><span class="hint" id="birdCheckStatus" role="status" data-state="off">Local video advisory off · motion detection stays active.</span></div>
+      <div class="row"><button class="ghost" id="birdCheck" type="button" aria-pressed="false" aria-describedby="birdCheckHelp" disabled>Enable local video advisory</button><select id="birdModelTier" aria-label="Local AI Model tier" disabled><option value="v4.1" selected>v4.1 Lite · 2.5 MB</option><option value="v5">v5 Large ONNX · 16.8 MB</option></select><span class="hint" id="birdCheckStatus" role="status" data-state="off">Local video advisory off · motion detection stays active.</span></div>
       <p class="hint" id="birdCheckHelp">The v4.1 model checks multiple frames in this browser without sending extra images. The live video stream still goes through the server. A track needs a complete vote before it can be classified. Results are advisory, not clearance, and do not change detector risk.</p>
       <p class="hint" id="birdCloudReviewControl" hidden>
         <label><input id="birdCloudReview" type="checkbox" autocomplete="off" aria-describedby="birdCloudReviewHelp" disabled> Allow Local AI Model review</label>
@@ -143,6 +149,7 @@
       <div><div id="qr" aria-label="QR code for the camera page"></div><p class="hint" id="qrNote" role="status"></p></div>
       <div><h2>Add a phone camera</h2><p class="hint">Scan with the phone, open the camera page, point it at the sky by the runway and press Start. <span class="mono" id="camUrl"></span></p></div>
     </section>
+    <section class="card" id="clashBoardCard" aria-label="Runway operations"><div id="clashBoardMount"></div></section>
   </div>
   <details class="card fold more" id="more">
     <summary>More: beacon, charts, reports, assistant, event log</summary>
@@ -151,7 +158,7 @@
       <div id="beaconView"><div id="beaconLamps" aria-hidden="true" hidden></div><strong id="beaconReading">UNAVAILABLE · No usable monitoring</strong><span id="beaconCoverage">Waiting for a tower connection</span></div>
       <div class="row"><button class="ghost" id="beaconBtn" type="button">Full-screen beacon</button><span class="hint" id="beaconStatus">Software beacon running · no hardware needed. Put it full screen on a spare monitor in the tower.</span></div>
     </section>
-      <section class="card"><h2>Incident reports</h2><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>
+      <section class="card"><div class="ask-head"><h2>Incident reports</h2><div id="incidentExportToolbar"></div></div><ul class="incidents" id="incidents"></ul><div id="detail" hidden></div><p class="hint" id="incNote"></p></section>
       <section class="card"><h2>Detections by hour (UTC)</h2><canvas id="chart" aria-label="Detections by hour in UTC, last 24 hours"></canvas><p class="hint" id="chartNote" role="status"></p></section>
       <section class="card"><div class="ask-head"><h2>Ask SkySentry</h2><button class="linkbtn" id="askClear" type="button" hidden>New chat</button></div>
       <ul class="chat" id="chat" aria-live="polite"></ul>
@@ -168,5 +175,6 @@
 <script src="/js/smooth-details.js" defer></script>
 <script src="/js/scroll-perf-guard.js" defer></script>
 <script src="/js/reveal.js" defer></script>
+<script type="module" src="/js/pwa-install.mjs"></script>
 </body>
 </html>

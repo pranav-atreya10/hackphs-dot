@@ -84,6 +84,7 @@ const MARK = '<svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fi
 const HEAD = `<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <script src="/js/theme.js"></script>
@@ -102,7 +103,7 @@ const loader = html => must(html, '<span class="load-title">SKYSENTRY</span>', `
 
 let filmPage = readText(join(film, 'index.html'));
 filmPage = must(filmPage, '<div class="top"><h1>SkySentry</h1>', `<div class="top"><h1>${MARK}SkySentry</h1>`, 'film.html title');
-const filmScripts = '<script src="/js/film-scrubber.js" defer></script>\n<script src="/js/film-perf-governor.js" defer></script>\n<script src="/js/smooth-details.js" defer></script>\n<script src="/js/scroll-perf-guard.js" defer></script>\n';
+const filmScripts = '<script src="/js/film-scrubber.js" defer></script>\n<script src="/js/film-perf-governor.js" defer></script>\n<script src="/js/smooth-details.js" defer></script>\n<script src="/js/scroll-perf-guard.js" defer></script>\n<script type="module" src="/js/pwa-install.mjs"></script>\n';
 filmPage = filmPage.includes('</body>') ? filmPage.replace('</body>', `${filmScripts}</body>`) : `${filmPage}\n${filmScripts}`;
 output('film.html', optimizeGeneratedHtml(themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film illustrating simulated video detection and tower warnings.'), { page: 'film' }));
 
@@ -132,6 +133,7 @@ const scripts = [
   '<script src="/js/film-perf-governor.js" defer></script>',
   '<script type="module" src="/js/landing-live-ai.mjs"></script>',
   '<script type="module">import { observeLandingFacts } from "/js/stat-counter.mjs"; observeLandingFacts();</script>',
+  '<script type="module" src="/js/pwa-install.mjs"></script>',
   '',
 ].join('\n');
 site = site.includes('</body>') ? site.replace('</body>', `${scripts}</body>`) : `${site}\n${scripts}`;

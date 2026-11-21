@@ -1,15 +1,22 @@
 import { chooseBirdCandidate, MAX_FRAME_AGE, snapshotClassifierFrame, validBox } from './bird-evidence.js';
 import { createV41Scheduler } from './skysentry-v41-schedule.mjs';
 import { createV41Votes } from './skysentry-v41-vote.mjs';
+import { createV5WorkerClient } from './skysentry-v5-client.mjs';
 
 const TICK_MS = 350;
 const REVIEW_INTERVAL_MS = 3000;
 const TUPLE_FIELDS = ['cameraId', 'streamId', 'generation', 'trackId', 'frameId', 'frameT'];
 const CLASSES = ['bird', 'drone', 'other'];
 const WAITING = 'V4.1 ready · waiting for a fresh tracked object.';
+const WAITING_V5 = 'Local v5 ONNX model active · waiting for 5-frame track votes.';
 const createDefaultClient = async () => {
   const { createV41WorkerClient } = await import('./skysentry-v41-client.mjs');
   return createV41WorkerClient();
+};
+const normalizeModelTier = rawTier => {
+  if (typeof rawTier !== 'string') return 'v4.1';
+  const lower = rawTier.trim().toLowerCase();
+  return lower === 'v5' || lower === 'v5-large-onnx' || lower === 'v5_large_onnx' ? 'v5' : 'v4.1';
 };
 
 const sameTuple = (a, b) => TUPLE_FIELDS.every(key => a?.[key] === b[key]);
@@ -23,8 +30,13 @@ const trackItem = (item, trackId) => ({ ...item, tuple: { ...item.tuple, trackId
 // Visual results are status text only. Neither observer writes labels, risk, or alerts.
 export class VisualBirdVerifier {
   constructor({ button, status, reviewStatus, onProgress = null, createWorkerClient = createDefaultClient,
+    createV5Client = createV5WorkerClient, modelSelect = null, modelTier = 'v4.1',
     now = Date.now, isHidden = () => typeof document !== 'undefined' && document.hidden }) {
-    Object.assign(this, { button, status, reviewStatus, onProgress, createWorkerClient, now, isHidden });
+    Object.assign(this, { button, status, reviewStatus, onProgress, createWorkerClient, createV5Client, modelSelect, now, isHidden });
+    this.modelTier = normalizeModelTier(modelSelect?.value || modelTier);
+    if (this.modelSelect && 'value' in this.modelSelect && this.modelSelect.value !== this.modelTier) {
+      try { this.modelSelect.value = this.modelTier; } catch {}
+    }
     this.scheduler = createV41Scheduler();
     this.votes = createV41Votes();
     this.feeds = new Map();
@@ -37,11 +49,39 @@ export class VisualBirdVerifier {
     this.reviewAt = -Infinity;
     this.reviewAttempts = new Map();
     this.reviewCameraAttempts = new Map();
+    modelSelect?.addEventListener?.('change', () => {
+      void this.setModelTier(modelSelect.value);
+    });
     button.addEventListener('click', () => this.enabled ? this.disable() : void this.enable());
     this.updateButton();
   }
 
   get enabled() { return this.run !== null; }
+
+  getModelTier() { return this.modelTier; }
+
+  setModelTier(nextTier) {
+    const normalized = normalizeModelTier(nextTier);
+    if (this.modelSelect && 'value' in this.modelSelect && this.modelSelect.value !== normalized) {
+      try { this.modelSelect.value = normalized; } catch {}
+    }
+    if (normalized === this.modelTier) return Promise.resolve(this.modelTier);
+    const wasEnabled = this.enabled;
+    this.modelTier = normalized;
+    this.votes.clear();
+    this.scheduler.clear();
+    for (const scope of this.scopes.values()) delete scope.voteFrame;
+    this.local = null;
+    if (wasEnabled) {
+      this.stopWorker();
+      return this.enable().then(() => this.modelTier);
+    }
+    this.updateButton();
+    const cameraIds = [...this.feeds.keys()];
+    if (cameraIds.length) for (const cameraId of cameraIds) this.notifyProgress(cameraId);
+    else this.notifyProgress(null);
+    return Promise.resolve(this.modelTier);
+  }
 
   notifyProgress(cameraId) {
     if (typeof this.onProgress !== 'function') return;
@@ -120,7 +160,9 @@ export class VisualBirdVerifier {
   }
 
   updateButton() {
-    this.button.textContent = this.enabled ? 'Turn off browser check' : 'Enable v4.1 browser check';
+    this.button.textContent = this.enabled
+      ? 'Turn off browser check'
+      : (this.modelTier === 'v5' ? 'Enable v5 ONNX browser check' : 'Enable v4.1 browser check');
     this.button.setAttribute('aria-pressed', String(this.enabled));
   }
 
@@ -131,17 +173,23 @@ export class VisualBirdVerifier {
 
   async enable() {
     if (this.enabled) return;
-    const run = this.run = { client: null, ready: false, job: null };
+    const tier = this.modelTier;
+    const run = this.run = { client: null, ready: false, job: null, tier };
     this.updateButton();
-    this.setStatus('Loading v4.1 in the browser… motion detection stays active.', 'loading');
+    this.setStatus(
+      tier === 'v5'
+        ? 'Loading v5 Large ONNX model… motion detection stays active.'
+        : 'Loading v4.1 in the browser… motion detection stays active.',
+      'loading',
+    );
     try {
-      const client = await this.createWorkerClient();
-      if (this.run !== run) { client.close(); return; }
+      const client = await (tier === 'v5' ? this.createV5Client() : this.createWorkerClient());
+      if (this.run !== run) { client?.close?.(); return; }
       run.client = client;
       await client.load();
       if (this.run !== run) return;
       run.ready = true;
-      this.setStatus(WAITING, 'ready');
+      this.setStatus(tier === 'v5' ? WAITING_V5 : WAITING, 'ready');
       this.schedule();
     } catch (error) {
       if (this.run === run) this.fail('load the browser model', error);
@@ -174,9 +222,10 @@ export class VisualBirdVerifier {
   }
 
   fail(action, error) {
+    const label = this.modelTier === 'v5' ? 'V5' : 'V4.1';
     this.stopWorker();
     this.setStatus('Browser check unavailable. Motion detection stays active; enable the check to retry.', 'unavailable');
-    console.warn(`V4.1 could not ${action}:`, error.message);
+    console.warn(`${label} could not ${action}:`, error.message);
   }
 
   schedule() {
@@ -263,7 +312,7 @@ export class VisualBirdVerifier {
 
   clearLocal() {
     this.local = null;
-    if (this.run?.ready) this.setStatus(WAITING, 'ready');
+    if (this.run?.ready) this.setStatus(this.modelTier === 'v5' ? WAITING_V5 : WAITING, 'ready');
   }
 
   async tick() {
@@ -325,7 +374,8 @@ export class VisualBirdVerifier {
 
   showVote({ checked, vote }) {
     const { cameraId, trackId } = checked.tuple;
-    const subject = `Browser advisory · ${cameraId}, object ${trackId}`;
+    const prefix = this.modelTier === 'v5' ? 'Browser v5 ONNX advisory' : 'Browser advisory';
+    const subject = `${prefix} · ${cameraId}, object ${trackId}`;
     if (vote.status === 'ready' && CLASSES.includes(vote.label)) {
       this.local = checked;
       this.setStatus(`${subject}: ${vote.label} (${Math.round(vote.score * 100)}% mean probability over 5 frames). Not a clearance.`, 'active');

@@ -8,6 +8,7 @@
 <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <script src="/js/theme.js"></script>
@@ -36,6 +37,7 @@
   @media (max-width:520px){.phone{grid-template-columns:1fr}}
 </style>
 <link rel="stylesheet" href="/css/camera-hud.css">
+<link rel="stylesheet" href="/css/acoustic-hud.css">
 </head>
 <body class="app">
 <aside class="side" id="side">
@@ -116,6 +118,8 @@
     </div>
     <div class="row"><button class="ghost" id="coco" type="button" aria-pressed="false">COCO-SSD check</button><button class="ghost" id="mic" type="button" aria-pressed="false">Listen for drones</button><button class="ghost" id="fakeDrone" type="button" aria-pressed="false">Simulate drone sound</button></div>
     <p class="hint" id="aiStatus">COCO-SSD and the microphone work in “Detect on this phone” mode.</p>
+    <div class="row"><button class="ghost" id="acousticTelemetryBtn" type="button" aria-pressed="false">Share rotor-hum telemetry (opt-in)</button></div>
+    <p class="hint" id="acousticTelemetryStatus" role="status" aria-live="polite">Acoustic telemetry off · raw audio never leaves this browser.</p>
     <ul class="log" id="log"></ul>
   </details>
 </main>
@@ -128,5 +132,6 @@
 <script src="/js/scroll-perf-guard.js" defer></script>
 <script src="/js/reveal.js" defer></script>
 <script src="/js/walkthrough.js" defer></script>
+<script type="module" src="/js/pwa-install.mjs"></script>
 </body>
 </html>

@@ -1,0 +1,546 @@
+{
+  "schema_version": 1,
+  "scope": "authors-only Svanstrom development SELECT (not test); FBD-SV-2024 untouched",
+  "disclosure": "Development SELECT evaluation on 35 clip-disjoint CC0 Svanstrom clips (691 contiguous 5-frame foreground windows; generated background squares excluded). Not a frozen test-set benchmark or unseen-source FBD-SV-2024 score. Per BENCHMARK_PROTOCOL.md section 5, overlapping 95% clip-bootstrap CIs are flagged 'not significant'.",
+  "git_commit_base": "ca33d55707ef7903f550fcbf895b1e63ceacef51",
+  "backbone_checkpoint_sha256": "2dfc6316ea3077d534ce7d9c4a289d0a7c3e12c06d78c7d5178734b6cec30a6b",
+  "temporal_checkpoint_sha256": "3dd84a92beed41a37e7e52e5ed3ae247331e858dc9344bc68184d6985223f540",
+  "temporal_onnx_sha256": "43dcfc303cc03c6f224cabd7b83e503307e300eb785e76c218f4f44dffb421f9",
+  "temporal_browser_json_sha256": "ddc5c2ca2500ddebbe9e0ccad8b15394edcd3ff985ddee80c615581884f4bbd3",
+  "temporal_parameters": 5453,
+  "window_size": 5,
+  "frame_stride": 3,
+  "excluded_background_rows": 3678,
+  "bootstrap": {
+    "unit": "whole source clip",
+    "resamples": 1000,
+    "seed": 0,
+    "confidence_level": 0.95
+  },
+  "parity_max_abs_logit_error": {
+    "onnx_batch1": 5.960464477539063e-08,
+    "onnx_batch4": 2.384185791015625e-07,
+    "js_float32_select_691": 1.430511474609375e-06,
+    "node_v8_js_runtime": 4.76837158203125e-07
+  },
+  "macro_balanced_accuracy": {
+    "windows": 691,
+    "clips": 35,
+    "usable_draws": 1000,
+    "uniform_5_crop_vote": {
+      "value": 0.9725206904968843,
+      "lo": 0.9443325266188365,
+      "hi": 0.9929151771390833,
+      "ci95": [
+        0.9443325266188365,
+        0.9929151771390833
+      ]
+    },
+    "temporal_kinematics_5_frame": {
+      "value": 0.9786195709930922,
+      "lo": 0.9590681136998995,
+      "hi": 0.9982905982905983,
+      "ci95": [
+        0.9590681136998995,
+        0.9982905982905983
+      ]
+    },
+    "paired_delta": {
+      "value": 0.006098880496207881,
+      "lo": -0.011540880498216752,
+      "hi": 0.03192312475995091,
+      "ci95": [
+        -0.011540880498216752,
+        0.03192312475995091
+      ]
+    },
+    "ci_overlap_rule": "not significant"
+  },
+  "results": {
+    "bird": {
+      "metric": "bird recall",
+      "windows": 137,
+      "clips": 8,
+      "first_crop": {
+        "value": 0.9197080291970803,
+        "lo": 0.8015240106112285,
+        "hi": 1.0,
+        "ci95": [
+          0.8015240106112285,
+          1.0
+        ],
+        "numerator": 126
+      },
+      "uniform_5_crop_vote": {
+        "value": 0.9781021897810219,
+        "lo": 0.9333208955223881,
+        "hi": 1.0,
+        "ci95": [
+          0.9333208955223881,
+          1.0
+        ],
+        "numerator": 134
+      },
+      "temporal_kinematics_5_frame": {
+        "value": 0.9416058394160584,
+        "lo": 0.8881118881118881,
+        "hi": 0.9861111111111112,
+        "ci95": [
+          0.8881118881118881,
+          0.9861111111111112
+        ],
+        "numerator": 129
+      },
+      "uniform_vote_vs_first_crop": {
+        "paired_delta": {
+          "value": 0.058394160583941646,
+          "lo": 0.0,
+          "hi": 0.1288124566273421,
+          "ci95": [
+            0.0,
+            0.1288124566273421
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_first_crop": {
+        "paired_delta": {
+          "value": 0.021897810218978075,
+          "lo": -0.03731343283582089,
+          "hi": 0.09701492537313428,
+          "ci95": [
+            -0.03731343283582089,
+            0.09701492537313428
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_uniform_vote": {
+        "paired_delta": {
+          "value": -0.03649635036496357,
+          "lo": -0.06587818339225161,
+          "hi": -0.007036265210309472,
+          "ci95": [
+            -0.06587818339225161,
+            -0.007036265210309472
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      }
+    },
+    "drone": {
+      "metric": "drone recall",
+      "windows": 348,
+      "clips": 17,
+      "first_crop": {
+        "value": 0.9396551724137931,
+        "lo": 0.8749910968660969,
+        "hi": 0.9856733524355301,
+        "ci95": [
+          0.8749910968660969,
+          0.9856733524355301
+        ],
+        "numerator": 327
+      },
+      "uniform_5_crop_vote": {
+        "value": 0.9540229885057471,
+        "lo": 0.8835144311706812,
+        "hi": 0.9942861212861214,
+        "ci95": [
+          0.8835144311706812,
+          0.9942861212861214
+        ],
+        "numerator": 332
+      },
+      "temporal_kinematics_5_frame": {
+        "value": 0.9942528735632183,
+        "lo": 0.9827089337175793,
+        "hi": 1.0,
+        "ci95": [
+          0.9827089337175793,
+          1.0
+        ],
+        "numerator": 346
+      },
+      "uniform_vote_vs_first_crop": {
+        "paired_delta": {
+          "value": 0.014367816091953922,
+          "lo": -0.008621310742323435,
+          "hi": 0.03735632183908055,
+          "ci95": [
+            -0.008621310742323435,
+            0.03735632183908055
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_first_crop": {
+        "paired_delta": {
+          "value": 0.05459770114942519,
+          "lo": 0.014326647564469885,
+          "hi": 0.10796223452473458,
+          "ci95": [
+            0.014326647564469885,
+            0.10796223452473458
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_uniform_vote": {
+        "paired_delta": {
+          "value": 0.04022988505747127,
+          "lo": 0.005713878713878673,
+          "hi": 0.09943890022015016,
+          "ci95": [
+            0.005713878713878673,
+            0.09943890022015016
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      }
+    },
+    "aircraft": {
+      "metric": "labelled aircraft called bird or drone",
+      "windows": 206,
+      "clips": 10,
+      "first_crop": {
+        "value": 0.03398058252427184,
+        "lo": 0.0,
+        "hi": 0.08832409775504398,
+        "ci95": [
+          0.0,
+          0.08832409775504398
+        ],
+        "numerator": 7
+      },
+      "uniform_5_crop_vote": {
+        "value": 0.014563106796116505,
+        "lo": 0.0,
+        "hi": 0.038461538461538464,
+        "ci95": [
+          0.0,
+          0.038461538461538464
+        ],
+        "numerator": 3
+      },
+      "temporal_kinematics_5_frame": {
+        "value": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ],
+        "numerator": 0
+      },
+      "uniform_vote_vs_first_crop": {
+        "paired_delta": {
+          "value": -0.019417475728155338,
+          "lo": -0.04912262006251776,
+          "hi": 0.0,
+          "ci95": [
+            -0.04912262006251776,
+            0.0
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_first_crop": {
+        "paired_delta": {
+          "value": -0.03398058252427184,
+          "lo": -0.08832409775504405,
+          "hi": 0.0,
+          "ci95": [
+            -0.08832409775504405,
+            0.0
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      },
+      "temporal_vs_uniform_vote": {
+        "paired_delta": {
+          "value": -0.014563106796116505,
+          "lo": -0.038461538461538464,
+          "hi": 0.0,
+          "ci95": [
+            -0.038461538461538464,
+            0.0
+          ]
+        },
+        "ci_overlap_rule": "not significant"
+      }
+    }
+  },
+  "size_slices_median_box_px": {
+    "lte_15px": {
+      "windows": 8,
+      "clips": 1,
+      "by_class": {
+        "drone": {
+          "metric": "drone_recall",
+          "windows": 8,
+          "clips": 1,
+          "first_crop_value": 1.0,
+          "uniform_5_crop_vote": {
+            "value": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "numerator": 8
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "numerator": 8
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        }
+      }
+    },
+    "gt_15_lte_30px": {
+      "windows": 227,
+      "clips": 22,
+      "by_class": {
+        "bird": {
+          "metric": "bird_recall",
+          "windows": 101,
+          "clips": 8,
+          "first_crop_value": 0.9207920792079208,
+          "uniform_5_crop_vote": {
+            "value": 0.9801980198019802,
+            "lo": 0.9245163601624075,
+            "hi": 1.0,
+            "ci95": [
+              0.9245163601624075,
+              1.0
+            ],
+            "numerator": 99
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 0.9603960396039604,
+            "lo": 0.9058768035516094,
+            "hi": 1.0,
+            "ci95": [
+              0.9058768035516094,
+              1.0
+            ],
+            "numerator": 97
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": -0.01980198019801982,
+            "lo": -0.05128205128205121,
+            "hi": 0.0,
+            "ci95": [
+              -0.05128205128205121,
+              0.0
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        },
+        "drone": {
+          "metric": "drone_recall",
+          "windows": 103,
+          "clips": 12,
+          "first_crop_value": 0.8737864077669902,
+          "uniform_5_crop_vote": {
+            "value": 0.8932038834951457,
+            "lo": 0.7523214285714286,
+            "hi": 1.0,
+            "ci95": [
+              0.7523214285714286,
+              1.0
+            ],
+            "numerator": 92
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 0.9805825242718447,
+            "lo": 0.942846865364851,
+            "hi": 1.0,
+            "ci95": [
+              0.942846865364851,
+              1.0
+            ],
+            "numerator": 101
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": 0.08737864077669899,
+            "lo": 0.0,
+            "hi": 0.19301226366888086,
+            "ci95": [
+              0.0,
+              0.19301226366888086
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        },
+        "aircraft_other": {
+          "metric": "aircraft_false_alarm",
+          "windows": 23,
+          "clips": 2,
+          "first_crop_value": 0.21739130434782608,
+          "uniform_5_crop_vote": {
+            "value": 0.08695652173913043,
+            "lo": 0.0,
+            "hi": 0.09523809523809523,
+            "ci95": [
+              0.0,
+              0.09523809523809523
+            ],
+            "numerator": 2
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "ci95": [
+              0.0,
+              0.0
+            ],
+            "numerator": 0
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": -0.08695652173913043,
+            "lo": -0.09523809523809523,
+            "hi": 0.0,
+            "ci95": [
+              -0.09523809523809523,
+              0.0
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        }
+      }
+    },
+    "gt_30px": {
+      "windows": 456,
+      "clips": 30,
+      "by_class": {
+        "bird": {
+          "metric": "bird_recall",
+          "windows": 36,
+          "clips": 5,
+          "first_crop_value": 0.9166666666666666,
+          "uniform_5_crop_vote": {
+            "value": 0.9722222222222222,
+            "lo": 0.9285714285714286,
+            "hi": 1.0,
+            "ci95": [
+              0.9285714285714286,
+              1.0
+            ],
+            "numerator": 35
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 0.8888888888888888,
+            "lo": 0.8222222222222222,
+            "hi": 1.0,
+            "ci95": [
+              0.8222222222222222,
+              1.0
+            ],
+            "numerator": 32
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": -0.08333333333333337,
+            "lo": -0.14292207792207795,
+            "hi": 0.0,
+            "ci95": [
+              -0.14292207792207795,
+              0.0
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        },
+        "drone": {
+          "metric": "drone_recall",
+          "windows": 237,
+          "clips": 16,
+          "first_crop_value": 0.9662447257383966,
+          "uniform_5_crop_vote": {
+            "value": 0.9789029535864979,
+            "lo": 0.9433895198068497,
+            "hi": 0.9966788301290779,
+            "ci95": [
+              0.9433895198068497,
+              0.9966788301290779
+            ],
+            "numerator": 232
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "numerator": 237
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": 0.021097046413502074,
+            "lo": 0.0033211698709220833,
+            "hi": 0.0566104801931503,
+            "ci95": [
+              0.0033211698709220833,
+              0.0566104801931503
+            ]
+          },
+          "ci_overlap_rule": "significant"
+        },
+        "aircraft_other": {
+          "metric": "aircraft_false_alarm",
+          "windows": 183,
+          "clips": 9,
+          "first_crop_value": 0.01092896174863388,
+          "uniform_5_crop_vote": {
+            "value": 0.00546448087431694,
+            "lo": 0.0,
+            "hi": 0.016574585635359115,
+            "ci95": [
+              0.0,
+              0.016574585635359115
+            ],
+            "numerator": 1
+          },
+          "temporal_kinematics_5_frame": {
+            "value": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "ci95": [
+              0.0,
+              0.0
+            ],
+            "numerator": 0
+          },
+          "paired_delta_vs_uniform_vote": {
+            "value": -0.00546448087431694,
+            "lo": -0.016574585635359115,
+            "hi": 0.0,
+            "ci95": [
+              -0.016574585635359115,
+              0.0
+            ]
+          },
+          "ci_overlap_rule": "not significant"
+        }
+      }
+    }
+  }
+}

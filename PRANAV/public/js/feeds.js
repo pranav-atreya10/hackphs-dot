@@ -248,6 +248,9 @@ export function startFeeds(socket, {
   onFeed,
   onRemove,
   onDemoState,
+  onFrameSample,
+  getOperations,
+  onForecastUpdate,
   demo = true,
   getTrackVote,
   hudRenderer,
@@ -324,9 +327,91 @@ export function startFeeds(socket, {
     resetHud(t);
     canvasSizer.unobserve(t?.overlay);
     if (t === emptyDemo) { removeEmptyDemo(); emptyDemoClosed = true; }
-    else { dismissed.add(t.cameraId); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(t.cameraId); onRemove?.(t.cameraId); }
+    else { dismissed.add(t.cameraId); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(t.cameraId); onRemove?.(t.cameraId); notifyForecastUpdate(); }
     hint.hidden = tiles.size > 0 || Boolean(emptyDemo);
     showRestore();
+  }
+
+  function syncTileCorridor(t) {
+    if (!t?.hud?.forecaster) return false;
+    const isDemo = Boolean(t.demo) || t.source === 'demo';
+    const corridor = !isDemo && !t.offline && t.config?.surveyId ? t.config.corridor : null;
+    const surveyed = Boolean(corridor?.length > 2 && t.config?.surveyId);
+    const corridorKey = surveyed ? `${t.config.surveyId}:${JSON.stringify(corridor)}` : '';
+    if (t.hud.corridorKey !== corridorKey) {
+      t.hud.corridorKey = corridorKey;
+      t.hud.forecaster.setCorridor(
+        surveyed ? corridor : null,
+        surveyed ? { surveyId: String(t.config.surveyId), surveyed: true } : { surveyed: false, demo: isDemo },
+      );
+    }
+    return surveyed;
+  }
+
+  function getForecastSources() {
+    const sources = new Map();
+    for (const [cameraId, t] of tiles.entries()) {
+      if (!t || t.offline || t.placeholder) continue;
+      const isDemo = Boolean(t.demo) || t.source === 'demo';
+      const surveyed = syncTileCorridor(t) && !isDemo && Boolean(t.hud?.forecaster?.hasCorridor?.());
+      sources.set(cameraId, {
+        cameraId,
+        cameraLabel: t.config?.cameraLabel || t.config?.label || cameraId,
+        surveyId: surveyed ? String(t.config.surveyId) : null,
+        demo: isDemo,
+        corridorSurveyed: surveyed,
+        forecaster: surveyed ? t.hud.forecaster : null,
+      });
+    }
+    return sources;
+  }
+
+  function notifyForecastUpdate() {
+    if (typeof onForecastUpdate !== 'function') return;
+    try {
+      onForecastUpdate(getForecastSources());
+    } catch (err) {
+      console.warn('Forecast update listener failed:', err);
+    }
+  }
+
+  function getCameraContainer(cameraId) {
+    if (typeof cameraId !== 'string' || !cameraId) return null;
+    const t = tiles.get(cameraId);
+    if (!t || t.placeholder || t.offline) return null;
+    return t.el ?? null;
+  }
+
+  function emitFrameSample(t, stateOverride = null) {
+    if (typeof onFrameSample !== 'function' || !t || t.demo || t.placeholder || t.offline || !t.displayedFrame) return;
+    if (t.birdEvidence?.frame !== t.displayedFrame || t.lastSampledFrame === t.displayedFrame) return;
+    const active = stateOverride || t.birdEvidence?.state || t.detector.current();
+    const rawGen = t.birdEvidence?.generation ?? active?.generation ?? t.detector.generation ?? null;
+    const generation = rawGen !== null && rawGen !== undefined && String(rawGen).trim() ? String(rawGen).trim() : null;
+    const streamId = t.displayedFrame.streamId ?? t.birdStreamId ?? null;
+    if (!streamId || !generation) return;
+    t.lastSampledFrame = t.displayedFrame;
+    const width = t.video?.width || t.displayedFrame.bitmap?.width || 0;
+    const height = t.video?.height || t.displayedFrame.bitmap?.height || 0;
+    const rawTracks = Array.isArray(active?.tracks) ? active.tracks : [];
+    const frameAt = Number.isFinite(t.displayedFrame.frameReceivedAt) ? t.displayedFrame.frameReceivedAt : Date.now();
+    const atMs = Math.max(t.lastSampleAtMs || 0, frameAt);
+    t.lastSampleAtMs = atMs;
+    try {
+      onFrameSample({
+        cameraId: t.cameraId,
+        streamId: String(streamId),
+        generation,
+        frameId: t.displayedFrame.frameId ?? null,
+        atMs,
+        frame: t.video,
+        width,
+        height,
+        tracks: rawTracks,
+      });
+    } catch (err) {
+      console.warn('Frame sample listener failed:', err);
+    }
   }
 
   function tile(cameraId) {
@@ -379,6 +464,7 @@ export function startFeeds(socket, {
     else if (t.frames && Date.now() - t.lastFrameAt < 3000) { stopDemo(t); updateServerEvidence(t, true); }   // live video is flowing: show it
     else if (!t.demo) startDemo(t);                                                                             // nothing live yet: keep demo until it arrives
     label(t);
+    if (changed) notifyForecastUpdate();
   }
 
   // ---------- demo footage ----------
@@ -467,11 +553,13 @@ export function startFeeds(socket, {
     t.birdEvidence = null;
     t.birdPairs.clear(options);
     t.displayedFrame = null;
+    t.lastSampledFrame = null;
   }
 
   function invalidateEvidence(t) {
     t.birdEpoch = (t.birdEpoch || 0) + 1;
     t.pending = null;
+    t.lastSampleAtMs = 0;
     clearBirdEvidence(t);
     resetHud(t);
     if (!t.demo) draw(t, null);
@@ -569,6 +657,11 @@ export function startFeeds(socket, {
       frame: f,
     };
     if (!activeTracks.length) {
+      const isNewEmptyState = state !== t.hud.lastState || frameT !== t.hud.frameT;
+      if (isNewEmptyState) {
+        syncTileCorridor(t);
+        t.hud.forecaster.update([], frameT);
+      }
       t.hud.tracks.clear();
       t.hud.reticles.clear();
       t.hud.forecasts.clear();
@@ -588,19 +681,12 @@ export function startFeeds(socket, {
     const builtInAnimating = stepBuiltInHud(t.hud, activeTracks, now, animate, isNewState);
     t.hud.reticles.step(activeTracks, now, { reducedMotion: !animate });
     if (isNewState) {
-      const surveyed = Boolean(corridor?.length > 2 && t.config?.surveyId);
-      const corridorKey = surveyed ? `${t.config.surveyId}:${JSON.stringify(corridor)}` : '';
-      if (t.hud.corridorKey !== corridorKey) {
-        t.hud.corridorKey = corridorKey;
-        t.hud.forecaster.setCorridor(
-          surveyed ? corridor : null,
-          surveyed ? { surveyId: t.config.surveyId, surveyed: true } : { surveyed: false },
-        );
-      }
+      const surveyed = syncTileCorridor(t);
       t.hud.forecaster.update(activeTracks, frameT);
       t.hud.forecasts.clear();
+      const ops = !t.demo && surveyed && typeof getOperations === 'function' ? (getOperations() || []) : [];
       for (const tr of activeTracks) {
-        const fan = t.hud.forecaster.coneFan(tr.id);
+        const fan = t.hud.forecaster.coneFan(tr.id, ops.length ? { operations: ops } : undefined);
         if (fan) t.hud.forecasts.set(tr.id, fan);
       }
     }
@@ -713,9 +799,11 @@ export function startFeeds(socket, {
     t.config = cfg;
     t.detector.reset();
     invalidateEvidence(t);
+    syncTileCorridor(t);
     t.botState = null;
     label(t);
     onFeed?.(t);
+    notifyForecastUpdate();
   });
   socket.on('bot:status', s => {
     if (dismissed.has(s.cameraId)) return;
@@ -734,6 +822,8 @@ export function startFeeds(socket, {
     if (!t.demo) {
       t.birdPairs.addState(result);
       updateServerEvidence(t, true);
+      emitFrameSample(t, result.state);
+      notifyForecastUpdate();
     }
     onFeed?.(t);
   });
@@ -744,8 +834,9 @@ export function startFeeds(socket, {
     if (!online) invalidateEvidence(t);
     refreshDetection(t);
     onFeed?.(t);
+    if (!online) notifyForecastUpdate();
     if (online) return;
-    setTimeout(() => { if (tiles.get(cameraId) === t && t.offline && Date.now() - t.lastFrameAt > 9000) { resetHud(t); canvasSizer.unobserve(t.overlay); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
+    setTimeout(() => { if (tiles.get(cameraId) === t && t.offline && Date.now() - t.lastFrameAt > 9000) { resetHud(t); canvasSizer.unobserve(t.overlay); stopDemo(t); clearBirdEvidence(t); t.el.remove(); tiles.delete(cameraId); onRemove?.(cameraId); notifyForecastUpdate(); hint.hidden = tiles.size > 0; setTimeout(showEmptyDemo, DEMO_AFTER_MS); } }, 10000);
   });
   socket.on('disconnect', () => {
     for (const t of tiles.values()) {
@@ -756,6 +847,7 @@ export function startFeeds(socket, {
       refreshDetection(t);
       onFeed?.(t);
     }
+    notifyForecastUpdate();
   });
   const refreshTimer = setInterval(() => { for (const t of tiles.values()) refreshDetection(t); }, 500);
   socket.on('camera:frame', ({ cameraId, streamId, frameId, t: ft, jpeg }) => {
@@ -764,6 +856,7 @@ export function startFeeds(socket, {
     if (t.demo && t.source !== 'demo') stopDemo(t);   // real video beats automatic demo footage immediately
     const streamChanged = t.birdStreamId !== streamId;
     if (streamChanged) {
+      t.lastSampleAtMs = 0;
       clearBirdEvidence(t, { keepStates: true });
       resetHud(t);
       t.birdStreamId = streamId;
@@ -835,6 +928,7 @@ export function startFeeds(socket, {
         t.displayedFrame = frame;
         t.birdPairs.addFrame(frame);
         updateServerEvidence(t, true);
+        emitFrameSample(t);
         onFeed?.(t);
       }
     } finally {
@@ -856,5 +950,5 @@ export function startFeeds(socket, {
     canvasSizer.disconnect();
   }
 
-  return { redraw, redrawAll, stop };
+  return { redraw, redrawAll, getForecastSources, getCameraContainer, stop };
 }
