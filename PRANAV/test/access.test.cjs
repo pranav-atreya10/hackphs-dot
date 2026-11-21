@@ -2,7 +2,7 @@ const { EventEmitter } = require("node:events");
 const { setImmediate } = require("node:timers/promises");
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { accessConfig, createAccess, createSocketAccess } = require("../access");
+const { accessConfig, resolveRuntimeAccess, createAccess, createSocketAccess } = require("../access");
 const { assignInitialRole, createRoleRequests } = require("../role-requests");
 const { airportFilter, hourlyPipeline } = require("../airport-history");
 
@@ -51,6 +51,75 @@ test("production rejects missing dashboard authorization and unbound keys", () =
   assert.throws(() => accessConfig({ ...env, TOWER_API_KEY: "fixture-tower" }, airports), /TOWER_API_AIRPORT/);
   assert.throws(() => accessConfig({ ...env, CLERK_SECRET_KEY: "fixture" }, airports), /both Clerk keys/);
   assert.deepEqual(accessConfig({ ...env, TOWER_API_KEY: "fixture-tower", TOWER_API_AIRPORT: "BBB", ALLOW_UNAUTHENTICATED_TOWER: "true" }, airports), { demo: false });
+});
+
+test("resolveRuntimeAccess never throws and fail-closes unbound, duplicate, or partial credentials", () => {
+  const unboundCam = resolveRuntimeAccess({
+    NODE_ENV: "production",
+    CAMERA_API_KEY: "secret-cam",
+    CAMERA_API_AIRPORT: "",
+    CLERK_SECRET_KEY: "sk_test_1",
+    CLERK_PUBLISHABLE_KEY: "pk_test_1",
+    MONGODB_URI: "mongodb://127.0.0.1:1",
+  }, new Map());
+  assert.equal(unboundCam.demo, false);
+  assert.equal(unboundCam.clerkEnabled, true);
+  assert.equal(unboundCam.cameraKey, "");
+  assert.equal(unboundCam.cameraAirport, "");
+  assert.equal(unboundCam.cameraKeyMisconfigured, true);
+  assert.equal(unboundCam.towerKey, "");
+  assert.equal(unboundCam.towerKeyMisconfigured, false);
+  assert.ok(unboundCam.warnings.some((w) => /CAMERA_API_AIRPORT/.test(w)));
+
+  const duplicateKeys = resolveRuntimeAccess({
+    NODE_ENV: "production",
+    CAMERA_API_KEY: "same-key",
+    CAMERA_API_AIRPORT: "AAA",
+    TOWER_API_KEY: "same-key",
+    TOWER_API_AIRPORT: "BBB",
+  }, airports);
+  assert.equal(duplicateKeys.cameraKey, "");
+  assert.equal(duplicateKeys.towerKey, "");
+  assert.equal(duplicateKeys.cameraKeyMisconfigured, true);
+  assert.equal(duplicateKeys.towerKeyMisconfigured, true);
+  assert.ok(duplicateKeys.warnings.includes("camera and tower keys must be distinct"));
+
+  const clerkNoMongoProd = resolveRuntimeAccess({
+    NODE_ENV: "production",
+    CAMERA_API_KEY: "cam-key",
+    CAMERA_API_AIRPORT: "AAA",
+    CLERK_SECRET_KEY: "sk_test_1",
+    CLERK_PUBLISHABLE_KEY: "pk_test_1",
+    MONGODB_URI: "   ",
+  }, airports);
+  assert.equal(clerkNoMongoProd.clerkEnabled, false);
+  assert.ok(clerkNoMongoProd.warnings.includes("Clerk in production requires MONGODB_URI"));
+
+  const partialClerkDev = resolveRuntimeAccess({
+    NODE_ENV: "development",
+    CLERK_SECRET_KEY: "sk_only",
+    ALLOW_UNAUTHENTICATED_TOWER: "true",
+  }, airports);
+  assert.equal(partialClerkDev.clerkEnabled, false);
+  assert.equal(partialClerkDev.demo, false);
+  assert.ok(partialClerkDev.warnings.includes("configure both Clerk keys or neither"));
+
+  const validProd = resolveRuntimeAccess({
+    NODE_ENV: "production",
+    CAMERA_API_KEY: "cam-key",
+    CAMERA_API_AIRPORT: "AAA",
+    TOWER_API_KEY: "tower-key",
+    TOWER_API_AIRPORT: "BBB",
+    ALLOW_UNAUTHENTICATED_TOWER: "true",
+  }, airports);
+  assert.equal(validProd.demo, false);
+  assert.equal(validProd.cameraKey, "cam-key");
+  assert.equal(validProd.cameraAirport, "AAA");
+  assert.equal(validProd.towerKey, "tower-key");
+  assert.equal(validProd.towerAirport, "BBB");
+  assert.equal(validProd.cameraKeyMisconfigured, false);
+  assert.equal(validProd.towerKeyMisconfigured, false);
+  assert.deepEqual(validProd.warnings, []);
 });
 
 test("HTTP grants and socket grants agree on exact airport scope", async () => {

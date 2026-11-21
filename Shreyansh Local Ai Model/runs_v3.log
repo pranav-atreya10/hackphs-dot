@@ -1,0 +1,14 @@
+start from runs/v2/best.pt; samples per epoch 129322 (bird, drone, other = [24856, 42125, 62341]); Svanström train 23282 x2, select 7218
+/home/claude/pranav-atreya10/hackphs-dot/Shreyansh Local Ai Model/train.py:54: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/utils/tensor_numpy.cpp:208.)
+  return torch.from_numpy(x_uint8).permute(0, 3, 1, 2).float().div_(255)
+epoch 1/10  loss 0.481  mendeley holdout 0.9304  svan select 0.8747 (bird 0.940 drone 0.781 other 0.904)  | bird+drone by size: 7-15px: 0.571 (n=35)  15-9999px: 0.830 (n=2452)  [108s]
+epoch 2/10  loss 0.454  mendeley holdout 0.9281  svan select 0.9111 (bird 0.922 drone 0.904 other 0.908)  | bird+drone by size: 7-15px: 0.943 (n=35)  15-9999px: 0.908 (n=2452)  [235s]
+epoch 3/10  loss 0.435  mendeley holdout 0.9374  svan select 0.9111 (bird 0.931 drone 0.862 other 0.940)  | bird+drone by size: 7-15px: 0.486 (n=35)  15-9999px: 0.887 (n=2452)  [407s]
+epoch 4/10  loss 0.425  mendeley holdout 0.9277  svan select 0.9009 (bird 0.812 drone 0.962 other 0.929)  | bird+drone by size: 7-15px: 0.429 (n=35)  15-9999px: 0.926 (n=2452)  [517s]
+epoch 5/10  loss 0.411  mendeley holdout 0.9415  svan select 0.9196 (bird 0.860 drone 0.960 other 0.939)  | bird+drone by size: 7-15px: 0.571 (n=35)  15-9999px: 0.936 (n=2452)  [622s]
+epoch 6/10  loss 0.402  mendeley holdout 0.9463  svan select 0.9353 (bird 0.917 drone 0.945 other 0.943)  | bird+drone by size: 7-15px: 0.600 (n=35)  15-9999px: 0.942 (n=2452)  [728s]
+epoch 7/10  loss 0.389  mendeley holdout 0.9460  svan select 0.9260 (bird 0.931 drone 0.895 other 0.952)  | bird+drone by size: 7-15px: 0.457 (n=35)  15-9999px: 0.912 (n=2452)  [833s]
+epoch 8/10  loss 0.380  mendeley holdout 0.9485  svan select 0.9240 (bird 0.915 drone 0.910 other 0.947)  | bird+drone by size: 7-15px: 0.514 (n=35)  15-9999px: 0.917 (n=2452)  [940s]
+epoch 9/10  loss 0.372  mendeley holdout 0.9505  svan select 0.9287 (bird 0.913 drone 0.927 other 0.946)  | bird+drone by size: 7-15px: 0.543 (n=35)  15-9999px: 0.929 (n=2452)  [1049s]
+epoch 10/10  loss 0.370  mendeley holdout 0.9508  svan select 0.9276 (bird 0.920 drone 0.917 other 0.945)  | bird+drone by size: 7-15px: 0.571 (n=35)  15-9999px: 0.923 (n=2452)  [1160s]
+done; best score 0.9408

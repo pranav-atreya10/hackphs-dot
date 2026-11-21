@@ -480,7 +480,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
       <div class="callout node" data-a="n_phone" data-n="0"><div class="cin fi" style="--d:.6s"><i class="ln"></i><i class="dot"></i><div class="lb">Camera station<small>Streams JPEGs, no drone audio</small></div></div></div>
       <div class="callout node l" data-a="n_server" data-n="1"><div class="cin fi" style="--d:.9s"><i class="ln"></i><i class="dot"></i><div class="lb">API server<small>Evaluates video and assigns risk</small></div></div></div>
       <div class="callout node" data-a="n_s0" data-n="2"><div class="cin fi" style="--d:1.1s"><i class="ln"></i><i class="dot"></i><div class="lb">Event log<small>Confirmed receipts support replay</small></div></div></div>
-      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Gemini<small>Optional advisory review</small></div></div></div>
+      <div class="callout node" data-a="n_s1" data-n="3"><div class="cin fi" style="--d:1.2s"><i class="ln"></i><i class="dot"></i><div class="lb">Local AI Model<small>In-browser advisory check</small></div></div></div>
       <div class="callout node" data-a="n_s2" data-n="4"><div class="cin fi" style="--d:1.3s"><i class="ln"></i><i class="dot"></i><div class="lb">MongoDB Atlas<small>Reports, with optional image retention</small></div></div></div>
       <div class="callout node" data-a="n_s3" data-n="5"><div class="cin fi" style="--d:1.4s"><i class="ln"></i><i class="dot"></i><div class="lb">Solana devnet<small>Optional report hash comparison</small></div></div></div>
       <div class="callout node" data-a="n_s4" data-n="6"><div class="cin fi" style="--d:1.5s"><i class="ln"></i><i class="dot"></i><div class="lb">Browser voice<small>Opt-in; fresh alerts only</small></div></div></div>
@@ -493,7 +493,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
         <header><span>SKYSENTRY TOWER · RUNWAY-EAST</span><span class="live">● LIVE</span><span id="clock">14:32:05</span><span class="demo">DEMO DATA</span><span class="pill">RISK: RED</span></header>
         <div class="col">
           <div class="tile"><span class="k y"><span>VOICE ALERT · BROWSER VOICE</span><span>▶ PLAYING</span></span><div class="voice"><span id="typed"></span><i class="cur"></i></div></div>
-          <div class="tile fu" style="--d:5s"><span class="k"><span>GEMINI INCIDENT REPORT</span><span>14:32:09</span></span><div class="report">At 2:32 PM, eight geese were detected east of the runway, moving toward the active runway. Confidence high. Risk level red.</div></div>
+          <div class="tile fu" style="--d:5s"><span class="k"><span>LOCAL AI MODEL INCIDENT REPORT</span><span>14:32:09</span></span><div class="report">At 2:32 PM, eight geese were detected east of the runway, moving toward the active runway. Confidence high. Risk level red.</div></div>
           <div class="tile fu" style="--d:6s"><span class="k"><span>ALERT LOG</span><span>LAST 3</span></span>
             <div class="log">
               <div><span>14:32:05</span><em style="background:#d13b2f">RED</em><span>Birds · 8 · toward runway</span></div>
@@ -524,7 +524,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
         <h2 class="fu" style="--d:.3s">SkySentry</h2>
         <p class="fu" style="--d:.9s">An advisory video-monitoring prototype. Not a source of runway clearance.</p>
         <span class="sign fi" style="--d:2s">BUILT IN 24 HOURS · HACKPHS 2026</span>
-        <span class="sp fi" style="--d:2.6s">Gemini · DigitalOcean · MongoDB Atlas · Solana</span>
+        <span class="sp fi" style="--d:2.6s">Local AI Model · DigitalOcean · MongoDB Atlas · Solana</span>
       </div>
     </div>
   </div>
@@ -607,7 +607,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
         <li><em>Socket.IO</em><b>Show the warning</b><span>An in-session warning can arrive before storage confirms it.</span></li>
         <li><em>Browser voice</em><b>Speak fresh alerts only</b><span>Operators can turn sound on. Acknowledgment and replay do not trigger speech.</span></li>
         <li><em>MongoDB Atlas</em><b>Confirm storage</b><span>Stored receipts support acknowledgment and replay. The hourly chart counts stored detections.</span></li>
-        <li><em>Gemini</em><b>Optionally review evidence</b><span>Reports use detector readings. Cloud image review requires separate opt-in and does not change warnings.</span></li>
+        <li><em>Local AI Model</em><b>Optionally review evidence</b><span>Reports use detector readings. The Local AI Model checks tracks in the browser; optional server review requires separate opt-in and does not change warnings.</span></li>
         <li><em>MongoDB Atlas</em><b>Save the report when available</b><span>Report work can be delayed or incomplete; incident snapshot retention is off unless separately enabled.</span></li>
         <li><em>Solana devnet</em><b>Optionally verify a report hash</b><span>A confirmed hash can be compared with the exact report text. It does not protect stored records from edits or prove the report accurate.</span></li>
       </ol>
@@ -618,7 +618,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="sec-head"><span class="eyebrow-s">Built with</span><h2>The services behind the prototype</h2></div>
     <div class="stack">
       <div><b>Browser voice</b><span>Opt-in speech for new alerts</span></div>
-      <div><b>Gemini</b><span>Optional image review and text assistance</span></div>
+      <div><b>Local AI Model</b><span>In-browser bird and drone verification</span></div>
       <div><b>DigitalOcean</b><span>Hosts the server and keeps API keys safe</span></div>
       <div><b>MongoDB Atlas</b><span>Alert receipts, incident reports and hourly charts</span></div>
       <div><b>Solana devnet</b><span>Optional drone-report hash comparison</span></div>
@@ -630,7 +630,7 @@ html{scroll-behavior:smooth;scroll-padding-top:72px}
     <div class="faq">
       <details><summary>How accurate is it?</summary><p>The film and synthetic scenarios illustrate the software; they do not establish field accuracy or airport qualification.</p></details>
       <details><summary>Can it monitor the whole airport?</summary><p>No. It can only assess usable video in view. Poor visibility, distance or a stalled detector can leave coverage gaps. Night performance is not established.</p></details>
-      <details><summary>What about privacy?</summary><p>Live video goes to the SkySentry server. Incident snapshot retention and sending eligible camera images to Google Gemini are separate settings, both off by default. Enabling one does not authorize the other.</p></details>
+      <details><summary>What about privacy?</summary><p>Live video goes to the SkySentry server, while the Local AI Model checks tracks directly in your browser. Incident snapshot retention and sending eligible camera images for optional AI review are separate settings, both off by default. Enabling one does not authorize the other.</p></details>
       <details><summary>What does a devnet hash prove?</summary><p>It lets someone compare the fingerprint of exact report text against a confirmed memo. It is not tamper-proof storage, proof of accuracy, or a chain of custody.</p></details>
     </div>
   </section>
@@ -882,7 +882,8 @@ async function startFilm({userInitiated = false} = {}) {
     W.spon.forEach((s, i) => W.anchors["n_s"+i] = s.p.clone().add(new T.Vector3(20, 0, -6)));
     detailReady = import("./film-enhancements.js").then(m => m.enhanceFilm({
       T, scene, renderer, camera, W, sun, ground, runwayMesh, taxiMesh, apronMesh,
-      trees, bush, station, phone, TW, std, basic, mesh, box, resize
+      trees, bush, station, phone, TW, std, basic, mesh, box, resize,
+      onBackgroundSettled: () => { if (ready && !playing) frame(); }
     }));
   }
 
@@ -1059,6 +1060,12 @@ async function startFilm({userInitiated = false} = {}) {
     segs.forEach((g, i) => { g.classList.toggle("cur", i === idx); g.firstChild.firstChild.style.width = (i < idx ? 100 : i > idx ? 0 : (t/s.dur)*100) + "%"; });
   }
   function loop(now) {
+    if (playing && ready && document.documentElement.dataset.scrolling === "1") {
+      perfStamp += now - last;
+      last = now;
+      requestAnimationFrame(loop);
+      return;
+    }
     if(playing)perfFrames++;
     if (now - perfStamp > 1200) {
       const fps = Math.round(perfFrames * 1000 / (now - perfStamp));
@@ -1145,8 +1152,32 @@ function showFilmError(error) {
 }
 
 const film = document.getElementById("film");
+const filmPoster = document.getElementById("filmPoster");
 const launch = document.getElementById("filmLaunch");
 const status = document.getElementById("filmLaunchStatus");
+let warmFetched = false;
+const warmFilmAssets = () => {
+  if (warmFetched || filmPoster?.dataset.warmFetched === "1" || navigator.connection?.saveData) return;
+  warmFetched = true;
+  if (filmPoster) filmPoster.dataset.warmFetched = "1";
+  warmObserver?.disconnect();
+  for (const url of [
+    "./vendor/three.module.js",
+    "./film-enhancements.js",
+    "./details.js",
+    "./cinema.js",
+    "./assets/narrow-body-airliner.glb",
+    "./assets/derelict_airfield_01_1k.hdr"
+  ]) fetch(url, {priority: "low"}).catch(() => {});
+};
+const warmObserver = typeof IntersectionObserver === "function" && filmPoster
+  ? new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) warmFilmAssets(); }, {rootMargin: "300px"})
+  : null;
+if (filmPoster) {
+  warmObserver?.observe(filmPoster);
+  filmPoster.addEventListener("pointerenter", warmFilmAssets, {once: true, passive: true});
+  filmPoster.addEventListener("focusin", warmFilmAssets, {once: true});
+}
 let launching = false, failed = false;
 launch.addEventListener("click", async event => {
   if (failed || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;

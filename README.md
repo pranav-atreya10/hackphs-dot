@@ -4,17 +4,17 @@ SkySentry is a video-only monitoring prototype. An authorized camera sends JPEGs
 
 **Live site:** https://lancerhacks-rvs8r.ondigitalocean.app (deployed from `main` on DigitalOcean App Platform)
 
-> ## ⚠️ To do before the live site updates (Pranav, at home)
-> Since PR #56 the server **refuses to start in production** unless the camera key is tied to one airport, so
-> DigitalOcean keeps running an old version (from before PRs #58/#59) until this is fixed. In DigitalOcean → the app →
-> Settings → web → Environment Variables (tick "Encrypt" for secrets), add:
+> ## ⚠️ DigitalOcean environment variable checklist (Pranav)
+> Production now boots cleanly on DigitalOcean App Platform (`GET /health` returns `200`), while keeping any unbound
+> `CAMERA_API_KEY` or `TOWER_API_KEY` **fail-closed disabled** until bound to a registered airport. To enable API-key
+> camera/tower access, open DigitalOcean → the app → Settings → web → Environment Variables (tick "Encrypt" for secrets)
+> and set:
 > 1. `CAMERA_API_AIRPORT` = an airport code listed in `AIRPORT_CODES` (e.g. `KPCT`). If `AIRPORT_CODES` is empty there,
->    add it too, e.g. `KPCT=<long secret join code>`.
-> 2. If `TOWER_API_KEY` is set: `TOWER_API_AIRPORT` = the same kind of code.
+>    add it too, e.g. `KPCT=<long secret join code>` (or generate a bundle locally with `npm --prefix PRANAV run preflight:do -- --generate KPCT`).
+> 2. If `TOWER_API_KEY` is set: `TOWER_API_AIRPORT` = an airport code listed in `AIRPORT_CODES`.
 >
-> Save; it redeploys by itself. **Done when** `https://lancerhacks-rvs8r.ondigitalocean.app/ready` stops saying
-> "Cannot GET /ready" (it will then say "not ready"; that's expected on App Platform). Optional cleanup while there:
-> delete `DATABASE_URL` and any `ELEVENLABS_*` variables (no longer used). Then delete this box.
+> Save to redeploy; verify status anytime in `/admin.html` Diagnostics or `https://lancerhacks-rvs8r.ondigitalocean.app/ready`
+> (`503 not_ready` with `receipt_recovery: unavailable` is expected on ephemeral App Platform disks once `camera_access` and `tower_access` report `ready`). Optional cleanup while there: delete `DATABASE_URL` and any `ELEVENLABS_*` variables (no longer used).
 
 ## The app
 

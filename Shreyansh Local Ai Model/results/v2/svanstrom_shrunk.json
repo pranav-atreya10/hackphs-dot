@@ -1,0 +1,338 @@
+{
+ "checkpoint": "runs/v2/best.pt",
+ "checkpoint_sha256": "59406ecae7fa500580e76726171d9691b65f5fb65239386f50669f8802e606e6",
+ "test_clips": [
+  "V_AIRPLANE_001",
+  "V_AIRPLANE_007",
+  "V_AIRPLANE_008",
+  "V_AIRPLANE_013",
+  "V_AIRPLANE_015",
+  "V_AIRPLANE_018",
+  "V_AIRPLANE_024",
+  "V_AIRPLANE_031",
+  "V_AIRPLANE_038",
+  "V_AIRPLANE_039",
+  "V_AIRPLANE_040",
+  "V_AIRPLANE_041",
+  "V_AIRPLANE_042",
+  "V_AIRPLANE_043",
+  "V_AIRPLANE_044",
+  "V_AIRPLANE_045",
+  "V_AIRPLANE_046",
+  "V_AIRPLANE_047",
+  "V_AIRPLANE_048",
+  "V_AIRPLANE_056",
+  "V_AIRPLANE_057",
+  "V_BIRD_003",
+  "V_BIRD_008",
+  "V_BIRD_011",
+  "V_BIRD_022",
+  "V_BIRD_029",
+  "V_BIRD_032",
+  "V_BIRD_033",
+  "V_BIRD_044",
+  "V_BIRD_047",
+  "V_BIRD_051",
+  "V_DRONE_001",
+  "V_DRONE_004",
+  "V_DRONE_011",
+  "V_DRONE_014",
+  "V_DRONE_021",
+  "V_DRONE_026",
+  "V_DRONE_035",
+  "V_DRONE_039",
+  "V_DRONE_046",
+  "V_DRONE_050",
+  "V_DRONE_054",
+  "V_DRONE_056",
+  "V_DRONE_062",
+  "V_DRONE_064",
+  "V_DRONE_065",
+  "V_DRONE_079",
+  "V_DRONE_081",
+  "V_DRONE_082",
+  "V_DRONE_084",
+  "V_DRONE_088",
+  "V_DRONE_094",
+  "V_DRONE_100",
+  "V_DRONE_101",
+  "V_HELICOPTER_006",
+  "V_HELICOPTER_008",
+  "V_HELICOPTER_009",
+  "V_HELICOPTER_014",
+  "V_HELICOPTER_019",
+  "V_HELICOPTER_020",
+  "V_HELICOPTER_021",
+  "V_HELICOPTER_022",
+  "V_HELICOPTER_023",
+  "V_HELICOPTER_024",
+  "V_HELICOPTER_025",
+  "V_HELICOPTER_026",
+  "V_HELICOPTER_027",
+  "V_HELICOPTER_028",
+  "V_HELICOPTER_029",
+  "V_HELICOPTER_030",
+  "V_HELICOPTER_031",
+  "V_HELICOPTER_032",
+  "V_HELICOPTER_033",
+  "V_HELICOPTER_034",
+  "V_HELICOPTER_035",
+  "V_HELICOPTER_036",
+  "V_HELICOPTER_037",
+  "V_HELICOPTER_038",
+  "V_HELICOPTER_039",
+  "V_HELICOPTER_040",
+  "V_HELICOPTER_041",
+  "V_HELICOPTER_042",
+  "V_HELICOPTER_043",
+  "V_HELICOPTER_044",
+  "V_HELICOPTER_045",
+  "V_HELICOPTER_046",
+  "V_HELICOPTER_047",
+  "V_HELICOPTER_048",
+  "V_HELICOPTER_049",
+  "V_HELICOPTER_050",
+  "V_HELICOPTER_051",
+  "V_HELICOPTER_052",
+  "V_HELICOPTER_053",
+  "V_HELICOPTER_054",
+  "V_HELICOPTER_055",
+  "V_HELICOPTER_056",
+  "V_HELICOPTER_059"
+ ],
+ "by_size": {
+  "7 px": {
+   "bird_recall": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drone_recall": {
+    "value": 0.502495840266223,
+    "ci95": [
+     0.34974636539697584,
+     0.6630265665868996
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "bird_or_drone_correct": {
+    "value": 0.37702871410736577,
+    "ci95": [
+     0.24583007466787532,
+     0.5300932366863882
+    ],
+    "n": 1602,
+    "clips": 33
+   },
+   "birds_called_drone": {
+    "value": 0.065,
+    "ci95": [
+     0.016128220938534433,
+     0.1433419540229885
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drones_called_bird": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "false_alarm_rate": {
+    "value": 0.10499243570347958,
+    "ci95": [
+     0.04809691734852779,
+     0.16142933803956364
+    ],
+    "n": 3305,
+    "clips": 48
+   }
+  },
+  "10 px": {
+   "bird_recall": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drone_recall": {
+    "value": 0.6455906821963394,
+    "ci95": [
+     0.4937235108750499,
+     0.7903537744656661
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "bird_or_drone_correct": {
+    "value": 0.484394506866417,
+    "ci95": [
+     0.34428974443454363,
+     0.6334429055722551
+    ],
+    "n": 1602,
+    "clips": 33
+   },
+   "birds_called_drone": {
+    "value": 0.1325,
+    "ci95": [
+     0.05405714544936102,
+     0.24931722689075628
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drones_called_bird": {
+    "value": 0.0008319467554076539,
+    "ci95": [
+     0.0,
+     0.002512562814070352
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "false_alarm_rate": {
+    "value": 0.12950075642965203,
+    "ci95": [
+     0.07082020108188056,
+     0.1883010497248874
+    ],
+    "n": 3305,
+    "clips": 48
+   }
+  },
+  "13 px": {
+   "bird_recall": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drone_recall": {
+    "value": 0.757071547420965,
+    "ci95": [
+     0.6193646623925029,
+     0.8798856793085112
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "bird_or_drone_correct": {
+    "value": 0.568039950062422,
+    "ci95": [
+     0.42137376679291333,
+     0.7107387780548629
+    ],
+    "n": 1602,
+    "clips": 33
+   },
+   "birds_called_drone": {
+    "value": 0.21,
+    "ci95": [
+     0.09228915662650602,
+     0.34927912032070463
+    ],
+    "n": 400,
+    "clips": 10
+   },
+   "drones_called_bird": {
+    "value": 0.008319467554076539,
+    "ci95": [
+     0.0,
+     0.02512562814070352
+    ],
+    "n": 1202,
+    "clips": 23
+   },
+   "false_alarm_rate": {
+    "value": 0.13434190620272315,
+    "ci95": [
+     0.06787313893250702,
+     0.20030324679518227
+    ],
+    "n": 3305,
+    "clips": 48
+   }
+  },
+  "7 px and up": {
+   "bird_recall": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "n": 1200,
+    "clips": 10
+   },
+   "drone_recall": {
+    "value": 0.6350526899611758,
+    "ci95": [
+     0.49232447716048744,
+     0.7689887252326263
+    ],
+    "n": 3606,
+    "clips": 23
+   },
+   "bird_or_drone_correct": {
+    "value": 0.47648772367873493,
+    "ci95": [
+     0.3377328131715052,
+     0.6226936406282944
+    ],
+    "n": 4806,
+    "clips": 33
+   },
+   "birds_called_drone": {
+    "value": 0.13583333333333333,
+    "ci95": [
+     0.06310070404725193,
+     0.23353598269698544
+    ],
+    "n": 1200,
+    "clips": 10
+   },
+   "drones_called_bird": {
+    "value": 0.003050471436494731,
+    "ci95": [
+     0.0,
+     0.009212730318257957
+    ],
+    "n": 3606,
+    "clips": 23
+   },
+   "false_alarm_rate": {
+    "value": 0.12294503277861825,
+    "ci95": [
+     0.06633641485523498,
+     0.18218455244706697
+    ],
+    "n": 9915,
+    "clips": 48
+   }
+  }
+ },
+ "youtube_false_alarm": {
+  "value": 0.35591124991866746,
+  "ci95": [
+   0.3177936483771956,
+   0.39007070771762936
+  ],
+  "n": 15369,
+  "clips": 49
+ }
+}

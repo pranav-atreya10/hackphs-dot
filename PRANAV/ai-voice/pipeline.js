@@ -56,11 +56,14 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   function health() {
     const g = ai.geminiState || {};
     const configured = Boolean(settings.GEMINI_API_KEY);
+    const judgeModel = settings.BIRD_JUDGE === 'onnx' ? 'skysentry-v5-onnx'
+      : settings.BIRD_JUDGE === 'local' ? settings.LOCAL_JUDGE_MODEL
+      : settings.GEMINI_MODEL;
     return { gemini: { configured, model: settings.GEMINI_MODEL, backupModel: settings.GEMINI_BACKUP_MODEL,
         state: !configured ? 'not_configured' : g.lastFailure ? 'unavailable' : g.lastSuccessAt ? 'available' : 'untested',
         failure: !configured ? { reason: 'not_configured', httpStatus: null, action: ai.failureMessages.not_configured } : g.lastFailure,
         lastError: g.lastError, lastSuccess: g.lastSuccessAt ? new Date(g.lastSuccessAt).toISOString() : null },
-      bird_judge: { provider: settings.BIRD_JUDGE || 'gemini', model: settings.BIRD_JUDGE === 'local' ? settings.LOCAL_JUDGE_MODEL : settings.GEMINI_MODEL, ...(require('./bird-judge').localState) },
+      bird_judge: { provider: settings.BIRD_JUDGE || 'gemini', model: judgeModel, ...(require('./bird-judge').localState) },
       solana: solana.health() };
   }
   function status() {
@@ -72,7 +75,11 @@ function createPipeline({ analyzeEvent = ai.analyzeEvent, answer = ai.answerQues
   }
   function judgeStatus(j, g) {
     if (j.provider === 'off') return 'off';
-    if (j.provider === 'local') return j.lastErrorAt > j.lastSuccessAt ? `local ${j.model}: failing (${j.lastError})` : j.lastSuccessAt ? `local ${j.model}: live` : `local ${j.model}: configured`;
+    if (j.provider === 'local' || j.provider === 'onnx') {
+      return j.lastErrorAt > j.lastSuccessAt
+        ? `${j.provider} ${j.model}: failing (${j.lastError})`
+        : j.lastSuccessAt ? `${j.provider} ${j.model}: live` : `${j.provider} ${j.model}: configured`;
+    }
     return !g.configured ? 'off (no Gemini key)' : g.lastError ? 'gemini: failing' : 'gemini';
   }
   return { processIncident, answerQuestion, health, status };

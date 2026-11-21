@@ -1,6 +1,7 @@
 // Admin page (admin.html): list, create, re-code and delete airports via /api/admin/airports.
 // Only accounts whose verified email is in the server's ADMIN_EMAILS get past the gate (the server checks too).
 import { loadClerk, forgetAccount } from '/js/auth.js';
+import { mountAdminDiagnostics } from '/js/admin-diagnostics.mjs';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -89,12 +90,38 @@ $('code').addEventListener('input', () => { $('code').value = $('code').value.to
 
 async function main() {
   const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({ publishableKey: null }));
-  if (!cfg.publishableKey) return gate('<h2>Accounts aren’t on</h2><p>Sign-in isn’t set up on this server, so there are no admins. Airports come from <code>AIRPORT_CODES</code>.</p>');
+  if (!cfg.publishableKey || cfg.configured === false) {
+    gate('<h2>Accounts aren’t on</h2><p>Sign-in isn’t set up on this server, so there are no admins. Airports come from <code>AIRPORT_CODES</code>.</p>');
+    try {
+      const probe = await fetch('/api/deploy-diagnostics', { headers: { accept: 'application/json' } });
+      if ((probe.status === 200 || probe.status === 503) && $('diagPanel')) {
+        const initialSnapshot = await probe.json().catch(() => null);
+        if (initialSnapshot && typeof initialSnapshot === 'object') {
+          $('diagPanel').hidden = false;
+          mountAdminDiagnostics($('diagPanel'), {
+            initialSnapshot,
+            immediate: false,
+          });
+        }
+      }
+    } catch {
+      // Keep #diagPanel hidden when unauthenticated diagnostics are unavailable.
+    }
+    return;
+  }
   clerk = await loadClerk(cfg.publishableKey);
   if (!clerk.user) { forgetAccount(); return gate('<h2>Sign in</h2><p>Sign in with an admin account to manage airports.</p><p><a href="/account.html?mode=sign-in">Sign in</a></p>'); }
-  const me = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${await clerk.session.getToken()}` } }).then(r => r.json()).catch(() => ({}));
+  const token = await clerk.session.getToken();
+  const me = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({}));
   if (!me.admin) return gate(`<h2>Admins only</h2><p>${esc(clerk.user.primaryEmailAddress?.emailAddress || 'This account')} isn’t an admin. Admins are set by email in the server’s <code>ADMIN_EMAILS</code> setting.</p>`);
   $('gate').hidden = true; $('reqPanel').hidden = false; $('addPanel').hidden = false; $('listPanel').hidden = false;
+  if ($('diagPanel')) {
+    $('diagPanel').hidden = false;
+    mountAdminDiagnostics($('diagPanel'), {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      getToken: () => clerk.session.getToken(),
+    });
+  }
   await Promise.all([load(), loadRequests()]);
 }
 main().catch(err => gate(`<h2>Something went wrong</h2><p>${esc(err.message)}</p>`));

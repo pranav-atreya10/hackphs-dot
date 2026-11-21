@@ -6,6 +6,8 @@
 //
 // The bot owns streamed detection. On failure it reports unavailable and retries on incoming frames.
 const sharp = require("sharp");
+sharp.cache?.(false);
+sharp.concurrency?.(1);
 const path = require("path");
 const { pathToFileURL } = require("url");
 const { randomUUID } = require("crypto");

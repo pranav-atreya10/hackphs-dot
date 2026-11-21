@@ -1,0 +1,342 @@
+[
+ {
+  "accuracy": 0.7396712572190137,
+  "balanced_accuracy": 0.7302211390080761,
+  "recall_bird": 0.6409090909090909,
+  "recall_drone": 0.8950036205648081,
+  "recall_other": 0.6547507055503292,
+  "bird_as_drone": 0.3048951048951049,
+  "drone_as_bird": 0.06565290852039585,
+  "epoch": 1,
+  "train_loss": 0.8503359554728854,
+  "tiny_le12px": {
+   "recall_bird": 0.08163265306122448,
+   "recall_drone": 0.8717948717948718,
+   "bird_as_drone": 0.7346938775510204,
+   "drone_as_bird": 0.06593406593406594
+  }
+ },
+ {
+  "accuracy": 0.8280764104842292,
+  "balanced_accuracy": 0.8216637099915608,
+  "recall_bird": 0.765034965034965,
+  "recall_drone": 0.8826937002172339,
+  "recall_other": 0.8172624647224835,
+  "bird_as_drone": 0.13916083916083916,
+  "drone_as_bird": 0.057446294955346366,
+  "epoch": 2,
+  "train_loss": 0.681398335770545,
+  "tiny_le12px": {
+   "recall_bird": 0.12244897959183673,
+   "recall_drone": 0.9120879120879121,
+   "bird_as_drone": 0.6326530612244898,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.8510884051532652,
+  "balanced_accuracy": 0.8467352813690662,
+  "recall_bird": 0.8052447552447553,
+  "recall_drone": 0.927105961863384,
+  "recall_other": 0.8078551269990593,
+  "bird_as_drone": 0.11888111888111888,
+  "drone_as_bird": 0.022688872797489743,
+  "epoch": 3,
+  "train_loss": 0.5953556756410452,
+  "tiny_le12px": {
+   "recall_bird": 0.1836734693877551,
+   "recall_drone": 0.8864468864468864,
+   "bird_as_drone": 0.4489795918367347,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.8855619724566859,
+  "balanced_accuracy": 0.88856912154167,
+  "recall_bird": 0.9111888111888112,
+  "recall_drone": 0.9102099927588704,
+  "recall_other": 0.8443085606773283,
+  "bird_as_drone": 0.04965034965034965,
+  "drone_as_bird": 0.052618875211199616,
+  "epoch": 4,
+  "train_loss": 0.5336838924348082,
+  "tiny_le12px": {
+   "recall_bird": 0.3469387755102041,
+   "recall_drone": 0.9157509157509157,
+   "bird_as_drone": 0.4897959183673469,
+   "drone_as_bird": 0.01098901098901099
+  }
+ },
+ {
+  "accuracy": 0.9064415815193247,
+  "balanced_accuracy": 0.9073867934901257,
+  "recall_bird": 0.9122377622377622,
+  "recall_drone": 0.9430364470190683,
+  "recall_other": 0.8668861712135466,
+  "bird_as_drone": 0.0479020979020979,
+  "drone_as_bird": 0.020033791938209027,
+  "epoch": 5,
+  "train_loss": 0.49545978882077174,
+  "tiny_le12px": {
+   "recall_bird": 0.4897959183673469,
+   "recall_drone": 0.9120879120879121,
+   "bird_as_drone": 0.1836734693877551,
+   "drone_as_bird": 0.01098901098901099
+  }
+ },
+ {
+  "accuracy": 0.9081297201243892,
+  "balanced_accuracy": 0.9039315239856043,
+  "recall_bird": 0.8671328671328671,
+  "recall_drone": 0.9403813661597876,
+  "recall_other": 0.904280338664158,
+  "bird_as_drone": 0.06923076923076923,
+  "drone_as_bird": 0.011103065411537534,
+  "epoch": 6,
+  "train_loss": 0.46795305632894413,
+  "tiny_le12px": {
+   "recall_bird": 0.20408163265306123,
+   "recall_drone": 0.8717948717948718,
+   "bird_as_drone": 0.2857142857142857,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.9185250999555753,
+  "balanced_accuracy": 0.9178947917702538,
+  "recall_bird": 0.9097902097902097,
+  "recall_drone": 0.9563118513154719,
+  "recall_other": 0.8875823142050799,
+  "bird_as_drone": 0.05034965034965035,
+  "drone_as_bird": 0.012068549360366883,
+  "epoch": 7,
+  "train_loss": 0.4488377313926874,
+  "tiny_le12px": {
+   "recall_bird": 0.40816326530612246,
+   "recall_drone": 0.9194139194139194,
+   "bird_as_drone": 0.2653061224489796,
+   "drone_as_bird": 0.0
+  }
+ },
+ {
+  "accuracy": 0.9029764549089294,
+  "balanced_accuracy": 0.9088431007077631,
+  "recall_bird": 0.9601398601398602,
+  "recall_drone": 0.8595220854453295,
+  "recall_other": 0.9068673565380997,
+  "bird_as_drone": 0.006993006993006993,
+  "drone_as_bird": 0.08303161959932416,
+  "epoch": 8,
+  "train_loss": 0.4359243273059472,
+  "tiny_le12px": {
+   "recall_bird": 0.40816326530612246,
+   "recall_drone": 0.8864468864468864,
+   "bird_as_drone": 0.14285714285714285,
+   "drone_as_bird": 0.018315018315018316
+  }
+ },
+ {
+  "accuracy": 0.9244780097734341,
+  "balanced_accuracy": 0.9274185888897507,
+  "recall_bird": 0.9496503496503497,
+  "recall_drone": 0.9471397538015931,
+  "recall_other": 0.8854656632173095,
+  "bird_as_drone": 0.026223776223776224,
+  "drone_as_bird": 0.019309678976587013,
+  "epoch": 9,
+  "train_loss": 0.42247866217739566,
+  "tiny_le12px": {
+   "recall_bird": 0.4489795918367347,
+   "recall_drone": 0.9377289377289377,
+   "bird_as_drone": 0.32653061224489793,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9386050644158151,
+  "balanced_accuracy": 0.9405917701036648,
+  "recall_bird": 0.9555944055944056,
+  "recall_drone": 0.9541395124306058,
+  "recall_other": 0.912041392285983,
+  "bird_as_drone": 0.022727272727272728,
+  "drone_as_bird": 0.017378711078928313,
+  "epoch": 10,
+  "train_loss": 0.40738477757382774,
+  "tiny_le12px": {
+   "recall_bird": 0.4489795918367347,
+   "recall_drone": 0.9340659340659341,
+   "bird_as_drone": 0.12244897959183673,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9377165704131497,
+  "balanced_accuracy": 0.93904677687078,
+  "recall_bird": 0.9479020979020979,
+  "recall_drone": 0.9633116099444847,
+  "recall_other": 0.9059266227657573,
+  "bird_as_drone": 0.023776223776223775,
+  "drone_as_bird": 0.008930726526671495,
+  "epoch": 11,
+  "train_loss": 0.39687606766785744,
+  "tiny_le12px": {
+   "recall_bird": 0.4489795918367347,
+   "recall_drone": 0.9340659340659341,
+   "bird_as_drone": 0.24489795918367346,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9422478898267437,
+  "balanced_accuracy": 0.9451527340134175,
+  "recall_bird": 0.9681818181818181,
+  "recall_drone": 0.9510016895969104,
+  "recall_other": 0.916274694261524,
+  "bird_as_drone": 0.012237762237762238,
+  "drone_as_bird": 0.018102824040550327,
+  "epoch": 12,
+  "train_loss": 0.38681369295291135,
+  "tiny_le12px": {
+   "recall_bird": 0.4897959183673469,
+   "recall_drone": 0.9267399267399268,
+   "bird_as_drone": 0.061224489795918366,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.9482896490448689,
+  "balanced_accuracy": 0.948510812166813,
+  "recall_bird": 0.948951048951049,
+  "recall_drone": 0.9657253198165581,
+  "recall_other": 0.9308560677328316,
+  "bird_as_drone": 0.026573426573426574,
+  "drone_as_bird": 0.008447984552256819,
+  "epoch": 13,
+  "train_loss": 0.37764617218264046,
+  "tiny_le12px": {
+   "recall_bird": 0.3469387755102041,
+   "recall_drone": 0.9230769230769231,
+   "bird_as_drone": 0.22448979591836735,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9444691248334074,
+  "balanced_accuracy": 0.9469919433615693,
+  "recall_bird": 0.9664335664335665,
+  "recall_drone": 0.9592083031619599,
+  "recall_other": 0.9153339604891816,
+  "bird_as_drone": 0.011188811188811189,
+  "drone_as_bird": 0.013034033309196235,
+  "epoch": 14,
+  "train_loss": 0.3656788038975257,
+  "tiny_le12px": {
+   "recall_bird": 0.3877551020408163,
+   "recall_drone": 0.9267399267399268,
+   "bird_as_drone": 0.14285714285714285,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9480231008440693,
+  "balanced_accuracy": 0.9498410419240281,
+  "recall_bird": 0.9629370629370629,
+  "recall_drone": 0.9703113685734974,
+  "recall_other": 0.916274694261524,
+  "bird_as_drone": 0.015034965034965035,
+  "drone_as_bird": 0.01037895244991552,
+  "epoch": 15,
+  "train_loss": 0.35824600757990543,
+  "tiny_le12px": {
+   "recall_bird": 0.3877551020408163,
+   "recall_drone": 0.945054945054945,
+   "bird_as_drone": 0.2653061224489796,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.9468680586406042,
+  "balanced_accuracy": 0.9505801640170235,
+  "recall_bird": 0.98006993006993,
+  "recall_drone": 0.9572773352643013,
+  "recall_other": 0.9143932267168391,
+  "bird_as_drone": 0.008391608391608392,
+  "drone_as_bird": 0.016413227130098962,
+  "epoch": 16,
+  "train_loss": 0.3488594621787943,
+  "tiny_le12px": {
+   "recall_bird": 0.4489795918367347,
+   "recall_drone": 0.945054945054945,
+   "bird_as_drone": 0.12244897959183673,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9516659262549978,
+  "balanced_accuracy": 0.9542906318127145,
+  "recall_bird": 0.9748251748251748,
+  "recall_drone": 0.9630702389572773,
+  "recall_other": 0.9249764816556915,
+  "bird_as_drone": 0.01013986013986014,
+  "drone_as_bird": 0.013999517258025585,
+  "epoch": 17,
+  "train_loss": 0.3432756639436709,
+  "tiny_le12px": {
+   "recall_bird": 0.5102040816326531,
+   "recall_drone": 0.9377289377289377,
+   "bird_as_drone": 0.08163265306122448,
+   "drone_as_bird": 0.003663003663003663
+  }
+ },
+ {
+  "accuracy": 0.9561972456685918,
+  "balanced_accuracy": 0.9581134419144287,
+  "recall_bird": 0.9727272727272728,
+  "recall_drone": 0.9693458846246681,
+  "recall_other": 0.9322671683913453,
+  "bird_as_drone": 0.010839160839160839,
+  "drone_as_bird": 0.009654839488293506,
+  "epoch": 18,
+  "train_loss": 0.3358557910507104,
+  "tiny_le12px": {
+   "recall_bird": 0.5102040816326531,
+   "recall_drone": 0.945054945054945,
+   "bird_as_drone": 0.12244897959183673,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.9558418480675256,
+  "balanced_accuracy": 0.9576946775133699,
+  "recall_bird": 0.972027972027972,
+  "recall_drone": 0.9659666908037654,
+  "recall_other": 0.9350893697083725,
+  "bird_as_drone": 0.01013986013986014,
+  "drone_as_bird": 0.011103065411537534,
+  "epoch": 19,
+  "train_loss": 0.33199325759695664,
+  "tiny_le12px": {
+   "recall_bird": 0.46938775510204084,
+   "recall_drone": 0.9413919413919414,
+   "bird_as_drone": 0.14285714285714285,
+   "drone_as_bird": 0.007326007326007326
+  }
+ },
+ {
+  "accuracy": 0.955752998667259,
+  "balanced_accuracy": 0.9576884692739701,
+  "recall_bird": 0.9727272727272728,
+  "recall_drone": 0.9654839488293507,
+  "recall_other": 0.9348541862652869,
+  "bird_as_drone": 0.01013986013986014,
+  "drone_as_bird": 0.011585807385952208,
+  "epoch": 20,
+  "train_loss": 0.33144211951825897,
+  "tiny_le12px": {
+   "recall_bird": 0.4489795918367347,
+   "recall_drone": 0.9377289377289377,
+   "bird_as_drone": 0.14285714285714285,
+   "drone_as_bird": 0.007326007326007326
+  }
+ }
+]

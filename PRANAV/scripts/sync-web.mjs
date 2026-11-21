@@ -1,13 +1,15 @@
 // Copies the team's browser code into PRANAV/public so one server (this one) hosts the whole site.
 // DigitalOcean only deploys the PRANAV folder, so the copies are committed. Run after changing
-// Vivan's detection engine or Atharv's film/site: npm run sync-web
+// Vivan's detection engine, Atharv's film/site, or Shreyansh's classifier export: npm run sync-web
 //
 //   VIVAN/detection/{index.js,src,adapters,models,test}  -> public/detection/
 //   ATHARV/skysentry/dist (film runtime + assets)  -> public/  (film.html = standalone film)
 //   ATHARV/skysentry/dist/site.html                -> public/index.html (landing page, film built in)
+//   Shreyansh Local Ai Model/skysentry_classifier.{js,json} -> public/ai-models/ (full sync only)
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
+import { optimizeGeneratedHtml } from './perf-html-transform.mjs';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const pub = join(repo, 'PRANAV/public');
@@ -22,15 +24,15 @@ if ([...args].some(arg => !['--check', '--film', '--detector'].includes(arg)) ||
 const check = args.has('--check');
 const differences = [];
 const normalized = data => data.toString('utf8').replace(/\r\n/g, '\n');
-const textFile = path => /\.(?:html|js|json|svg|txt|md|css)$/.test(path);
+const textFile = path => /\.(?:html|m?js|cjs|json|svg|txt|md|css)$/.test(path);
 const managed = new Set();
-function output(path, content) {
+function output(path, content, { exactBytes = false } = {}) {
   managed.add(path);
   const dest = join(pub, path);
   const exists = existsSync(dest);
   if (exists) {
     const actual = readFileSync(dest);
-    if (textFile(path) ? normalized(actual) === normalized(content) : actual.equals(content)) return;
+    if (!exactBytes && textFile(path) ? normalized(actual) === normalized(content) : actual.equals(content)) return;
   }
   if (check) differences.push(`${exists ? 'changed' : 'missing'} ${path}`);
   else {
@@ -82,22 +84,28 @@ const MARK = '<svg class="mark" viewBox="10 2 80 96" aria-hidden="true"><path fi
 const HEAD = `<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/brand/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <script src="/js/theme.js"></script>
 </head>`;
 const must = (html, from, to, what) => { if (!html.includes(from)) throw new Error(`${what} changed; update sync-web.mjs`); return html.replace(from, to); };
-const themed = (html, css, description) => {
+const themed = (html, css, description, extraCss = []) => {
   html = doc(html).replace('</head>', `<meta name="description" content="${description}">\n${HEAD}`);
   const lastStyle = html.lastIndexOf('</style>');
-  return html.slice(0, lastStyle + 8) + `\n<link rel="stylesheet" href="/css/${css}">` + html.slice(lastStyle + 8);
+  const links = [css, 'view-transitions.css', 'smooth-details.css', 'perf-scroll.css', ...extraCss]
+    .map(href => `<link rel="stylesheet" href="/css/${href}">`)
+    .join('\n');
+  return html.slice(0, lastStyle + 8) + `\n${links}` + html.slice(lastStyle + 8);
 };
 const decorative = html => html.replaceAll('<svg viewBox="0 0 36 36"', '<svg aria-hidden="true" viewBox="0 0 36 36"').replaceAll('<svg class="eng"', '<svg aria-hidden="true" class="eng"');
 const loader = html => must(html, '<span class="load-title">SKYSENTRY</span>', `<span class="load-title">${MARK}SkySentry</span>`, 'film loader title');
 
 let filmPage = readText(join(film, 'index.html'));
 filmPage = must(filmPage, '<div class="top"><h1>SkySentry</h1>', `<div class="top"><h1>${MARK}SkySentry</h1>`, 'film.html title');
-output('film.html', themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film illustrating simulated video detection and tower warnings.'));
+const filmScripts = '<script src="/js/film-scrubber.js" defer></script>\n<script src="/js/film-perf-governor.js" defer></script>\n<script src="/js/smooth-details.js" defer></script>\n<script src="/js/scroll-perf-guard.js" defer></script>\n<script type="module" src="/js/pwa-install.mjs"></script>\n';
+filmPage = filmPage.includes('</body>') ? filmPage.replace('</body>', `${filmScripts}</body>`) : `${filmPage}\n${filmScripts}`;
+output('film.html', optimizeGeneratedHtml(themed(decorative(loader(filmPage)), 'film.css', 'A 100-second 3D film illustrating simulated video detection and tower warnings.'), { page: 'film' }));
 
 // Landing page: the product site plus links into the live system.
 let site = readText(join(film, 'site.html'));
@@ -112,9 +120,22 @@ site = site.replace(anchor, live + '\n  ' + anchor);
 // Isolated demo links, right after "How it works".
 const promo = readText(fileURLToPath(new URL('./promo-section.html', import.meta.url)));
 site = must(site, '<section class="sec" id="risk">', promo + '\n  <section class="sec" id="risk">', 'site.html #risk section');
-// The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), and the top bar's
-// signed-in swap (public/js/nav-account.js: a Dashboard button in place of Sign in / Sign up).
-const scripts = '<script src="/js/guide.js" defer></script>\n<script src="/js/nav-account.js" defer></script>\n';
+// The "Ask about SkySentry" chat bubble (public/js/guide.js, served by /api/guide), the top bar's
+// signed-in swap (public/js/nav-account.js), smooth accordions, scroll perf guard, film scrubber/governor,
+// interactive local v4.1 sandbox, and landing fact odometer roll-ups.
+const scripts = [
+  '<script src="/js/guide.js" defer></script>',
+  '<script src="/js/nav-account.js" defer></script>',
+  '<script src="/js/smooth-details.js" defer></script>',
+  '<script src="/js/scroll-perf-guard.js" defer></script>',
+  '<script src="/js/reveal.js" defer></script>',
+  '<script src="/js/film-scrubber.js" defer></script>',
+  '<script src="/js/film-perf-governor.js" defer></script>',
+  '<script type="module" src="/js/landing-live-ai.mjs"></script>',
+  '<script type="module">import { observeLandingFacts } from "/js/stat-counter.mjs"; observeLandingFacts();</script>',
+  '<script type="module" src="/js/pwa-install.mjs"></script>',
+  '',
+].join('\n');
 site = site.includes('</body>') ? site.replace('</body>', `${scripts}</body>`) : `${site}\n${scripts}`;
 // Logo in the bar and footer, sign in / sign up (account.html; the theme lives in settings.html), and Geist in place of the serif font link.
 site = must(site, '<a class="brand" href="#top"><i></i>SkySentry</a>', `<a class="brand" href="#top">${MARK}SkySentry</a>`, 'site.html brand');
@@ -125,7 +146,16 @@ site = must(site, '<div class="cta"><a class="btn-s primary" href="#film">Watch 
   '<div class="cta"><a class="btn-s primary" href="/account.html">Sign up</a><a class="btn-s" href="/app.html">Get the app</a></div>', 'site.html hero buttons');
 site = must(site, '<div><b>SkySentry</b>', `<div><b>${MARK}SkySentry</b>`, 'site.html footer');
 site = site.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2\?family=Source\+Serif[^>]*>\n?/, '');
-output('index.html', themed(decorative(loader(site)), 'site.css', 'SkySentry is a video-only monitoring prototype with server-assigned risk and advisory tower warnings.'));
+output('index.html', optimizeGeneratedHtml(themed(decorative(loader(site)), 'site.css', 'SkySentry is a video-only monitoring prototype with server-assigned risk and advisory tower warnings.', ['landing-live-ai.css']), { page: 'index' }));
+}
+
+if (!args.has('--film') && !args.has('--detector')) {
+  const model = join(repo, 'Shreyansh Local Ai Model');
+  for (const name of ['skysentry_classifier.js', 'skysentry_classifier.json']) {
+    // Undo Git's CRLF checkout conversion before comparing the bytes served to browsers.
+    const content = Buffer.from(normalized(readFileSync(join(model, name))));
+    output(join('ai-models', name), content, { exactBytes: true });
+  }
 }
 
 if (differences.length) {

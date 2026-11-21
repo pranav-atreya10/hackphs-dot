@@ -1,0 +1,134 @@
+[
+ {
+  "accuracy": 0.6650071123755334,
+  "balanced_accuracy": 0.6915799706204826,
+  "recall_bird": 0.9066433566433566,
+  "recall_drone": 0.7016654598117307,
+  "recall_other": 0.4664310954063604,
+  "bird_as_drone": 0.08076923076923077,
+  "drone_as_bird": 0.280231716147719,
+  "epoch": 1,
+  "train_loss": 0.8478892673348866
+ },
+ {
+  "accuracy": 0.6915896159317212,
+  "balanced_accuracy": 0.7148833930929662,
+  "recall_bird": 0.9125874125874126,
+  "recall_drone": 0.5990827902486121,
+  "recall_other": 0.632979976442874,
+  "bird_as_drone": 0.023076923076923078,
+  "drone_as_bird": 0.278059377262853,
+  "epoch": 2,
+  "train_loss": 0.6796604125128357
+ },
+ {
+  "accuracy": 0.8423719772403983,
+  "balanced_accuracy": 0.8540623805559595,
+  "recall_bird": 0.9496503496503497,
+  "recall_drone": 0.8452811972000965,
+  "recall_other": 0.7672555948174322,
+  "bird_as_drone": 0.021678321678321677,
+  "drone_as_bird": 0.1223750905141202,
+  "epoch": 3,
+  "train_loss": 0.5866891767328666
+ },
+ {
+  "accuracy": 0.9035384068278806,
+  "balanced_accuracy": 0.8999618686644526,
+  "recall_bird": 0.8688811188811189,
+  "recall_drone": 0.9275887038377987,
+  "recall_other": 0.9034157832744405,
+  "bird_as_drone": 0.04895104895104895,
+  "drone_as_bird": 0.020999275887038378,
+  "epoch": 4,
+  "train_loss": 0.5368014863314567
+ },
+ {
+  "accuracy": 0.9089615931721194,
+  "balanced_accuracy": 0.9094645149250432,
+  "recall_bird": 0.9125874125874126,
+  "recall_drone": 0.9225199131064447,
+  "recall_other": 0.893286219081272,
+  "bird_as_drone": 0.025524475524475523,
+  "drone_as_bird": 0.031378228336953896,
+  "epoch": 5,
+  "train_loss": 0.5006835214760983
+ },
+ {
+  "accuracy": 0.9097617354196301,
+  "balanced_accuracy": 0.9137624319493094,
+  "recall_bird": 0.9437062937062937,
+  "recall_drone": 0.9483466087376298,
+  "recall_other": 0.8492343934040048,
+  "bird_as_drone": 0.02937062937062937,
+  "drone_as_bird": 0.018344195027757665,
+  "epoch": 6,
+  "train_loss": 0.47067507852873414
+ },
+ {
+  "accuracy": 0.9145625889046942,
+  "balanced_accuracy": 0.9184506417464816,
+  "recall_bird": 0.9472027972027972,
+  "recall_drone": 0.9567945932898866,
+  "recall_other": 0.8513545347467609,
+  "bird_as_drone": 0.02902097902097902,
+  "drone_as_bird": 0.013999517258025585,
+  "epoch": 7,
+  "train_loss": 0.4523946712346802
+ },
+ {
+  "accuracy": 0.9335881934566145,
+  "balanced_accuracy": 0.9363826572491365,
+  "recall_bird": 0.9594405594405594,
+  "recall_drone": 0.9314506396331161,
+  "recall_other": 0.9182567726737338,
+  "bird_as_drone": 0.01013986013986014,
+  "drone_as_bird": 0.030654115375331886,
+  "epoch": 8,
+  "train_loss": 0.4320308046029245
+ },
+ {
+  "accuracy": 0.9375,
+  "balanced_accuracy": 0.9392917650333411,
+  "recall_bird": 0.9524475524475524,
+  "recall_drone": 0.9582428192131306,
+  "recall_other": 0.9071849234393404,
+  "bird_as_drone": 0.021678321678321677,
+  "drone_as_bird": 0.01255129133478156,
+  "epoch": 9,
+  "train_loss": 0.4155970437751922
+ },
+ {
+  "accuracy": 0.9443456614509246,
+  "balanced_accuracy": 0.9462172231606222,
+  "recall_bird": 0.9611888111888112,
+  "recall_drone": 0.9493120926864591,
+  "recall_other": 0.928150765606596,
+  "bird_as_drone": 0.011888111888111888,
+  "drone_as_bird": 0.015930485155684286,
+  "epoch": 10,
+  "train_loss": 0.4006792985902857
+ },
+ {
+  "accuracy": 0.9471906116642959,
+  "balanced_accuracy": 0.9494518278932196,
+  "recall_bird": 0.9671328671328672,
+  "recall_drone": 0.9587255611875453,
+  "recall_other": 0.9224970553592462,
+  "bird_as_drone": 0.011888111888111888,
+  "drone_as_bird": 0.011585807385952208,
+  "epoch": 11,
+  "train_loss": 0.3887447890803939
+ },
+ {
+  "accuracy": 0.9449679943100996,
+  "balanced_accuracy": 0.9467874988234589,
+  "recall_bird": 0.9604895104895105,
+  "recall_drone": 0.9613806420468259,
+  "recall_other": 0.91849234393404,
+  "bird_as_drone": 0.015384615384615385,
+  "drone_as_bird": 0.011344436398744872,
+  "epoch": 12,
+  "train_loss": 0.38424561788586425
+ }
+]

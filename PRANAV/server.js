@@ -2,6 +2,7 @@ const path = require("path");
 const http = require("http");
 const { randomUUID } = require("node:crypto");
 const { cameraIdentity, createCameraRegistry, isDeviceId, isJPEG, isLiveSource } = require("./camera-ingress");
+const { applyPerfStaticHeaders } = require("./perf-headers");
 const express = require("express");
 const compression = require("compression");
 const { Server } = require("socket.io");
@@ -28,37 +29,48 @@ const ledger = createSolana();
 const ai = createPipeline({ solana: ledger });
 const { createChat, createRequestLimit } = require("./ai-voice/chat");
 const { createAirports, AirportError, parseEnv } = require("./airports");
-const { accessConfig, createAccess, createSocketAccess, keyMatches } = require("./access");
+const { accessConfig, resolveRuntimeAccess, createAccess, createSocketAccess, keyMatches } = require("./access");
 const { airportFilter, hourlyPipeline } = require("./airport-history");
 const { assignInitialRole, createRoleRequests, RequestError } = require("./role-requests");
 const { localHourLabel } = require("./ai-voice/describe");
 const { CameraBot, BOT_ENABLED, checkVideoDetector, cropBirdReview } = require("./bot");
 const { createBirdReview } = require("./bird-review");
 const { siteOrigin, sitemapXml, robotsTxt } = require("./sitemap");
+const { createSolanaVerifyHandler } = require("./solana-verify-route");
+const { registerV5ModelRoutes } = require("./v5-model-route");
+const { createStereoRegistry } = require("./stereo-triangulation");
+const { createAcousticTelemetryRegistry } = require("./camera-audio");
+const { createDeployDiagnosticsHandler } = require("./deploy-diagnostics");
 
 // DigitalOcean App Platform injects PORT; default to 8080 (its default http_port).
 const PORT = process.env.PORT || 8080;
 // Comma-separated list of allowed origins for cross-origin Socket.IO clients, or "*".
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
-// Secret that cameras must present to send events. Required in production.
-const CAMERA_API_KEY = process.env.CAMERA_API_KEY || "";
-// Optional airport-bound dashboard credential.
-const TOWER_API_KEY = process.env.TOWER_API_KEY || "";
 // Clerk keys (dashboard.clerk.com → API keys). When set, people sign in as a "camera" or "dashboard" user.
-const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || "";
-const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY || "";
+const CLERK_SECRET_KEY = (process.env.CLERK_SECRET_KEY || "").trim();
+const CLERK_PUBLISHABLE_KEY = (process.env.CLERK_PUBLISHABLE_KEY || "").trim();
 // Join codes per airport, e.g. "KPCT=pct-sky-4821,KTTN=ttn-sky-9310". Signing up needs one of these codes,
 // and each user only sees their own airport's alerts. Admins can add more airports on admin.html (saved in MongoDB).
 const AIRPORT_CODES_ENV = process.env.AIRPORT_CODES || "";
 const fixedAirports = parseEnv(AIRPORT_CODES_ENV);
-const { demo } = accessConfig(process.env, fixedAirports);
-const HOST = demo ? "127.0.0.1" : "0.0.0.0";
+const runtimeAccess = resolveRuntimeAccess(process.env, fixedAirports);
+for (const warning of runtimeAccess.warnings) {
+  console.warn("startup access configuration warning:", aiConfig.redact(warning));
+}
+// Secret that cameras must present to send events (fail-closed disabled unless bound to a registered airport).
+const CAMERA_API_KEY = runtimeAccess.cameraKey;
+const CAMERA_API_AIRPORT = runtimeAccess.cameraAirport;
+// Optional airport-bound dashboard credential (fail-closed disabled unless distinct and bound to a registered airport).
+const TOWER_API_KEY = runtimeAccess.towerKey;
+const TOWER_API_AIRPORT = runtimeAccess.towerAirport;
+const { demo, cameraKeyMisconfigured, towerKeyMisconfigured } = runtimeAccess;
+const HOST = process.env.HOST || (demo ? "127.0.0.1" : "0.0.0.0");
 // Admin accounts, by verified email, e.g. "you@example.com,teammate@example.com". Admins create airports and
 // join codes on admin.html and see every airport in the tower.
 const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 // MongoDB Atlas connection string. Everything is stored here: incident reports (with snapshots), every detection
 // (for the hourly chart), bird verdicts, airports and account-switch requests.
-const MONGODB_URI = process.env.MONGODB_URI || "";
+const MONGODB_URI = (process.env.MONGODB_URI || "").trim();
 // Detections are deleted automatically after this many days (keeps the Atlas free tier from filling up;
 // the chart needs 24 h and the assistant looks back 7 days).
 const DETECTION_DAYS = 8;
@@ -74,29 +86,36 @@ if (!MONGODB_URI) console.warn("MONGODB_URI is not set; incidents and detections
 // A short server-selection timeout makes an unreachable cluster fail in 5s, before DigitalOcean's gateway gives up.
 let mongo = null;
 function newMongo() {
-  mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000, timeoutMS: 5000 });
-  const mdb = mongo.db("skysentry");
-  for (const name of ["incidents", "detections"]) {
-    mdb.collection(name).createIndex({ airport: 1, time: -1 })
-      .catch((err) => console.error(`failed to index ${name} by airport:`, err.message));
+  try {
+    mongo = new MongoClient(MONGODB_URI, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000, timeoutMS: 5000 });
+    const mdb = mongo.db("skysentry");
+    for (const name of ["incidents", "detections"]) {
+      mdb.collection(name).createIndex({ airport: 1, time: -1 })
+        .catch((err) => console.error(`failed to index ${name} by airport:`, aiConfig.redact(err.message)));
+    }
+    mdb.collection("incidents").createIndex({ time: -1 })
+      .catch((err) => console.error("failed to index incidents:", aiConfig.redact(err.message)));
+    mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: RETENTION_SECONDS })
+      .catch((err) => console.error("failed to index detections for expiration:", aiConfig.redact(err.message)));
+    mdb.collection("detections").createIndex({ "enrichment.due_at": 1 }, { sparse: true })
+      .catch((err) => console.error("failed to index incident enrichment:", err.code || err.name));
+  } catch (err) {
+    console.error("failed to initialize MongoDB client:", aiConfig.redact(err.message));
+    mongo = null;
   }
-  mdb.collection("incidents").createIndex({ time: -1 })
-    .catch((err) => console.error("failed to index incidents:", err.message));
-  mdb.collection("detections").createIndex({ time: 1 }, { expireAfterSeconds: RETENTION_SECONDS })
-    .catch((err) => console.error("failed to index detections for expiration:", err.message));
-  mdb.collection("detections").createIndex({ "enrichment.due_at": 1 }, { sparse: true })
-    .catch((err) => console.error("failed to index incident enrichment:", err.code || err.name));
 }
 if (MONGODB_URI) newMongo();
 
 // Run fn(db), replacing the client once if it has closed for good.
 async function withMongo(fn) {
   const client = mongo;
+  if (!client) throw new Error("MongoDB is not connected");
   try {
     return await fn(client.db("skysentry"));
   } catch (err) {
     if (err.name !== "MongoTopologyClosedError" || shuttingDown) throw err;
     if (mongo === client) newMongo();
+    if (!mongo) throw err;
     return fn(mongo.db("skysentry"));
   }
 }
@@ -158,10 +177,22 @@ async function logBirdVerdict(v, airport, image = null) {
   if (mongo) withMongo((mdb) => mdb.collection("bird_verdicts").insertOne(doc)).catch((err) => console.error("failed to store bird verdict:", err.message));
 }
 
-const journal = createEventJournal(MONGODB_URI ? withMongo : null);
+const journal = createEventJournal(mongo ? withMongo : null);
 const memIncidents = [];
 
-const clerk = CLERK_SECRET_KEY ? createClerkClient({ secretKey: CLERK_SECRET_KEY, publishableKey: CLERK_PUBLISHABLE_KEY }) : null;
+const canInitClerk = runtimeAccess.clerkEnabled && (process.env.NODE_ENV !== "production" || Boolean(mongo));
+if (runtimeAccess.clerkEnabled && !canInitClerk) {
+  console.warn("startup access configuration warning: Clerk disabled in production because MongoDB client initialization failed");
+}
+let clerk = null;
+if (canInitClerk) {
+  try {
+    clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY, publishableKey: CLERK_PUBLISHABLE_KEY });
+  } catch (err) {
+    console.error("failed to initialize Clerk client:", aiConfig.redact(err.message));
+    clerk = null;
+  }
+}
 const ROLES = ["camera", "dashboard"];
 
 if (!clerk) console.warn(`Clerk sign-in is off; unauthenticated tower access is ${demo ? "explicitly enabled for local development" : "disabled"}`);
@@ -209,8 +240,8 @@ const bearerToken = (req) => {
 const airportForCode = (code) => airports.forJoinCode(code);
 
 const { dashboardGrant, towerAccess, cameraAccess, view } = createAccess({
-  airports, lookup: clerkAccess, cameraKey: CAMERA_API_KEY, cameraAirport: process.env.CAMERA_API_AIRPORT,
-  towerKey: TOWER_API_KEY, towerAirport: process.env.TOWER_API_AIRPORT, demo,
+  airports, lookup: clerkAccess, cameraKey: CAMERA_API_KEY, cameraAirport: CAMERA_API_AIRPORT,
+  towerKey: TOWER_API_KEY, towerAirport: TOWER_API_AIRPORT, demo,
 });
 const viewAirport = (req, requested) => view(req.towerGrant, requested === undefined ? req.get("x-airport") : requested);
 async function requireDashboard(req, res, next) {
@@ -256,7 +287,13 @@ const towersFor = (airport) => airports.has(airport) ? towers.to(towerRoom(airpo
 const { revoke: revokeSockets, install: installSocketAccess, epoch: socketAccessEpoch } = createSocketAccess([cameras, towers]);
 
 const { readSurveys, surveyedCorridor, sanitizeMetrics } = require("./corridor-calibration");
-const surveyedCorridors = readSurveys(process.env.SURVEYED_CORRIDORS_JSON);
+let surveyedCorridors = [];
+try {
+  surveyedCorridors = readSurveys(process.env.SURVEYED_CORRIDORS_JSON);
+} catch (err) {
+  console.warn("invalid SURVEYED_CORRIDORS_JSON; surveyed corridors disabled:", aiConfig.redact(err.message));
+  surveyedCorridors = [];
+}
 const retainIncidentEvidence = process.env.DURABLE_INCIDENT_EVIDENCE === "1";
 const shouldAlert = createRateLimit();
 const worker = createEnrichmentWorker({
@@ -400,7 +437,7 @@ app.use("/api", (req, res, next) => {
   if (origin && (!allowedOrigins || allowedOrigins.includes(origin))) {
     res.set({
       "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Headers": "authorization, content-type, x-api-key, x-camera-id, x-airport",
+      "Access-Control-Allow-Headers": "authorization, content-type, x-api-key, x-camera-id, x-airport, x-camera-device, x-camera-session, x-camera-source",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       Vary: "Origin",
     });
@@ -415,13 +452,12 @@ app.use(express.json({ limit: "1mb" }));
 app.use(compression({ threshold: 1024 }));
 // Heavy, rarely-changing files (3D assets, AI model weights, vendored libraries, clips) are cached
 // by the browser for a week, so the second visit and the bird check load instantly. HTML and app JS
-// revalidate every time so new deploys show up immediately.
-const LONG_CACHE = /^\/(assets|ai-models|vendor|clips|promo|brand|detection\/models)\//;
-app.use(express.static(path.join(__dirname, "public"), {
+// revalidate every time so new deploys show up immediately; compressible assets advertise Vary: Accept-Encoding.
+const publicDir = path.join(__dirname, "public");
+registerV5ModelRoutes(app);
+app.use(express.static(publicDir, {
   setHeaders(res, filePath) {
-    const rel = "/" + path.relative(path.join(__dirname, "public"), filePath).split(path.sep).join("/");
-    if (LONG_CACHE.test(rel)) res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
-    else res.setHeader("Cache-Control", "no-cache");
+    applyPerfStaticHeaders(res, filePath, { publicDir });
   },
 }));
 
@@ -578,15 +614,18 @@ const readiness = createReadiness({
     await loadAirportRegistry();
     return airports.size ? "ready" : "not_configured";
   },
-  camera_access: () => CAMERA_API_KEY || clerk ? "ready" : "not_configured",
+  camera_access: () => {
+    if (cameraKeyMisconfigured) return clerk ? "degraded" : "not_configured";
+    return CAMERA_API_KEY || clerk ? "ready" : "not_configured";
+  },
   tower_access: async () => {
     if (!clerk) return TOWER_API_KEY ? "ready" : "not_configured";
-    if (!mongo) return "not_configured";
+    if (!mongo) return TOWER_API_KEY ? (towerKeyMisconfigured ? "degraded" : "ready") : "not_configured";
     await Promise.all([
       clerk.users.getCount(),
       withMongo(mdb => mdb.collection("role_requests").findOne({ _id: "skysentry:readiness:v1" })),
     ]);
-    return "ready";
+    return towerKeyMisconfigured ? "degraded" : "ready";
   },
   receipt_storage: () => mongo ? withMongo(mdb => checkReceiptStorage(mdb, RETENTION_SECONDS)) : "not_configured",
   receipt_recovery: () => receiptRecovery.check(),
@@ -603,6 +642,21 @@ app.get("/health/db", async (_req, res) => {
   const { checks } = await readiness();
   res.set("Cache-Control", "no-store").json({ mongodb: checks.receipt_storage,
     clerk: clerk ? checks.tower_access : "not_configured", airports: airports.size });
+});
+let deployDiagnosticsHandler;
+app.get("/api/deploy-diagnostics", requireDashboard, (req, res) => {
+  deployDiagnosticsHandler ??= createDeployDiagnosticsHandler({
+    readiness,
+    env: process.env,
+    redact: aiConfig.redact,
+    uptime: () => process.uptime(),
+    ai,
+    chat,
+    ledger,
+    airports: () => airports.all().map((a) => a.code),
+    liveCameraCount: () => liveCameras.active().length,
+  });
+  return deployDiagnosticsHandler(req, res);
 });
 
 // Hourly detection totals for the caller's airport for the last 24 hours.
@@ -669,6 +723,14 @@ app.get("/api/incidents/:id/snapshot", requireDashboard, requireAirport, async (
     res.status(500).json({ error: "could not load snapshot" });
   }
 });
+
+const verifySolanaRoute = createSolanaVerifyHandler({
+  findIncident: async (id, airport) => mongo
+    ? withMongo((mdb) => mdb.collection("incidents").findOne({ _id: id, ...airportFilter(airport) }, { projection: { snapshot: 0 } }))
+    : memIncidents.find((d) => d._id === id && d.airport === airport),
+  solana: ledger,
+});
+app.get("/api/incidents/:id/verify-solana", requireDashboard, requireAirport, verifySolanaRoute);
 
 // Incident fields the chatbot may see (never the snapshot), with times in airport local time.
 const incidentSummary = (d) => ({
@@ -757,11 +819,16 @@ app.post("/api/guide", async (req, res) => {
   res.json(await chat.guide(messages));
 });
 
+const stereoRegistry = createStereoRegistry();
+const acousticRegistry = createAcousticTelemetryRegistry();
+
 // The tower requests advisory review of a server-observed track, never of caller-supplied pixels.
 const birdJudgeLimit = createRequestLimit({ max: 30, windowMs: 60_000 });
 // Bird review needs camera crops: allowed when Gemini image uploads are opted in, or when the judge is a local
-// model on the operator's own machine (BIRD_JUDGE=local), where images never leave it.
-const judgeReviewEnabled = cloudEvidenceEnabled || aiConfig.BIRD_JUDGE === "local";
+// model on the operator's own machine (BIRD_JUDGE=local or onnx), where images never leave it.
+const birdReviewProvider = ["local", "onnx"].includes(aiConfig.BIRD_JUDGE) ? "local"
+  : aiConfig.BIRD_JUDGE === "gemini" && cloudEvidenceEnabled ? "gemini" : null;
+const judgeReviewEnabled = birdReviewProvider !== null;
 const birdReview = createBirdReview({
   findLive: (cameraId, airport) => {
     const live = liveCameras.get(cameraId);
@@ -770,16 +837,22 @@ const birdReview = createBirdReview({
   crop: cropBirdReview, verify: verifyBird,
 });
 app.get("/api/cloud-evidence-policy", requireDashboard, requireAirport, (_req, res) => {
-  res.set("Cache-Control", "no-store").json({ cloudEvidenceEnabled, birdJudge: aiConfig.BIRD_JUDGE, reviewEnabled: judgeReviewEnabled });
+  res.set("Cache-Control", "no-store").json({
+    cloudEvidenceEnabled, birdJudge: birdReviewProvider ?? aiConfig.BIRD_JUDGE, reviewEnabled: judgeReviewEnabled, providerBinding: true,
+  });
 });
 app.post("/api/verify-bird", requireDashboard, requireAirport, async (req, res) => {
   res.set("Cache-Control", "no-store");
   if (!clerk && !(TOWER_API_KEY && keyMatches(req.get("x-api-key"), TOWER_API_KEY)))
     return res.status(401).json({ status: "unavailable", reason: "authentication_required" });
   if (!judgeReviewEnabled) return res.json({ status: "unavailable", reason: "cloud_evidence_disabled" });
+  // A stale local-only page must not send a crop to a newly configured cloud judge.
+  if (req.get("x-bird-review-provider") !== birdReviewProvider)
+    return res.status(409).json({ status: "unavailable", reason: "review_provider_mismatch" });
   if (!birdJudgeLimit(req.get("do-connecting-ip") || req.ip))
     return res.status(429).json({ status: "unavailable", reason: "rate_limited" });
-  if (!isPlainObject(req.body) || Object.keys(req.body).some(key => !["cameraId", "streamId", "frameId", "trackId"].includes(key)))
+  const fields = ["cameraId", "streamId", "frameId", "trackId"];
+  if (!isPlainObject(req.body) || Object.keys(req.body).length !== fields.length || fields.some(key => !Object.hasOwn(req.body, key)))
     return res.status(400).json({ status: "unavailable", reason: "invalid_reference" });
   try {
     const { crop, ...verdict } = await birdReview.review(req.body, req.airport);
@@ -805,11 +878,17 @@ installSocketAccess(cameras, ({ key, token, airport, deviceId }) =>
 
 cameras.on("connection", (socket) => {
   const { grant, airport } = socket.data;
-  const cameraId = cameraIdentity(grant, "socket", socket.handshake.auth.deviceId);
+  const deviceId = socket.handshake.auth.deviceId;
+  const cameraId = cameraIdentity(grant, "socket", deviceId);
+  const socketSession = typeof socket.id === "string" && socket.id.trim() ? socket.id : randomUUID();
   let live = null;
   let cameraConfig = null;
   const close = () => {
-    if (live) liveCameras.remove(live);
+    if (live) {
+      const wasOnline = live.lastSeen !== null && liveCameras.current(live);
+      liveCameras.remove(live);
+      if (!wasOnline) clearLiveTelemetry(live);
+    }
     live = cameraConfig = null;
   };
 
@@ -836,12 +915,25 @@ cameras.on("connection", (socket) => {
       live = openLive(cameraId, airport, cameraConfig.cameraLabel, (name, data) => {
         if (name === "bot:state") socket.volatile.emit(name, data);
         else socket.emit(name, data);
-      });
+      }, { principal: grant?.principal, deviceId, session: socketSession });
       configureLive(live, cameraConfig);
     }
     const stream = live;
     const result = await liveFrame(stream, jpegBuf, meta.t);
     reply(liveCameras.fresh(stream) ? { ok: true, ...result } : { ok: false, error: "stream stopped" });
+  });
+  socket.on("camera:audio", (payload, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
+    if (typeof acousticRegistry === "undefined") return reply({ ok: false, reason: "unavailable" });
+    if (!live || !liveCameras.current(live) || !liveCameras.fresh(live)) {
+      return reply({ ok: false, reason: "stream_stopped" });
+    }
+    const result = acousticRegistry.ingest(liveAudioBinding(live), payload);
+    if (result.accepted) {
+      const towerPayload = acousticRegistry.toTowerPayload(cameraId, { airport });
+      if (towerPayload) towersFor(airport).emit("bot:audio", towerPayload);
+    }
+    reply({ ok: result.accepted, ...(result.accepted ? {} : { reason: result.reason }) });
   });
   socket.on("camera:stop", close);
   socket.on("disconnect", close);
@@ -849,15 +941,52 @@ cameras.on("connection", (socket) => {
 
 installSocketAccess(towers, ({ key, token, airport }) => towerAccess(token, key, airport));
 
+const liveAudioBinding = (live) => ({
+  airport: live.airport,
+  cameraId: live.cameraId,
+  principal: live.principal,
+  deviceId: live.deviceId,
+  session: live.session,
+  source: "live",
+  cameraLabel: live.cameraLabel,
+  streamId: live.streamId,
+});
+
+function clearLiveTelemetry(live) {
+  if (!live) return;
+  if (typeof stereoRegistry !== "undefined" && stereoRegistry.removeCamera(live.cameraId)) {
+    towersFor(live.airport).emit("bot:stereo", stereoRegistry.correlate(live.airport));
+  }
+  if (typeof acousticRegistry !== "undefined") {
+    acousticRegistry.clear({ cameraId: live.cameraId, session: live.session });
+    towersFor(live.airport).emit("bot:audio", {
+      cameraId: live.cameraId,
+      cameraLabel: live.cameraLabel,
+      airport: live.airport,
+      source: "live",
+      advisory: true,
+      active: false,
+      droneProb: 0,
+      dominantHz: 0,
+      humDetected: false,
+      updatedAt: Date.now(),
+    });
+  }
+}
+
 const liveCameras = createCameraRegistry({
-  onStatus: (live, status) => towersFor(live.airport).emit("camera:status", status),
+  onStatus: (live, status) => {
+    towersFor(live.airport).emit("camera:status", status);
+    if (!status.online) clearLiveTelemetry(live);
+  },
 });
 const cameraLabel = (label) => typeof label === "string" && /^[a-z0-9._ -]{1,60}$/i.test(label.trim()) ? label.trim() : "Camera";
 
 // toCamera(name, data) sends bot results back to the streaming device (socket cameras); HTTP cameras read
 // the latest state from the response instead.
-function openLive(cameraId, airport, label, toCamera = () => {}) {
+function openLive(cameraId, airport, label, toCamera = () => {}, meta = {}) {
   const live = { cameraId, cameraLabel: cameraLabel(label), airport, streamId: randomUUID(), frameId: 0,
+    principal: meta.principal ?? null, deviceId: meta.deviceId ?? null, session: meta.session ?? randomUUID(),
     config: { camera_id: cameraId }, toCamera, lastResult: null, lastSeen: Date.now() };
   const exactResult = (frame, state) => liveCameras.fresh(live) && frame.streamId === live.streamId &&
     state && state === live.bot.freshState() && state.t === frame.t &&
@@ -879,11 +1008,24 @@ function openLive(cameraId, airport, label, toCamera = () => {}) {
       if (judgeReviewEnabled) birdReview.record(live, frame, state);
       towersFor(airport).volatile.emit("bot:state", result);
       live.toCamera("bot:state", result);
+      if (typeof stereoRegistry !== "undefined") {
+        const snapshot = stereoRegistry.updateCamera({
+          airport, cameraId: live.cameraId, cameraLabel: live.cameraLabel,
+          streamId: live.streamId, source: "live", config: live.config,
+          state, updatedAt: result.at,
+        });
+        towersFor(airport).emit("bot:stereo", snapshot);
+      }
     },
     onStatus: () => {
       if (!liveCameras.fresh(live)) return;
       const status = live.bot.status();
-      if (status.mode !== "server") live.lastResult = null;
+      if (status.mode !== "server") {
+        live.lastResult = null;
+        if (typeof stereoRegistry !== "undefined" && stereoRegistry.setCameraStatus(live.cameraId, status)) {
+          towersFor(airport).emit("bot:stereo", stereoRegistry.correlate(airport));
+        }
+      }
       towersFor(airport).emit("bot:status", status);
       live.toCamera("bot:status", status);
     },
@@ -893,6 +1035,7 @@ function openLive(cameraId, airport, label, toCamera = () => {}) {
 }
 function configureLive(live, config) {
   if (!liveCameras.current(live) || !isPlainObject(config) || !isLiveSource(config.source)) return false;
+  const priorState = live.lastResult?.state || null;
   live.bot.invalidate("camera configuration changed");
   live.streamId = randomUUID(); live.frameId = 0; live.lastResult = null;
   if (config.cameraLabel !== undefined) live.cameraLabel = cameraLabel(config.cameraLabel);
@@ -901,7 +1044,28 @@ function configureLive(live, config) {
   live.config = { camera: config.camera, corridor: survey?.polygon || [], surveyId: survey?.surveyId,
     preset: preset.length ? preset : undefined, camera_id: live.cameraId };
   live.bot.configure(live.config);
-  live.toCamera("camera:config", live.config);
+  if (typeof stereoRegistry !== "undefined") {
+    if (priorState && liveCameras.fresh(live)) {
+      const snapshot = stereoRegistry.updateCamera({
+        airport: live.airport, cameraId: live.cameraId, cameraLabel: live.cameraLabel,
+        streamId: live.streamId, source: "live", config: live.config,
+        state: priorState, updatedAt: Date.now(),
+      });
+      towersFor(live.airport).emit("bot:stereo", snapshot);
+    } else {
+      stereoRegistry.configureCamera({
+        airport: live.airport, cameraId: live.cameraId, cameraLabel: live.cameraLabel,
+        streamId: live.streamId, source: "live", config: live.config,
+      });
+      if (liveCameras.fresh(live)) {
+        towersFor(live.airport).emit("bot:stereo", stereoRegistry.correlate(live.airport));
+      }
+    }
+  }
+  if (typeof acousticRegistry !== "undefined" && live.principal && live.deviceId && live.session) {
+    acousticRegistry.bindStream(liveAudioBinding(live));
+  }
+  live.toCamera("camera:config", { ...live.config, streamId: live.streamId });
   if (liveCameras.fresh(live)) towersFor(live.airport).emit("camera:config", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, ...live.config });
   return true;
 }
@@ -919,7 +1083,7 @@ async function liveFrame(live, jpegBuf, t) {
   const detector = live.bot.status();
   const state = live.bot.freshState();
   return {
-    bot: detector.mode, detector, state, at: Date.now(), remaining_ms: live.bot.remainingMs(),
+    streamId: live.streamId, bot: detector.mode, detector, state, at: Date.now(), remaining_ms: live.bot.remainingMs(),
   };
 }
 setInterval(() => {
@@ -941,17 +1105,21 @@ async function httpCamera(req, res) {
     return null;
   }
   const cameraId = cameraIdentity(access, "http", deviceId);
-  return { cameraId, airport: access.airport, session, live: liveCameras.get(cameraId) };
+  return { cameraId, airport: access.airport, principal: access.principal, deviceId, session, live: liveCameras.get(cameraId) };
 }
 app.post("/api/camera-config", async (req, res) => {
   const ingress = await httpCamera(req, res); if (!ingress) return;
   if (!isPlainObject(req.body) || !isLiveSource(req.body.source)) return res.status(400).json({ error: "explicit live source required" });
-  const { cameraId, airport, session } = ingress;
+  const { cameraId, airport, principal, deviceId, session } = ingress;
   if (ingress.live && ingress.live.session !== session) return res.status(409).json({ error: "device already has a configured stream" });
-  const live = ingress.live?.session === session ? ingress.live : openLive(cameraId, airport, req.get("x-camera-id"));
+  const live = ingress.live?.session === session
+    ? ingress.live
+    : openLive(cameraId, airport, req.get("x-camera-id"), undefined, { principal, deviceId, session });
   live.session = session;
+  live.principal = principal;
+  live.deviceId = deviceId;
   configureLive(live, req.body);
-  res.json({ ok: true });
+  res.json({ ok: true, streamId: live.streamId });
 });
 app.post("/api/camera-frame", express.raw({ type: ["image/jpeg", "application/octet-stream"], limit: "900kb" }), async (req, res) => {
   const ingress = await httpCamera(req, res); if (!ingress) return;
@@ -970,10 +1138,36 @@ app.post("/api/camera-frame", express.raw({ type: ["image/jpeg", "application/oc
 });
 app.post("/api/camera-stop", async (req, res) => {
   const ingress = await httpCamera(req, res); if (!ingress) return;
-  if (ingress.live?.session === ingress.session) liveCameras.remove(ingress.live);
+  if (ingress.live?.session === ingress.session) {
+    const wasOnline = ingress.live.lastSeen !== null && liveCameras.current(ingress.live);
+    liveCameras.remove(ingress.live);
+    if (!wasOnline) clearLiveTelemetry(ingress.live);
+  }
   res.json({ ok: true });
 });
-setInterval(() => { liveCameras.sweep(); birdReview.prune(); }, 1000).unref();
+app.post("/api/camera-audio", async (req, res) => {
+  const ingress = await httpCamera(req, res); if (!ingress) return;
+  const { cameraId, airport, session, live } = ingress;
+  if (!live || live.session !== session || !liveCameras.fresh(live)) {
+    return res.status(409).json({ error: "active camera stream required" });
+  }
+  if (typeof acousticRegistry === "undefined") {
+    return res.status(503).json({ error: "acoustic telemetry unavailable" });
+  }
+  const result = acousticRegistry.ingest(liveAudioBinding(live), req.body);
+  if (!result.accepted) {
+    return res.status(400).json({ error: result.reason || "invalid acoustic summary" });
+  }
+  const towerPayload = acousticRegistry.toTowerPayload(cameraId, { airport });
+  if (towerPayload) towersFor(airport).emit("bot:audio", towerPayload);
+  res.json({ ok: true });
+});
+setInterval(() => {
+  liveCameras.sweep();
+  birdReview.prune();
+  if (typeof stereoRegistry !== "undefined") stereoRegistry.prune();
+  if (typeof acousticRegistry !== "undefined") acousticRegistry.sweep();
+}, 1000).unref();
 const towerSees = (socket, live) => airports.has(socket.data.airport) && socket.data.airport === live.airport;
 
 towers.on("connection", (socket) => {
@@ -984,6 +1178,15 @@ towers.on("connection", (socket) => {
     socket.emit("camera:status", liveCameras.presence(live));
     socket.emit("bot:status", live.bot.status());
     if (live.config) socket.emit("camera:config", { cameraId: live.cameraId, cameraLabel: live.cameraLabel, ...live.config });
+  }
+  if (typeof stereoRegistry !== "undefined" && airports.has(airport)) {
+    const snapshot = stereoRegistry.correlate(airport);
+    if (snapshot.fixes.length > 0 || snapshot.cameraCount > 0) socket.emit("bot:stereo", snapshot);
+  }
+  if (typeof acousticRegistry !== "undefined" && airports.has(airport)) {
+    for (const audioPayload of acousticRegistry.activeForAirport(airport)) {
+      socket.emit("bot:audio", audioPayload);
+    }
   }
 
   socket.on("tower:label", (_payload, ack) => {
