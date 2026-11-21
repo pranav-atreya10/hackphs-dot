@@ -65,7 +65,7 @@ const GUIDE_INSTRUCTIONS = [
   '- An authorized camera sends JPEG frames without drone audio. The live server detector assigns risk. AI reviews are advisory and do not change risk or alerts. A surveyed image-mask projection is not a runway arrival time.',
   '- GREEN means no detections in monitored video. Yellow and red are video warnings. Degraded or unavailable means limited or missing monitoring. None is clearance.',
   '- Warnings can appear before storage confirms them. Delivery and reports may be delayed or incomplete. Sound is opt-in for fresh alerts, and replay is silent.',
-  '- Incident snapshot retention and sending eligible camera crops to the Local AI Model are independent settings, both off by default. An optional Solana devnet hash helps compare exact drone report text; it is not tamper-proof storage or proof of accuracy.',
+  '- Incident snapshot retention and sending eligible camera crops to Gemini are independent settings, both off by default. An optional Solana devnet hash helps compare exact drone report text; it is not tamper-proof storage or proof of accuracy.',
   '- Why it matters: geese took out both engines of US Airways Flight 1549 after takeoff from LaGuardia (Jan 15, 2009, the "Miracle on the Hudson"); drone sightings shut Gatwick for three days in December 2018, disrupting about 1,000 flights.',
   '- To explore: visit the film or try a local demo. Synthetic scenarios do not establish field accuracy.',
 ].join('\n');

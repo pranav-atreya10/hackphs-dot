@@ -24,24 +24,6 @@ The Node web service uses repository `pranav-atreya10/hackphs-dot`, branch `main
 
 Production startup requires a camera key and its `CAMERA_API_AIRPORT`, plus either a distinct tower key with `TOWER_API_AIRPORT`, or both Clerk keys and `MONGODB_URI`. Key bindings must name configured `AIRPORT_CODES` entries. Key-based cameras must submit the matching airport. `ALLOW_UNAUTHENTICATED_TOWER=true` opts into a loopback-only local tower without Clerk or a tower key; it does not pass readiness. Optional providers need their own encrypted runtime variables.
 
-Before pushing or updating DigitalOcean App Platform settings, run the preflight tool from `PRANAV`:
-
-```sh
-# Verify .do/app.yaml declares all required keys, SECRET flags, instance_count: 1, and /health liveness
-node scripts/do-deploy-preflight.mjs --app-yaml
-
-# Validate an environment against PRANAV/access.js production boot gates
-node scripts/do-deploy-preflight.mjs --check-env
-
-# Generate in-memory 32-byte hex keys + join code for DigitalOcean paste (never writes secrets to disk)
-node scripts/do-deploy-preflight.mjs --generate KPCT
-
-# Probe live /health liveness and /ready readiness (flags HTTP 404 on /ready when stuck on a pre-PR-#56 build)
-node scripts/do-deploy-preflight.mjs --probe https://lancerhacks-rvs8r.ondigitalocean.app
-```
-
-For operator visibility without exposing credentials, `deploy-diagnostics.js` (`buildDeployDiagnostics`) builds a redacted subsystem readiness checklist (`GET /api/deploy-diagnostics`) consumed by the Admin Deployment & Subsystem Readiness controller (`/js/admin-diagnostics.mjs` and `/css/admin-diagnostics.css`).
-
 ## Liveness and readiness
 
 Keep the App Platform health check on `/health`; it verifies liveness and shows last-observed optional provider state without probing dependencies. Use `/ready` separately. It returns `503` until the synthetic JPEG detector self-check, airport registry and access configuration, Mongo majority receipt/report write and read, detection TTL index, and restart spool checks pass. If configured, Clerk must answer a service read and the role lookup must be readable. The Mongo check uses one fixed, unscoped synthetic record per collection, not an operator incident or alert. Checks are cached briefly and return sanitized states. `/health/db` shows storage and Clerk diagnostics but is not a readiness gate.
@@ -138,11 +120,3 @@ receipt and report without that snapshot. Bird and unidentified-object reports u
 Gemini image verdict stored separately as advisory context. The same image is
 not sent to a second report prompt. A confirmation of storage is not
 confirmation of a completed report.
-
-Tower `/api/verify-bird` requests contain only `cameraId`, `streamId`, `frameId`,
-and `trackId` in the JSON body. They must send `X-Bird-Review-Provider: local`
-or `X-Bird-Review-Provider: gemini` matching the currently enabled server judge.
-A missing or mismatched provider is rejected before cropping. Gemini review in
-the tower also requires operator opt-in per connection; reconnecting reloads
-server policy without carrying over the checkbox. Towers leave both review
-paths off if the policy response does not advertise `providerBinding: true`.

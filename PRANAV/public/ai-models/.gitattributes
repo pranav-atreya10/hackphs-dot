@@ -1,3 +1,0 @@
-# Preserve the exact bytes produced by sync-web on every checkout.
-skysentry_classifier.js -text
-skysentry_classifier.json -text

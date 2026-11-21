@@ -88,35 +88,6 @@ test('captures into a detached, bounded canvas without substituting a later fram
   assert.equal(captureBirdEvidence(candidate), null);
 });
 
-test('model takes one transferable copy of the exact native-sized matched bitmap', async () => {
-  const { BirdFramePairs, snapshotClassifierFrame } = await helpers;
-  const pairs = new BirdFramePairs(), native = new Uint8ClampedArray([10, 20, 30, 255, 40, 50, 60, 255]);
-  const frame = decoded(1, { bitmap: { width: 2, height: 1, close() {} } });
-  pairs.addFrame(frame);
-  pairs.addState(detected(frame, [track(1)]));
-  pairs.addFrame(decoded(2));
-  const canvas = {
-    getContext: () => ({
-      drawImage: (...args) => {
-        assert.deepEqual(args, [frame.bitmap, 0, 0], 'do not read the newer frame or resize');
-        assert.deepEqual([canvas.width, canvas.height], [2, 1]);
-      },
-      getImageData: (...args) => {
-        assert.deepEqual(args, [0, 0, 2, 1]);
-        return { data: native.slice() };
-      },
-    }),
-  };
-  const snapshot = snapshotClassifierFrame(pairs.latest, () => canvas);
-  assert.deepEqual(snapshot, { data: native, width: 2, height: 1 });
-  const transferred = structuredClone(snapshot, { transfer: [snapshot.data.buffer] });
-  assert.deepEqual(transferred.data, native);
-  assert.equal(pairs.latest.frame, frame);
-  assert.equal(snapshotClassifierFrame({ ...pairs.latest, state: { t: .2 } }, () => assert.fail('mismatched frame')), null);
-  assert.equal(snapshotClassifierFrame({ ...pairs.latest, frame: { ...frame, bitmap: { width: 3000, height: 3000 } } },
-    () => assert.fail('must not allocate for oversized evidence')), null);
-});
-
 test('feed overlay ignores late boxes on newer video while verifier keeps the exact older pair', async t => {
   const { startFeeds } = await import('../public/js/feeds.js');
   const handlers = {}, video = { width: 0, height: 0 }, boxCalls = [];

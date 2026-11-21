@@ -91,7 +91,7 @@ test("authenticated capture uses its pinned mask and only the server can persist
   const approved = [[0, 0], [1, 0], [1, 1]];
   const routes = new Map(), cameraHandlers = new Map(), towerHandlers = new Map();
   const namespace = handlers => ({ on: (name, fn) => handlers.set(name, fn) });
-  const messages = [], records = [], labelApplications = [];
+  const messages = [], records = [];
   const jpeg = Buffer.alloc(100);
   jpeg.set([255, 216], 0);
   jpeg.set([255, 217], jpeg.length - 2);
@@ -110,12 +110,11 @@ test("authenticated capture uses its pinned mask and only the server can persist
       constructor({ onEvent, onState }) { Object.assign(this, { onEvent, onState }); }
       configure() {}
       invalidate() {}
-      applyLabel(...args) { labelApplications.push(args); }
       status() { return { mode: "server", generation: this.state?.generation }; }
       freshState() { return this.state; }
       remainingMs() { return 1000; }
       async frame(_jpeg, t, frame) {
-        this.state = { t, generation: "detector-generation", tracks: [{ id: 1 }] };
+        this.state = { t, generation: "detector-generation" };
         const event = { type: "bird", risk: "red", snapshot, airport: "untrusted" };
         sendDetection = (candidate, state = this.state) => this.onEvent(event, candidate, state);
         sendDetection(frame); // No accepted result for this frame yet.
@@ -168,11 +167,8 @@ test("authenticated capture uses its pinned mask and only the server can persist
   cameraHandlers.get("connection")({ data: { grant: access, airport: "KPCT" }, handshake: { auth: { deviceId } },
     on: (name, fn) => handlers.set(name, fn) });
   handlers.get("camera:event")({}, reply => assert.equal(reply.ok, false));
-  const towerMessages = [];
-  towerHandlers.get("connection")({ data: { airport: "KPCT" }, join() {}, on: (name, fn) => handlers.set(name, fn),
-    emit: (...packet) => towerMessages.push(packet) });
-  handlers.get("tower:bot-event")({}, reply => assert.equal(reply.ok, false));
-  assert.deepEqual(messages, []);
+  towerHandlers.get("connection")({ data: { airport: "KPCT" }, join() {}, on: (name, fn) => handlers.set(name, fn) });
+  for (const name of ["tower:label", "tower:bot-event"]) handlers.get(name)({}, reply => assert.equal(reply.ok, false));
   assert.equal(records.length, 0);
 
   assert.equal((await post("/api/camera-frame", jpeg, { "x-frame-time": "8.125" })).code, 200);
@@ -193,15 +189,6 @@ test("authenticated capture uses its pinned mask and only the server can persist
   const pending = messages.find(([name]) => name === "incident")[1];
   assert.equal(pending.persistence, "pending");
   assert.equal(Object.hasOwn(pending, "revision"), false);
-  const messageCount = messages.length;
-  const labelReplies = [];
-  handlers.get("tower:label")({ cameraId, trackId: 1, label: "bird", score: .99, frameT: 8.125 },
-    reply => labelReplies.push({ ...reply }));
-  assert.deepEqual(labelReplies, [{ ok: false, reason: "tower labels cannot modify server detection" }]);
-  assert.deepEqual(labelApplications, []);
-  assert.deepEqual(towerMessages, []);
-  assert.equal(messages.length, messageCount);
-  assert.equal(records.length, 1);
   await post("/api/camera-stop", {});
   sendDetection(frame);
   assert.equal(records.length, 1, "late detector callbacks after stop must not persist");
